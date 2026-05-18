@@ -1,0 +1,286 @@
+﻿src/app/pages/ProjectDetail.tsx(3,22): error TS6142: Module '../components/ui/card' was resolved to 'D:/DOS-PlanetOneProjectTrackingReact/frontend/src/app/components/ui/card.tsx', but '--jsx' is not set.
+src/app/pages/ProjectDetail.tsx(4,23): error TS6142: Module '../components/ui/badge' was resolved to 'D:/DOS-PlanetOneProjectTrackingReact/frontend/src/app/components/ui/badge.tsx', but '--jsx' is not set.
+src/app/pages/ProjectDetail.tsx(5,24): error TS6142: Module '../components/ui/button' was resolved to 'D:/DOS-PlanetOneProjectTrackingReact/frontend/src/app/components/ui/button.tsx', but '--jsx' is not set.
+src/app/pages/ProjectDetail.tsx(6,58): error TS6142: Module '../components/ui/tabs' was resolved to 'D:/DOS-PlanetOneProjectTrackingReact/frontend/src/app/components/ui/tabs.tsx', but '--jsx' is not set.
+src/app/pages/ProjectDetail.tsx(7,79): error TS6142: Module '../components/ui/table' was resolved to 'D:/DOS-PlanetOneProjectTrackingReact/frontend/src/app/components/ui/table.tsx', but '--jsx' is not set.
+src/app/pages/ProjectDetail.tsx(8,26): error TS6142: Module '../components/ui/progress' was resolved to 'D:/DOS-PlanetOneProjectTrackingReact/frontend/src/app/components/ui/progress.tsx', but '--jsx' is not set.
+src/app/pages/ProjectDetail.tsx(11,35): error TS6142: Module '../components/ProjectGanttChart' was resolved to 'D:/DOS-PlanetOneProjectTrackingReact/frontend/src/app/components/ProjectGanttChart.tsx', but '--jsx' is not set.
+src/app/pages/ProjectDetail.tsx(266,7): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(267,9): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(268,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(276,7): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(277,9): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(278,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(279,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(280,13): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(293,5): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(294,7): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(295,9): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(296,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(297,13): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(302,9): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(303,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(304,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(308,7): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(309,9): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(310,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(311,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(313,9): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(314,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(315,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(316,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(318,9): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(319,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(320,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(321,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(323,9): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(324,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(325,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(329,7): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(330,9): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(331,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(332,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(334,9): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(335,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(336,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(338,9): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(339,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(340,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(342,9): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(343,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(344,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(351,7): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(352,9): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(353,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(354,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(355,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(356,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(357,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(358,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(361,9): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(362,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(363,13): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(364,15): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(367,13): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(375,9): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(376,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(377,13): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(378,15): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(379,17): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(380,17): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(382,15): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(383,17): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(384,17): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(386,15): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(387,17): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(388,17): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(390,15): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(391,17): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(392,17): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(395,13): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(396,15): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(397,17): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(398,19): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(399,21): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(400,21): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(401,21): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(402,21): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(403,21): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(404,21): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(405,21): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(406,21): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(407,21): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(410,17): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(415,23): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(416,25): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(417,27): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(419,31): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(423,41): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(428,25): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(429,27): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(431,25): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(432,25): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(433,27): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(434,29): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(435,29): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(438,25): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(440,27): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(443,25): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(445,27): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(448,25): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(449,25): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(450,25): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(451,27): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(452,29): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(464,9): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(465,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(466,13): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(467,15): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(468,15): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(470,13): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(471,15): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(472,15): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(474,13): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(475,15): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(476,15): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(480,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(481,13): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(482,15): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(483,15): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(485,13): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(486,15): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(487,15): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(489,13): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(490,15): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(491,15): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(495,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(496,13): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(497,13): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(498,15): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(499,17): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(500,17): error TS2607: JSX element class does not support attributes because it does not have a 'props' property.
+src/app/pages/ProjectDetail.tsx(500,17): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(500,18): error TS2786: 'XAxis' cannot be used as a JSX component.
+  Its type 'typeof XAxis' is not a valid JSX element type.
+    Type 'typeof XAxis' is not assignable to type 'new (props: any, deprecatedLegacyContext?: any) => Component<any, any, any>'.
+      Type 'XAxis' is missing the following properties from type 'Component<any, any, any>': context, setState, forceUpdate, props, and 2 more.
+src/app/pages/ProjectDetail.tsx(501,17): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(501,18): error TS2786: 'YAxis' cannot be used as a JSX component.
+  Its type 'typeof YAxis' is not a valid JSX element type.
+    Type 'typeof YAxis' is not assignable to type 'new (props: any, deprecatedLegacyContext?: any) => Component<any, any, any>'.
+      Type 'YAxis' is missing the following properties from type 'Component<any, any, any>': context, setState, forceUpdate, props, and 2 more.
+src/app/pages/ProjectDetail.tsx(502,17): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(503,17): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(504,17): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(505,17): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(511,9): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(512,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(513,13): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(514,15): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(515,15): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(517,13): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(518,15): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(519,15): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(521,13): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(522,15): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(523,15): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(525,13): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(526,15): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(527,15): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(528,15): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(532,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(533,13): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(534,13): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(535,15): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(536,17): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(537,17): error TS2607: JSX element class does not support attributes because it does not have a 'props' property.
+src/app/pages/ProjectDetail.tsx(537,17): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(537,18): error TS2786: 'XAxis' cannot be used as a JSX component.
+  Its type 'typeof XAxis' is not a valid JSX element type.
+    Type 'typeof XAxis' is not assignable to type 'new (props: any, deprecatedLegacyContext?: any) => Component<any, any, any>'.
+      Type 'XAxis' is missing the following properties from type 'Component<any, any, any>': context, setState, forceUpdate, props, and 2 more.
+src/app/pages/ProjectDetail.tsx(538,17): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(538,18): error TS2786: 'YAxis' cannot be used as a JSX component.
+  Its type 'typeof YAxis' is not a valid JSX element type.
+    Type 'typeof YAxis' is not assignable to type 'new (props: any, deprecatedLegacyContext?: any) => Component<any, any, any>'.
+      Type 'YAxis' is missing the following properties from type 'Component<any, any, any>': context, setState, forceUpdate, props, and 2 more.
+src/app/pages/ProjectDetail.tsx(539,17): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(540,17): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(541,17): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(542,17): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(548,9): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(549,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(551,15): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(552,17): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(553,19): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(554,21): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(555,23): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(556,23): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(557,23): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(558,23): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(559,23): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(562,19): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(564,23): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(565,25): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(566,27): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(567,29): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(571,25): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(572,25): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(573,25): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(574,27): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(576,25): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(577,27): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(582,29): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(591,15): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(596,9): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(597,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(599,15): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(600,17): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(601,19): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(602,21): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(603,23): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(604,23): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(605,23): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(606,23): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(607,23): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(608,23): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(611,19): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(613,23): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(614,25): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(615,27): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(616,29): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(620,25): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(621,27): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(625,25): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(626,27): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(630,25): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(631,27): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(633,25): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(634,25): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(635,27): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/app/pages/ProjectDetail.tsx(643,15): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+../node_modules/recharts/types/cartesian/Area.d.ts(4,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/cartesian/Bar.d.ts(4,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/cartesian/Brush.d.ts(4,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/cartesian/CartesianAxis.d.ts(4,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/cartesian/CartesianGrid.d.ts(4,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/cartesian/ErrorBar.d.ts(4,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/cartesian/Line.d.ts(4,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/cartesian/ReferenceArea.d.ts(4,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/cartesian/ReferenceDot.d.ts(4,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/cartesian/ReferenceLine.d.ts(4,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/cartesian/Scatter.d.ts(4,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/cartesian/XAxis.d.ts(4,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/cartesian/YAxis.d.ts(4,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/cartesian/ZAxis.d.ts(4,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/chart/generateCategoricalChart.d.ts(1,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/chart/Sankey.d.ts(4,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/chart/SunburstChart.d.ts(1,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/chart/Treemap.d.ts(4,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/component/Customized.d.ts(4,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/component/DefaultLegendContent.d.ts(4,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/component/DefaultTooltipContent.d.ts(4,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/component/Label.d.ts(1,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/component/LabelList.d.ts(1,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/component/Legend.d.ts(4,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/component/ResponsiveContainer.d.ts(1,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/component/Text.d.ts(1,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/component/Tooltip.d.ts(4,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/container/Layer.d.ts(1,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/container/Surface.d.ts(4,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/numberAxis/Funnel.d.ts(4,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/polar/Pie.d.ts(4,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/polar/PolarAngleAxis.d.ts(4,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/polar/PolarGrid.d.ts(4,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/polar/PolarRadiusAxis.d.ts(4,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/polar/Radar.d.ts(4,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/polar/RadialBar.d.ts(4,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/shape/Cross.d.ts(4,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/shape/Curve.d.ts(4,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/shape/Dot.d.ts(4,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/shape/Polygon.d.ts(4,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/shape/Rectangle.d.ts(4,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/shape/Sector.d.ts(4,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/shape/Symbols.d.ts(4,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/shape/Trapezoid.d.ts(4,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+../node_modules/recharts/types/util/BarUtils.d.ts(1,8): error TS1259: Module '"D:/DOS-PlanetOneProjectTrackingReact/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag

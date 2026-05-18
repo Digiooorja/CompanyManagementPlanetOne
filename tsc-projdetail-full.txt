@@ -1,0 +1,42 @@
+﻿src/app/components/Layout.tsx(16,3): error TS6133: 'User' is declared but its value is never read.
+src/app/components/Layout.tsx(29,3): error TS6133: 'DropdownMenuItem' is declared but its value is never read.
+src/app/components/Layout.tsx(30,3): error TS6133: 'DropdownMenuSeparator' is declared but its value is never read.
+src/app/components/ProjectGanttChart.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/app/components/ProjectGanttChart.tsx(2,1): error TS6192: All imports in import declaration are unused.
+src/app/components/ProjectGanttChart.tsx(3,1): error TS6133: 'Button' is declared but its value is never read.
+src/app/components/ProjectGanttChart.tsx(116,11): error TS6133: 'weekDate' is declared but its value is never read.
+src/app/pages/Activities.tsx(161,63): error TS7006: Parameter 'sub' implicitly has an 'any' type.
+src/app/pages/Activities.tsx(361,52): error TS7006: Parameter 'subActivity' implicitly has an 'any' type.
+src/app/pages/Activities.tsx(433,56): error TS7006: Parameter 'sub' implicitly has an 'any' type.
+src/app/pages/Activities.tsx(493,56): error TS7006: Parameter 'sub' implicitly has an 'any' type.
+src/app/pages/ActivityDetail.tsx(43,75): error TS7006: Parameter 'sub' implicitly has an 'any' type.
+src/app/pages/BlockDetail.tsx(10,9): error TS6133: 'id' is declared but its value is never read.
+src/app/pages/DocumentDetail.tsx(9,9): error TS6133: 'id' is declared but its value is never read.
+src/app/pages/Documents.tsx(1,20): error TS6133: 'useEffect' is declared but its value is never read.
+src/app/pages/Documents.tsx(10,1): error TS6133: 'documentsApi' is declared but its value is never read.
+src/app/pages/Documents.tsx(15,21): error TS6133: 'setDocuments' is declared but its value is never read.
+src/app/pages/Documents.tsx(16,19): error TS6133: 'setLoading' is declared but its value is never read.
+src/app/pages/Documents.tsx(17,17): error TS6133: 'setError' is declared but its value is never read.
+src/app/pages/ExecutiveDashboard.tsx(9,3): error TS6133: 'TrendingUp' is declared but its value is never read.
+src/app/pages/ExecutiveDashboard.tsx(10,3): error TS6133: 'TrendingDown' is declared but its value is never read.
+src/app/pages/Finance.tsx(9,10): error TS6133: 'BarChart' is declared but its value is never read.
+src/app/pages/Finance.tsx(9,20): error TS6133: 'Bar' is declared but its value is never read.
+src/app/pages/Finance.tsx(9,101): error TS6133: 'Legend' is declared but its value is never read.
+src/app/pages/Finance.tsx(269,41): error TS6133: 'entry' is declared but its value is never read.
+src/app/pages/OperationalDashboard.tsx(6,10): error TS6133: 'AlertCircle' is declared but its value is never read.
+src/app/pages/OperationalDashboard.tsx(6,33): error TS6133: 'CheckCircle' is declared but its value is never read.
+src/app/pages/OperationalDashboard.tsx(6,46): error TS6133: 'Clock' is declared but its value is never read.
+src/app/pages/ProjectDetail.tsx(368,15): error TS2322: Type '{ subactivities: Activity[]; id: number; projectId: number; name: string; description?: string | undefined; status: string; assignedTo?: string | undefined; progress?: number | undefined; ... 6 more ...; parentActivityId?: number | ... 1 more ... | undefined; }[]' is not assignable to type 'Activity[]'.
+  Type '{ subactivities: Activity[]; id: number; projectId: number; name: string; description?: string; status: string; assignedTo?: string; progress?: number; plannedStartDate?: string; ... 5 more ...; parentActivityId?: number | null; }' is not assignable to type 'Activity'.
+    Types of property 'assignedTo' are incompatible.
+      Type 'string | undefined' is not assignable to type 'string'.
+        Type 'undefined' is not assignable to type 'string'.
+src/app/pages/Projects.tsx(9,24): error TS6133: 'Filter' is declared but its value is never read.
+src/app/pages/RegisterDetail.tsx(10,9): error TS6133: 'id' is declared but its value is never read.
+src/app/pages/Registers.tsx(80,10): error TS6133: 'loading' is declared but its value is never read.
+src/app/pages/Registers.tsx(81,10): error TS6133: 'error' is declared but its value is never read.
+src/app/pages/Registers.tsx(123,17): error TS6133: 'blocks' is declared but its value is never read.
+src/app/pages/Registers.tsx(141,43): error TS7006: Parameter 'block' implicitly has an 'any' type.
+src/app/pages/Registers.tsx(141,50): error TS7006: Parameter 'index' implicitly has an 'any' type.
+src/app/pages/WorkflowDetail.tsx(10,9): error TS6133: 'id' is declared but its value is never read.
+src/app/routes.tsx(9,10): error TS2614: Module '"./pages/ProjectDetail"' has no exported member 'ProjectDetail'. Did you mean to use 'import ProjectDetail from "./pages/ProjectDetail"' instead?
