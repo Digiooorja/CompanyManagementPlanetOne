@@ -50,10 +50,47 @@ export function ProjectGanttChart({ activities, projectStartDate, projectEndDate
     setExpandedActivities(newExpanded);
   };
 
-  // Calculate the timeline
-  const startDate = new Date(projectStartDate);
-  const endDate = new Date(projectEndDate);
-  const totalDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+  const parseDate = (value?: string | null) => {
+    if (!value) return null;
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  };
+
+  const flattenAllActivities = (activities: Activity[]): Activity[] =>
+    activities.flatMap((activity) => [
+      activity,
+      ...(activity.subactivities ? flattenAllActivities(activity.subactivities) : []),
+    ]);
+
+  const allActivities = flattenAllActivities(activities);
+  const activityStartDates = allActivities
+    .map((activity) => parseDate(activity.plannedStartDate) || parseDate(activity.actualStartDate))
+    .filter((date): date is Date => date !== null);
+  const activityEndDates = allActivities
+    .map((activity) => parseDate(activity.plannedEndDate) || parseDate(activity.actualEndDate))
+    .filter((date): date is Date => date !== null);
+
+  const projectStart = parseDate(projectStartDate);
+  const projectEnd = parseDate(projectEndDate);
+
+  const startDate = projectStart
+    ? activityStartDates.length > 0
+      ? new Date(Math.min(projectStart.getTime(), ...activityStartDates.map((d) => d.getTime())))
+      : projectStart
+    : activityStartDates.length > 0
+    ? new Date(Math.min(...activityStartDates.map((d) => d.getTime())))
+    : null;
+
+  const endDate = projectEnd
+    ? activityEndDates.length > 0
+      ? new Date(Math.max(projectEnd.getTime(), ...activityEndDates.map((d) => d.getTime())))
+      : projectEnd
+    : activityEndDates.length > 0
+    ? new Date(Math.max(...activityEndDates.map((d) => d.getTime())))
+    : null;
+
+  const dayMs = 1000 * 60 * 60 * 24;
+  const totalDays = startDate && endDate ? Math.max(Math.ceil((endDate.getTime() - startDate.getTime()) / dayMs), 1) : 0;
 
   // Helper function to flatten activities with subactivities based on expanded state
   const flattenActivities = (activities: Activity[]): Array<Activity & { level: number; parentId?: number }> => {
@@ -72,52 +109,59 @@ export function ProjectGanttChart({ activities, projectStartDate, projectEndDate
     return flattened;
   };
 
-  const flattenedActivities = flattenActivities(activities);
-
-  // Chart dimensions - now responsive
   const chartWidth = Math.max(containerWidth - 40, 600); // Minimum width of 600px, subtract padding
   const headerHeight = 90;
   const rowHeight = 80; // Reduced row height for subactivities
+  const flattenedActivities = flattenActivities(activities);
   const chartHeight = flattenedActivities.length * rowHeight + headerHeight + 100; // Increased height for dual bars + legend space
   const leftColumnWidth = 280; // Increased for indentation and buttons
   const timelineWidth = chartWidth - leftColumnWidth - 20;
 
-  // Helper function to get X position for a date
   const getXPosition = (date?: string) => {
-    if (!date) return leftColumnWidth;
-    const activityDate = new Date(date);
-    const daysFromStart = Math.ceil((activityDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+    if (!date || !startDate || totalDays <= 0) return leftColumnWidth;
+    const activityDate = parseDate(date);
+    if (!activityDate) return leftColumnWidth;
+    const daysFromStart = Math.min(totalDays, Math.max(0, Math.ceil((activityDate.getTime() - startDate.getTime()) / dayMs)));
     return leftColumnWidth + (daysFromStart / totalDays) * timelineWidth;
   };
 
-  // Helper function to get bar width
-  const getBarWidth = (startDate?: string, endDate?: string) => {
-    if (!startDate || !endDate) return 0;
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-    return Math.max((days / totalDays) * timelineWidth, 20); // Minimum width of 20px
+  const getBarWidth = (start?: string, end?: string) => {
+    const startParsed = parseDate(start);
+    const endParsed = parseDate(end);
+    if (!startParsed || !endParsed || totalDays <= 0) return 0;
+    const days = Math.max(1, Math.ceil((endParsed.getTime() - startParsed.getTime()) / dayMs));
+    return Math.max((days / totalDays) * timelineWidth, 20);
   };
 
   // Calculate months for timeline
   const months: { label: string; x: number }[] = [];
   const weeks: { label: string; x: number }[] = [];
-  
-  for (let i = 0; i < totalDays; i += 30) {
-    const monthDate = new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000);
-    const x = leftColumnWidth + (i / totalDays) * timelineWidth;
-    months.push({
-      label: monthDate.toLocaleDateString('en-US', { month: 'short' }),
-      x
-    });
+
+  if (startDate && totalDays > 0) {
+    for (let i = 0; i <= totalDays; i += 30) {
+      const monthDate = new Date(startDate.getTime() + i * dayMs);
+      const x = leftColumnWidth + (i / totalDays) * timelineWidth;
+      months.push({
+        label: monthDate.toLocaleDateString('en-US', { month: 'short' }),
+        x,
+      });
+    }
+
+    for (let i = 0; i <= totalDays; i += 7) {
+      const x = leftColumnWidth + (i / totalDays) * timelineWidth;
+      weeks.push({
+        label: `W${Math.ceil((i + 1) / 7)}`,
+        x,
+      });
+    }
   }
 
-  for (let i = 0; i < totalDays; i += 7) {
-    const x = leftColumnWidth + (i / totalDays) * timelineWidth;
-    weeks.push({
-      label: `W${Math.ceil(i / 7)}`,
-      x
-    });
+  if (!startDate || !endDate || totalDays === 0) {
+    return (
+      <div className="rounded-lg border border-gray-200 bg-white p-6 text-sm text-muted-foreground">
+        Project timeline data is unavailable. Please verify project or activity dates.
+      </div>
+    );
   }
 
   return (
@@ -237,9 +281,9 @@ export function ProjectGanttChart({ activities, projectStartDate, projectEndDate
                     y={y + (activity.level === 0 ? 8 : 12)}
                     width={getBarWidth(activity.plannedStartDate, activity.plannedEndDate)}
                     height={activity.level === 0 ? 16 : 12}
-                    fill="#e9ecef"
+                    fill="#f59e0b"
                     rx="2"
-                    opacity="0.7"
+                    opacity="0.85"
                   />
 
                   {getBarWidth(activity.plannedStartDate, activity.plannedEndDate) > 50 && (

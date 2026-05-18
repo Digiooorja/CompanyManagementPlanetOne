@@ -42,9 +42,11 @@ This is the backend API server for the DOS Planet One Project Tracking applicati
 
 Create a `.env` file in the backend root with:
 ```
-DATABASE_URL=your_postgresql_connection_string
+DATABASE_URL=mysql://username:password@localhost:3306/dos_planet_tracking
 PORT=5000
 ```
+
+If you are using a remote MySQL host, update the URL accordingly. The backend expects a valid MySQL connection string by default.
 
 ## Running the Server
 

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -15,6 +15,32 @@ export function ActivityDetail() {
   const { id } = useParams();
   const [activity, setActivity] = useState<any>(null);
   const [subActivities, setSubActivities] = useState<any[]>([]);
+  const [linkedDocuments, setLinkedDocuments] = useState<any[]>([
+    { id: 1, name: "Drilling Plan - Well B-3", type: "Technical", uploadDate: "2026-04-10" },
+    { id: 2, name: "Safety Procedures", type: "HSE", uploadDate: "2026-04-12" },
+    { id: 3, name: "Equipment Specifications", type: "Technical", uploadDate: "2026-04-14" },
+  ]);
+  const [comments, setComments] = useState<any[]>([
+    {
+      id: 1,
+      user: "Mike Chen",
+      date: "2026-04-28 10:30",
+      text: "Started the review process. Initial assessment looks good, but need to verify some equipment specifications.",
+    },
+    {
+      id: 2,
+      user: "Sarah Johnson",
+      date: "2026-04-29 14:15",
+      text: "Thanks for the update. Please prioritize the safety procedures review.",
+    },
+    {
+      id: 3,
+      user: "Mike Chen",
+      date: "2026-05-01 09:00",
+      text: "Safety procedures have been reviewed and approved. Moving on to final compliance check.",
+    },
+  ]);
+  const [newComment, setNewComment] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showSubActivityForm, setShowSubActivityForm] = useState(false);
@@ -25,6 +51,8 @@ export function ActivityDetail() {
     priority: 'Medium',
     progress: 0
   });
+  const navigate = useNavigate();
+  const [activityActionLoading, setActivityActionLoading] = useState(false);
 
   useEffect(() => {
     const fetchActivityDetails = async () => {
@@ -113,6 +141,133 @@ export function ActivityDetail() {
     }
   };
 
+  const handleUpdateActivityProgress = async () => {
+    if (!activity) return;
+    const progressInput = window.prompt('Enter new progress value (0-100)', String(activity.progress ?? 0));
+    if (progressInput === null) return;
+    const progressValue = Number(progressInput);
+    if (Number.isNaN(progressValue) || progressValue < 0 || progressValue > 100) {
+      setError('Progress must be between 0 and 100');
+      return;
+    }
+    try {
+      setActivityActionLoading(true);
+      const updated: any = await activitiesApi.update(activity.id, { progress: progressValue });
+      setActivity({ ...activity, progress: updated.progress });
+    } catch (err) {
+      console.error('Error updating activity progress:', err);
+      setError('Failed to update activity progress');
+    } finally {
+      setActivityActionLoading(false);
+    }
+  };
+
+  const handleChangeActivityStatus = async () => {
+    if (!activity) return;
+    const statusOrder = ['Active', 'Inactive', 'Completed'];
+    const nextStatus = statusOrder[(statusOrder.indexOf(activity.status) + 1) % statusOrder.length] || 'Active';
+    try {
+      setActivityActionLoading(true);
+      const updated: any = await activitiesApi.update(activity.id, { status: nextStatus });
+      setActivity({ ...activity, status: updated.status });
+    } catch (err) {
+      console.error('Error changing activity status:', err);
+      setError('Failed to change activity status');
+    } finally {
+      setActivityActionLoading(false);
+    }
+  };
+
+  const handleLinkDocument = () => {
+    const name = window.prompt('Enter document name to link');
+    if (!name) return;
+    const newDoc = {
+      id: Date.now(),
+      name,
+      type: 'Linked',
+      uploadDate: new Date().toISOString().split('T')[0]
+    };
+    setLinkedDocuments([newDoc, ...linkedDocuments]);
+  };
+
+  const handlePostComment = () => {
+    if (!newComment.trim()) {
+      setError('Comment cannot be empty');
+      return;
+    }
+    setComments([
+      {
+        id: Date.now(),
+        user: 'You',
+        date: new Date().toISOString().slice(0, 16).replace('T', ' '),
+        text: newComment.trim(),
+      },
+      ...comments,
+    ]);
+    setNewComment('');
+  };
+
+  const handleEditActivity = async () => {
+    if (!activity) return;
+    const name = window.prompt('Edit activity name', activity.name);
+    const description = window.prompt('Edit activity description', activity.description);
+    if (name === null || description === null) return;
+    try {
+      setActivityActionLoading(true);
+      const updated: any = await activitiesApi.update(activity.id, { name, description });
+      setActivity({ ...activity, name: updated.name, description: updated.description });
+    } catch (err) {
+      console.error('Error editing activity:', err);
+      setError('Failed to edit activity');
+    } finally {
+      setActivityActionLoading(false);
+    }
+  };
+
+  const handleReassign = async () => {
+    if (!activity) return;
+    const assignedTo = window.prompt('Reassign activity to', activity.assignedTo || '');
+    if (assignedTo === null) return;
+    try {
+      setActivityActionLoading(true);
+      const updated: any = await activitiesApi.update(activity.id, { assignedTo });
+      setActivity({ ...activity, assignedTo: updated.assignedTo });
+    } catch (err) {
+      console.error('Error reassigning activity:', err);
+      setError('Failed to reassign activity');
+    } finally {
+      setActivityActionLoading(false);
+    }
+  };
+
+  const handleChangeDueDate = async () => {
+    if (!activity) return;
+    const dueDate = window.prompt('Enter new due date (YYYY-MM-DD)', activity.dueDate || '');
+    if (dueDate === null) return;
+    try {
+      setActivityActionLoading(true);
+      const updated: any = await activitiesApi.update(activity.id, { dueDate });
+      setActivity({ ...activity, dueDate: updated.dueDate });
+    } catch (err) {
+      console.error('Error changing due date:', err);
+      setError('Failed to change due date');
+    } finally {
+      setActivityActionLoading(false);
+    }
+  };
+
+  const handleDeleteActivity = async () => {
+    if (!activity) return;
+    if (!window.confirm('Delete this activity?')) return;
+    try {
+      await activitiesApi.delete(activity.id);
+      navigate('/activities');
+    } catch (err) {
+      console.error('Error deleting activity:', err);
+      setError('Failed to delete activity');
+    }
+  };
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -145,32 +300,6 @@ export function ActivityDetail() {
     dueDate: new Date().toISOString().split('T')[0]
   };
 
-  const linkedDocuments = [
-    { id: 1, name: "Drilling Plan - Well B-3", type: "Technical", uploadDate: "2026-04-10" },
-    { id: 2, name: "Safety Procedures", type: "HSE", uploadDate: "2026-04-12" },
-    { id: 3, name: "Equipment Specifications", type: "Technical", uploadDate: "2026-04-14" },
-  ];
-
-  const comments = [
-    {
-      id: 1,
-      user: "Mike Chen",
-      date: "2026-04-28 10:30",
-      text: "Started the review process. Initial assessment looks good, but need to verify some equipment specifications.",
-    },
-    {
-      id: 2,
-      user: "Sarah Johnson",
-      date: "2026-04-29 14:15",
-      text: "Thanks for the update. Please prioritize the safety procedures review.",
-    },
-    {
-      id: 3,
-      user: "Mike Chen",
-      date: "2026-05-01 09:00",
-      text: "Safety procedures have been reviewed and approved. Moving on to final compliance check.",
-    },
-  ];
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -254,8 +383,12 @@ export function ActivityDetail() {
           </div>
           <Progress value={displayActivity.progress} className="h-3" />
           <div className="flex gap-2 mt-4">
-            <Button size="sm" variant="outline">Update Progress</Button>
-            <Button size="sm" variant="outline">Change Status</Button>
+            <Button size="sm" variant="outline" onClick={handleUpdateActivityProgress} disabled={activityActionLoading}>
+              Update Progress
+            </Button>
+            <Button size="sm" variant="outline" onClick={handleChangeActivityStatus} disabled={activityActionLoading}>
+              Change Status
+            </Button>
           </div>
         </div>
       </Card>
@@ -421,7 +554,7 @@ export function ActivityDetail() {
                 </div>
               ))}
             </div>
-            <Button variant="outline" size="sm" className="w-full mt-3">
+            <Button variant="outline" size="sm" className="w-full mt-3" onClick={handleLinkDocument}>
               Link Document
             </Button>
           </Card>
@@ -452,8 +585,13 @@ export function ActivityDetail() {
               ))}
             </div>
             <div className="mt-4 space-y-2">
-              <Textarea placeholder="Add a comment..." rows={3} />
-              <Button size="sm">Post Comment</Button>
+              <Textarea
+                placeholder="Add a comment..."
+                rows={3}
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+              />
+              <Button size="sm" onClick={handlePostComment}>Post Comment</Button>
             </div>
           </Card>
         </div>
@@ -509,16 +647,16 @@ export function ActivityDetail() {
           <Card className="p-4">
             <h4 className="font-medium mb-3">Actions</h4>
             <div className="space-y-2">
-              <Button variant="outline" className="w-full">
+              <Button variant="outline" className="w-full" onClick={handleEditActivity}>
                 Edit Activity
               </Button>
-              <Button variant="outline" className="w-full">
+              <Button variant="outline" className="w-full" onClick={handleReassign}>
                 Reassign
               </Button>
-              <Button variant="outline" className="w-full">
+              <Button variant="outline" className="w-full" onClick={handleChangeDueDate}>
                 Change Due Date
               </Button>
-              <Button variant="destructive" className="w-full">
+              <Button variant="destructive" className="w-full" onClick={handleDeleteActivity}>
                 Delete Activity
               </Button>
             </div>

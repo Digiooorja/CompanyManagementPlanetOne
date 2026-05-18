@@ -80,9 +80,9 @@ app.use('/api/auth', authRoutes);
 const startServer = async () => {
   try {
     await sequelize.authenticate();
-    console.log('PostgreSQL connected');
+    console.log('Database connected');
 
-    await sequelize.sync({ alter: true });
+    await sequelize.sync();
     console.log('Database synchronized');
 
     app.listen(PORT, () => {

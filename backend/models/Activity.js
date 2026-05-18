@@ -13,7 +13,7 @@ const Activity = sequelize.define('Activity', {
   },
   description: {
     type: DataTypes.TEXT,
-    allowNull: false
+    allowNull: true
   },
   status: {
     type: DataTypes.ENUM('Active', 'Inactive', 'Completed'),

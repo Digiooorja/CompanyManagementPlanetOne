@@ -4,6 +4,9 @@ import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import { Textarea } from "../components/ui/textarea";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "../components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "../components/ui/table";
 import { Search, Plus, Filter } from "lucide-react";
@@ -16,6 +19,61 @@ export function Projects() {
   const [projects, setProjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [newProject, setNewProject] = useState({
+    name: '',
+    description: '',
+    status: 'In Progress',
+    block: '',
+    manager: '',
+    budget: '',
+    startDate: '',
+    endDate: ''
+  });
+
+  const handleCreateProject = async () => {
+    if (!newProject.name.trim() || !newProject.description.trim()) {
+      setError('Project name and description are required.');
+      return;
+    }
+
+    try {
+      setCreating(true);
+      setError(null);
+
+      await projectsApi.create({
+        name: newProject.name,
+        description: newProject.description,
+        status: newProject.status,
+        block: newProject.block || undefined,
+        manager: newProject.manager || undefined,
+        budget: newProject.budget ? Number(newProject.budget) : undefined,
+        startDate: newProject.startDate || undefined,
+        endDate: newProject.endDate || undefined,
+      });
+
+      setIsCreateOpen(false);
+      setNewProject({
+        name: '',
+        description: '',
+        status: 'In Progress',
+        block: '',
+        manager: '',
+        budget: '',
+        startDate: '',
+        endDate: ''
+      });
+
+      const data = await projectsApi.getAll();
+      setProjects(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Create project error:', err);
+      setError('Unable to create project. Please try again.');
+    } finally {
+      setCreating(false);
+    }
+  };
 
   useEffect(() => {
     const fetchProjects = async () => {
@@ -60,10 +118,104 @@ export function Projects() {
           <h1 className="text-3xl">Projects</h1>
           <p className="text-gray-500 mt-1">Manage projects across all blocks</p>
         </div>
-        <Button>
-          <Plus className="h-4 w-4 mr-2" />
-          New Project
-        </Button>
+        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="h-4 w-4 mr-2" />
+              New Project
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Create Project</DialogTitle>
+              <DialogDescription>Fill out the details to add a new project.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 mt-4">
+              <div>
+                <Label>Project Name</Label>
+                <Input
+                  value={newProject.name}
+                  onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Block</Label>
+                <Input
+                  value={newProject.block}
+                  onChange={(e) => setNewProject({ ...newProject, block: e.target.value })}
+                  placeholder="e.g. Block A"
+                />
+              </div>
+              <div>
+                <Label>Status</Label>
+                <select
+                  className="w-full rounded-md border px-3 py-2"
+                  value={newProject.status}
+                  onChange={(e) => setNewProject({ ...newProject, status: e.target.value })}
+                >
+                  <option value="In Progress">In Progress</option>
+                  <option value="Active">Active</option>
+                  <option value="Planning">Planning</option>
+                  <option value="Completed">Completed</option>
+                  <option value="On Hold">On Hold</option>
+                  <option value="Cancelled">Cancelled</option>
+                </select>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Start Date</Label>
+                  <Input
+                    type="date"
+                    value={newProject.startDate}
+                    onChange={(e) => setNewProject({ ...newProject, startDate: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>End Date</Label>
+                  <Input
+                    type="date"
+                    value={newProject.endDate}
+                    onChange={(e) => setNewProject({ ...newProject, endDate: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div>
+                <Label>Manager</Label>
+                <Input
+                  value={newProject.manager}
+                  onChange={(e) => setNewProject({ ...newProject, manager: e.target.value })}
+                  placeholder="Project manager"
+                />
+              </div>
+              <div>
+                <Label>Budget</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={newProject.budget}
+                  onChange={(e) => setNewProject({ ...newProject, budget: e.target.value })}
+                  placeholder="Budget amount"
+                />
+              </div>
+              <div>
+                <Label>Description</Label>
+                <Textarea
+                  value={newProject.description}
+                  onChange={(e) => setNewProject({ ...newProject, description: e.target.value })}
+                  rows={4}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button variant="ghost">Cancel</Button>
+              </DialogClose>
+              <Button onClick={handleCreateProject} disabled={creating}>
+                {creating ? 'Creating...' : 'Create'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {error && (

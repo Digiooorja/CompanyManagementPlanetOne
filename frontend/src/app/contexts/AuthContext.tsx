@@ -74,8 +74,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Login failed');
+        let errorBody: any = null;
+        try {
+          errorBody = await response.json();
+        } catch (parseError) {
+          console.warn('Login error response could not be parsed as JSON', parseError);
+        }
+        throw new Error(errorBody?.error || 'Login failed');
       }
 
       const data = await response.json();
@@ -101,8 +106,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Registration failed');
+        let errorBody: any = null;
+        try {
+          errorBody = await response.json();
+        } catch (parseError) {
+          console.warn('Register error response could not be parsed as JSON', parseError);
+        }
+        throw new Error(errorBody?.error || 'Registration failed');
       }
 
       const result = await response.json();
