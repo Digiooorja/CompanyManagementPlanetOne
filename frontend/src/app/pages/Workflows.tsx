@@ -5,64 +5,31 @@ import { Button } from "../components/ui/button";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "../components/ui/table";
 import { GitBranch, Clock, CheckCircle } from "lucide-react";
 
+import { useEffect, useState } from "react";
+import { workflowsApi } from "../../services/api";
+
 export function Workflows() {
-  const workflowItems = [
-    {
-      id: 1,
-      title: "AFE Amendment - Block A",
-      type: "Finance Approval",
-      submittedBy: "Sarah Johnson",
-      submitDate: "2026-04-30",
-      currentStep: "Executive Approval",
-      status: "Awaiting Action",
-      priority: "High",
-      dueDate: "2026-05-05",
-    },
-    {
-      id: 2,
-      title: "Drilling Contract Review",
-      type: "Contract Approval",
-      submittedBy: "Mike Chen",
-      submitDate: "2026-04-29",
-      currentStep: "Legal Review",
-      status: "In Progress",
-      priority: "High",
-      dueDate: "2026-05-06",
-    },
-    {
-      id: 3,
-      title: "HSE Incident Report",
-      type: "HSE Review",
-      submittedBy: "Emma Davis",
-      submitDate: "2026-04-28",
-      currentStep: "Management Acknowledgment",
-      status: "Awaiting Action",
-      priority: "Critical",
-      dueDate: "2026-05-02",
-    },
-    {
-      id: 4,
-      title: "Environmental Permit Renewal",
-      type: "Regulatory Approval",
-      submittedBy: "James Wilson",
-      submitDate: "2026-04-27",
-      currentStep: "Internal Review",
-      status: "In Progress",
-      priority: "Medium",
-      dueDate: "2026-05-10",
-    },
-    {
-      id: 5,
-      title: "Well Completion Report",
-      type: "Technical Review",
-      submittedBy: "Lisa Brown",
-      submitDate: "2026-04-25",
-      currentStep: "Completed",
-      status: "Approved",
-      priority: "Medium",
-      dueDate: "2026-05-01",
-    },
-  ];
+  const [workflowItems, setWorkflowItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadWorkflows = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const data = await workflowsApi.getAll();
+        setWorkflowItems(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error("Error loading workflows", err);
+        setError("Unable to load workflows from the server.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadWorkflows();
+  }, []);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -92,6 +59,7 @@ export function Workflows() {
 
   const awaitingAction = workflowItems.filter((w) => w.status === "Awaiting Action");
   const inProgress = workflowItems.filter((w) => w.status === "In Progress");
+  const completedThisWeek = workflowItems.filter((w) => ["Approved", "Completed"].includes(w.status)).length;
 
   return (
     <div className="space-y-6">
@@ -133,7 +101,7 @@ export function Workflows() {
             </div>
             <div>
               <p className="text-sm text-gray-600">Completed This Week</p>
-              <p className="text-2xl">8</p>
+              <p className="text-2xl">{completedThisWeek}</p>
             </div>
           </div>
         </Card>
@@ -142,61 +110,69 @@ export function Workflows() {
       {/* Workflow Inbox */}
       <Card className="p-6">
         <h2 className="text-xl mb-4">Workflow Inbox</h2>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Title</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Submitted By</TableHead>
-              <TableHead>Submit Date</TableHead>
-              <TableHead>Current Step</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Priority</TableHead>
-              <TableHead>Due Date</TableHead>
-              <TableHead></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {workflowItems.map((item) => (
-              <TableRow key={item.id}>
-                <TableCell>
-                  <Link
-                    to={`/workflows/${item.id}`}
-                    className="hover:underline"
-                  >
-                    {item.title}
-                  </Link>
-                </TableCell>
-                <TableCell>
-                  <Badge variant="outline">{item.type}</Badge>
-                </TableCell>
-                <TableCell className="text-sm text-gray-600">
-                  {item.submittedBy}
-                </TableCell>
-                <TableCell>{item.submitDate}</TableCell>
-                <TableCell className="text-sm">{item.currentStep}</TableCell>
-                <TableCell>
-                  <Badge variant={getStatusColor(item.status)}>
-                    {item.status}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <Badge variant={getPriorityColor(item.priority)}>
-                    {item.priority}
-                  </Badge>
-                </TableCell>
-                <TableCell>{item.dueDate}</TableCell>
-                <TableCell>
-                  <Link to={`/workflows/${item.id}`}>
-                    <Button size="sm">
-                      {item.status === "Awaiting Action" ? "Action" : "View"}
-                    </Button>
-                  </Link>
-                </TableCell>
+        {loading ? (
+          <div className="text-sm text-gray-600">Loading workflows...</div>
+        ) : error ? (
+          <div className="text-sm text-red-600">{error}</div>
+        ) : workflowItems.length === 0 ? (
+          <div className="text-sm text-gray-600">No workflows available.</div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Title</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Submitted By</TableHead>
+                <TableHead>Submit Date</TableHead>
+                <TableHead>Current Step</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Priority</TableHead>
+                <TableHead>Due Date</TableHead>
+                <TableHead></TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {workflowItems.map((item) => (
+                <TableRow key={item.id}>
+                  <TableCell>
+                    <Link
+                      to={`/workflows/${item.id}`}
+                      className="hover:underline"
+                    >
+                      {item.title}
+                    </Link>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline">{item.type}</Badge>
+                  </TableCell>
+                  <TableCell className="text-sm text-gray-600">
+                    {item.submittedBy}
+                  </TableCell>
+                  <TableCell>{item.submitDate}</TableCell>
+                  <TableCell className="text-sm">{item.currentStep}</TableCell>
+                  <TableCell>
+                    <Badge variant={getStatusColor(item.status)}>
+                      {item.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={getPriorityColor(item.priority)}>
+                      {item.priority}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>{item.dueDate}</TableCell>
+                  <TableCell>
+                    <Link to={`/workflows/${item.id}`}>
+                      <Button size="sm">
+                        {item.status === "Awaiting Action" ? "Action" : "View"}
+                      </Button>
+                    </Link>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
       </Card>
     </div>
   );

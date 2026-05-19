@@ -241,17 +241,6 @@ router.post('/', upload.single('file'), async (req, res) => {
 
     await s3.upload(params).promise();
 
-    const parsedActivityIds = (() => {
-      if (!activityIds) return [];
-      if (Array.isArray(activityIds)) return activityIds.map((id) => Number(id));
-      try {
-        const parsed = JSON.parse(activityIds);
-        return Array.isArray(parsed) ? parsed.map((id) => Number(id)) : [Number(activityIds)];
-      } catch {
-        return String(activityIds).split(',').map((id) => Number(id.trim())).filter(Boolean);
-      }
-    })();
-
     const newDocument = await Document.create({
       title: title || originalName,
       content: req.body.content || '',

@@ -398,11 +398,22 @@ export function Documents() {
               </div>
               <div>
                 <Label htmlFor="document-file">File</Label>
+                <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <label
+                    htmlFor="document-file"
+                    className="inline-flex cursor-pointer items-center justify-center rounded-md border border-input px-4 py-2 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-muted"
+                  >
+                    Browse
+                  </label>
+                  <div className="min-h-[38px] flex-1 rounded-md border bg-input-background px-3 py-2 text-sm text-gray-700 shadow-sm">
+                    {file ? file.name : 'No file selected'}
+                  </div>
+                </div>
                 <input
                   id="document-file"
                   type="file"
                   onChange={handleFileChange}
-                  className="mt-1 block w-full text-sm text-gray-700"
+                  className="hidden"
                 />
               </div>
             </div>

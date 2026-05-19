@@ -5,6 +5,7 @@ const Activity = require("./models/Activity");
 const Document = require("./models/Document");
 const Risk = require("./models/Risk");
 const Block = require("./models/Block");
+const Workflow = require("./models/Workflow");
 
 async function seedDatabase() {
   try {
@@ -172,6 +173,101 @@ async function seedDatabase() {
       }
     ]);
     console.log("Projects created successfully!");
+
+    // 4. Create initial workflows
+    const workflows = await Workflow.bulkCreate([
+      {
+        id: 1,
+        title: "AFE Amendment - Block A",
+        type: "Finance Approval",
+        submittedBy: "Sarah Johnson",
+        submitDate: "2026-04-30",
+        currentStep: "Executive Approval",
+        status: "Awaiting Action",
+        priority: "High",
+        dueDate: "2026-05-05",
+        description: "Request for AFE amendment to increase budget allocation for Onshore drilling operations due to unexpected geological conditions.",
+        amount: 5200000,
+        steps: [
+          { step: "Submitted", status: "Completed", date: "2026-04-30 14:30", user: "Sarah Johnson", action: "Submitted for approval", comment: null },
+          { step: "Manager Review", status: "Completed", date: "2026-04-30 16:45", user: "Mike Chen", action: "Approved", comment: "Reviewed and approved. Budget justification is sound." },
+          { step: "Finance Review", status: "Completed", date: "2026-05-01 10:15", user: "Emma Davis", action: "Approved", comment: "Financial analysis completed. Funds available." },
+          { step: "Executive Approval", status: "Pending", date: null, user: "John Smith", action: null, comment: null },
+          { step: "Final Processing", status: "Not Started", date: null, user: "System", action: null, comment: null }
+        ]
+      },
+      {
+        id: 2,
+        title: "Drilling Contract Review",
+        type: "Contract Approval",
+        submittedBy: "Mike Chen",
+        submitDate: "2026-04-29",
+        currentStep: "Legal Review",
+        status: "In Progress",
+        priority: "High",
+        dueDate: "2026-05-06",
+        description: "Review of drilling contract terms and vendor compliance before execution.",
+        amount: 12000000,
+        steps: [
+          { step: "Submitted", status: "Completed", date: "2026-04-29 09:00", user: "Mike Chen", action: "Submitted for approval", comment: null },
+          { step: "Legal Review", status: "In Progress", date: "2026-04-29 14:30", user: "Legal Team", action: null, comment: null }
+        ]
+      },
+      {
+        id: 3,
+        title: "HSE Incident Report",
+        type: "HSE Review",
+        submittedBy: "Emma Davis",
+        submitDate: "2026-04-28",
+        currentStep: "Management Acknowledgment",
+        status: "Awaiting Action",
+        priority: "Critical",
+        dueDate: "2026-05-02",
+        description: "Incident report requiring HSE approval and management sign-off.",
+        amount: 0,
+        steps: [
+          { step: "Submitted", status: "Completed", date: "2026-04-28 11:20", user: "Emma Davis", action: "Submitted for approval", comment: null },
+          { step: "HSE Review", status: "Completed", date: "2026-04-28 16:00", user: "HSE Team", action: "Approved", comment: "HSE review complete." },
+          { step: "Management Acknowledgment", status: "Pending", date: null, user: "Management", action: null, comment: null }
+        ]
+      },
+      {
+        id: 4,
+        title: "Environmental Permit Renewal",
+        type: "Regulatory Approval",
+        submittedBy: "James Wilson",
+        submitDate: "2026-04-27",
+        currentStep: "Internal Review",
+        status: "In Progress",
+        priority: "Medium",
+        dueDate: "2026-05-10",
+        description: "Permit renewal application for environmental approvals and regulatory compliance.",
+        amount: 0,
+        steps: [
+          { step: "Submitted", status: "Completed", date: "2026-04-27 08:30", user: "James Wilson", action: "Submitted for approval", comment: null },
+          { step: "Internal Review", status: "In Progress", date: "2026-04-28 10:00", user: "Internal Team", action: null, comment: null }
+        ]
+      },
+      {
+        id: 5,
+        title: "Well Completion Report",
+        type: "Technical Review",
+        submittedBy: "Lisa Brown",
+        submitDate: "2026-04-25",
+        currentStep: "Completed",
+        status: "Approved",
+        priority: "Medium",
+        dueDate: "2026-05-01",
+        description: "Final technical report for well completion and operations handover.",
+        amount: 0,
+        steps: [
+          { step: "Submitted", status: "Completed", date: "2026-04-25 15:10", user: "Lisa Brown", action: "Submitted for approval", comment: null },
+          { step: "Technical Review", status: "Completed", date: "2026-04-26 10:30", user: "Technical Team", action: "Approved", comment: "No issues found." },
+          { step: "Completed", status: "Completed", date: "2026-05-01 09:45", user: "Operations", action: "Finalized", comment: "Report complete." }
+        ]
+      }
+    ]);
+    console.log("Workflows created successfully!");
 
     // 3. Create Activities with new fields
     const activities = await Activity.bulkCreate([
