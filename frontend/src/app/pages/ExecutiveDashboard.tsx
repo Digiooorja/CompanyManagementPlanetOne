@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
@@ -13,8 +14,13 @@ import {
   DollarSign,
   FileText
 } from "lucide-react";
+import { blocksApi } from "../../services/api";
 
 export function ExecutiveDashboard() {
+  const [blocks, setBlocks] = useState<any[]>([]);
+  const [loadingBlocks, setLoadingBlocks] = useState(true);
+  const [blockError, setBlockError] = useState<string | null>(null);
+
   const countdownCards = [
     {
       title: "Licence Expiry",
@@ -39,35 +45,24 @@ export function ExecutiveDashboard() {
     },
   ];
 
-  const blocks = [
-    {
-      id: 1,
-      name: "Block A",
-      status: "Active",
-      budget: 25000000,
-      actual: 18500000,
-      activeRisks: 3,
-      criticalRisks: 1,
-    },
-    {
-      id: 2,
-      name: "Block B",
-      status: "Active",
-      budget: 42000000,
-      actual: 38200000,
-      activeRisks: 5,
-      criticalRisks: 2,
-    },
-    {
-      id: 3,
-      name: "Block C",
-      status: "Planning",
-      budget: 15000000,
-      actual: 2100000,
-      activeRisks: 2,
-      criticalRisks: 0,
-    },
-  ];
+  const fetchBlocks = async () => {
+    try {
+      setLoadingBlocks(true);
+      setBlockError(null);
+      const data = await blocksApi.getAll();
+      setBlocks(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Error loading blocks overview:', err);
+      setBlockError('Unable to load blocks from the database.');
+      setBlocks([]);
+    } finally {
+      setLoadingBlocks(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchBlocks();
+  }, []);
 
   const alerts = [
     {
@@ -143,54 +138,62 @@ export function ExecutiveDashboard() {
 
       {/* Blocks Overview */}
       <div>
-        <h2 className="text-xl mb-4">Blocks Overview</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {blocks.map((block) => (
-            <Card key={block.id} className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg">{block.name}</h3>
-                <Badge variant={block.status === "Active" ? "default" : "outline"}>
-                  {block.status}
-                </Badge>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <div className="flex items-center justify-between text-sm mb-2">
-                    <span className="text-gray-600">Budget vs Actual</span>
-                    <span className="font-medium">
-                      {((block.actual / block.budget) * 100).toFixed(0)}%
-                    </span>
-                  </div>
-                  <Progress value={(block.actual / block.budget) * 100} className="h-2" />
-                  <div className="flex items-center justify-between text-xs mt-1 text-gray-500">
-                    <span>${(block.actual / 1000000).toFixed(1)}M</span>
-                    <span>${(block.budget / 1000000).toFixed(1)}M</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between pt-3 border-t">
-                  <div className="flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4 text-orange-500" />
-                    <span className="text-sm">Active Risks</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline">{block.activeRisks}</Badge>
-                    {block.criticalRisks > 0 && (
-                      <Badge variant="destructive">{block.criticalRisks} critical</Badge>
-                    )}
-                  </div>
-                </div>
-
-                <Link to={`/blocks/${block.id}`}>
-                  <Button variant="outline" className="w-full">
-                    View Details
-                  </Button>
-                </Link>
-              </div>
-            </Card>
-          ))}
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl">Blocks Overview</h2>
+          {loadingBlocks && <span className="text-sm text-gray-500">Loading blocks...</span>}
         </div>
+
+        {blockError ? (
+          <Card className="p-6 bg-red-50 border border-red-200">
+            <p className="text-red-700">{blockError}</p>
+          </Card>
+        ) : blocks.length === 0 ? (
+          <Card className="p-6">
+            <p className="text-gray-600">No blocks found in the database.</p>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {blocks.map((block) => (
+              <Card key={block.id} className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-lg">{block.name}</h3>
+                    <p className="text-sm text-gray-500">{block.operator || block.location || 'No operator/location set'}</p>
+                  </div>
+                  <Badge variant={block.status === "Active" ? "default" : "outline"}>
+                    {block.status}
+                  </Badge>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="text-sm text-gray-600">
+                    <p>
+                      <span className="font-medium">Area:</span> {block.area || 'Unknown'}
+                    </p>
+                    <p>
+                      <span className="font-medium">Location:</span> {block.location || 'Unknown'}
+                    </p>
+                    <p>
+                      <span className="font-medium">Licence Expiry:</span>{' '}
+                      {block.licenceExpiry ? new Date(block.licenceExpiry).toLocaleDateString() : 'Not set'}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-3 border-t">
+                    <div className="text-sm text-gray-600">
+                      {block.description ? block.description.slice(0, 100) : 'No description available'}
+                    </div>
+                    <Link to={`/blocks/${block.id}`}>
+                      <Button variant="outline" size="sm">
+                        Details
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Bottom Section */}

@@ -1,91 +1,236 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, ChangeEvent } from "react";
 import { Link } from "react-router-dom";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "../components/ui/table";
 import { Search, Plus, FileText, FolderOpen, Download } from "lucide-react";
-import { documentsApi } from "../../services/api";
+import { useAuth } from "../contexts/AuthContext";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogClose,
+} from "../components/ui/dialog";
+import { documentsApi, blocksApi, activitiesApi, projectsApi } from "../../services/api";
 
 export function Documents() {
   const [filterBlock, setFilterBlock] = useState("all");
   const [filterType, setFilterType] = useState("all");
   const [documents, setDocuments] = useState<any[]>([]);
+  const [blocks, setBlocks] = useState<any[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [activities, setActivities] = useState<any[]>([]);
+  const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
+  const [previewingId, setPreviewingId] = useState<number | null>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [uploadForm, setUploadForm] = useState({
+    title: "",
+    author: "",
+    documentType: "Technical",
+    status: "Review",
+    blockId: "",
+    projectId: "",
+    activityId: ""
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
 
-  const defaultDocuments = [
-    {
-      id: 1,
-      name: "Drilling Plan - Well B-3",
-      type: "Technical",
-      block: "Block B",
-      project: "Well B-3 Development",
-      uploadDate: "2026-04-10",
-      uploadedBy: "Mike Chen",
-      size: "4.2 MB",
-      status: "Approved",
-    },
-    {
-      id: 2,
-      name: "Environmental Impact Assessment",
-      type: "Environmental",
-      block: "Block A",
-      project: "DWTCP Deep Water",
-      uploadDate: "2026-03-22",
-      uploadedBy: "Emma Davis",
-      size: "8.7 MB",
-      status: "Approved",
-    },
-    {
-      id: 3,
-      name: "AFE Amendment Request",
-      type: "Finance",
-      block: "Block A",
-      project: "Onshore",
-      uploadDate: "2026-04-30",
-      uploadedBy: "James Wilson",
-      size: "1.5 MB",
-      status: "Pending Review",
-    },
-    {
-      id: 4,
-      name: "Safety Inspection Report Q1",
-      type: "HSE",
-      block: "Block B",
-      project: "Operations",
-      uploadDate: "2026-04-05",
-      uploadedBy: "Sarah Johnson",
-      size: "3.1 MB",
-      status: "Approved",
-    },
-    {
-      id: 5,
-      name: "Seismic Survey Results",
-      type: "Technical",
-      block: "Block C",
-      project: "Exploration Phase 1",
-      uploadDate: "2026-04-18",
-      uploadedBy: "Lisa Brown",
-      size: "15.4 MB",
-      status: "Under Review",
-    },
-    {
-      id: 6,
-      name: "Licence Renewal Application",
-      type: "Legal",
-      block: "Block A",
-      project: null,
-      uploadDate: "2026-04-25",
-      uploadedBy: "Mike Chen",
-      size: "2.8 MB",
-      status: "Pending Approval",
-    },
-  ];
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const [documentData, blockData, projectData] = await Promise.all([
+          documentsApi.getAll(),
+          blocksApi.getAll(),
+          // get all projects and use block filtering client-side
+          projectsApi.getAll ? projectsApi.getAll() : []
+        ]);
+        setDocuments(Array.isArray(documentData) ? documentData : []);
+        setBlocks(Array.isArray(blockData) ? blockData : []);
+        setProjects(Array.isArray(projectData) ? projectData : []);
+      } catch (err) {
+        console.error('Error loading documents page data:', err);
+        setDocuments([]);
+        setBlocks([]);
+        setProjects([]);
+        setError('Unable to load documents data');
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const renderedDocuments = documents.length > 0 ? documents : defaultDocuments;
+    loadData();
+  }, []);
+
+  const fetchActivitiesForProject = async (projectId: string) => {
+    if (!projectId) {
+      setActivities([]);
+      return;
+    }
+
+    try {
+      const data = await activitiesApi.getByProjectId(Number(projectId));
+      setActivities(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Error fetching activities:', err);
+      setActivities([]);
+    }
+  };
+
+  const handleUploadChange = (field: keyof typeof uploadForm, value: string) => {
+    setUploadForm((current) => {
+      if (field === 'blockId') {
+        return {
+          ...current,
+          blockId: value,
+          projectId: '',
+          activityId: ''
+        };
+      }
+
+      return {
+        ...current,
+        [field]: value
+      };
+    });
+  };
+
+  const handleProjectChange = async (projectId: string) => {
+    setUploadForm((current) => ({
+      ...current,
+      projectId,
+      activityId: ''
+    }));
+    await fetchActivitiesForProject(projectId);
+  };
+
+  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = event.target.files?.[0] || null;
+    setFile(selectedFile);
+  };
+
+  const handleUploadDocument = async () => {
+    if (!file) {
+      setError('Please select a file to upload');
+      return;
+    }
+
+    if (!uploadForm.projectId && !uploadForm.activityId) {
+      setError('Please choose at least a project or activity');
+      return;
+    }
+
+    try {
+      setUploading(true);
+      setError(null);
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('title', uploadForm.title || file.name);
+      formData.append(
+        'author',
+        user ? `${user.firstName || ''} ${user.lastName || user.username}`.trim() : uploadForm.author || 'unknown'
+      );
+      formData.append('documentType', uploadForm.documentType);
+      formData.append('status', uploadForm.status);
+      if (uploadForm.projectId) {
+        formData.append('projectId', uploadForm.projectId);
+      }
+      if (uploadForm.activityId) {
+        formData.append('activityId', uploadForm.activityId);
+      }
+
+      await documentsApi.upload(formData);
+
+      const refreshedDocuments = await documentsApi.getAll();
+      setDocuments(Array.isArray(refreshedDocuments) ? refreshedDocuments : []);
+      setIsUploadOpen(false);
+      setFile(null);
+      setUploadForm({
+        title: '',
+        author: '',
+        documentType: 'Technical',
+        status: 'Review',
+        blockId: '',
+        projectId: '',
+        activityId: ''
+      });
+    } catch (err) {
+      console.error('Error uploading document:', err);
+      setError('Failed to upload document');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDownloadDocument = async (documentId: number) => {
+    try {
+      setDownloadingId(documentId);
+      setError(null);
+      const presigned = await documentsApi.getPresignedUrl(documentId, 'download');
+      window.open(presigned.url, '_blank');
+    } catch (err) {
+      console.error('Error fetching document download link:', err);
+      setError('Failed to generate download link');
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
+  const handlePreviewDocument = async (documentId: number) => {
+    try {
+      setPreviewingId(documentId);
+      setError(null);
+      const presigned = await documentsApi.getPresignedUrl(documentId, 'preview');
+      window.open(presigned.url, '_blank');
+    } catch (err) {
+      console.error('Error fetching document preview link:', err);
+      setError('Failed to generate preview link');
+    } finally {
+      setPreviewingId(null);
+    }
+  };
+
+  const getDocumentProjectName = (document: any) => {
+    if (document?.project) {
+      return document.project;
+    }
+    const project = projects.find((projectItem) => String(projectItem.id) === String(document?.projectId));
+    return project?.name || document?.projectId || '-';
+  };
+
+  const getDocumentBlockName = (document: any) => {
+    if (document?.block || document?.blockName) {
+      return document.block || document.blockName;
+    }
+
+    const project = projects.find((projectItem) => String(projectItem.id) === String(document?.projectId));
+    if (!project) {
+      return document?.block || '-';
+    }
+
+    const block = blocks.find((blockItem) => String(blockItem.id) === String(project.blockId));
+    return block?.name || document?.block || '-';
+  };
+
+  const getActiveUserName = () => {
+    if (!user) return '-';
+    return `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username || '-';
+  };
+
+  const renderedDocuments = documents;
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -109,10 +254,147 @@ export function Documents() {
           <h1 className="text-3xl">Document Management</h1>
           <p className="text-gray-500 mt-1">Centralized document library</p>
         </div>
-        <Button>
-          <Plus className="h-4 w-4 mr-2" />
-          Upload Document
-        </Button>
+        <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="h-4 w-4 mr-2" />
+              Upload Document
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Upload Document</DialogTitle>
+              <DialogDescription>
+                Upload a file and link it to a block, project, and activity.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-2">
+              <div>
+                <Label htmlFor="document-title">Title</Label>
+                <Input
+                  id="document-title"
+                  value={uploadForm.title}
+                  onChange={(event) => handleUploadChange('title', event.target.value)}
+                  placeholder="Document title"
+                />
+              </div>
+              <div>
+                <Label htmlFor="document-author">Author</Label>
+                <Input
+                  id="document-author"
+                  value={uploadForm.author}
+                  onChange={(event) => handleUploadChange('author', event.target.value)}
+                  placeholder="Author name"
+                />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <Label htmlFor="document-block">Block</Label>
+                  <select
+                    id="document-block"
+                    className="mt-1 block w-full rounded-md border bg-input-background px-3 py-2 text-sm text-foreground shadow-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                    value={uploadForm.blockId}
+                    onChange={(event) => handleUploadChange('blockId', event.target.value)}
+                  >
+                    <option value="">Select block</option>
+                    {blocks.map((block) => (
+                      <option key={block.id} value={String(block.id)}>
+                        {block.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <Label htmlFor="document-project">Project</Label>
+                  <select
+                    id="document-project"
+                    className="mt-1 block w-full rounded-md border bg-input-background px-3 py-2 text-sm text-foreground shadow-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                    value={uploadForm.projectId}
+                    onChange={(event) => handleProjectChange(event.target.value)}
+                  >
+                    <option value="">Select project</option>
+                    {projects
+                      .filter((project) =>
+                        uploadForm.blockId ? String(project.blockId) === uploadForm.blockId : true
+                      )
+                      .map((project) => (
+                        <option key={project.id} value={String(project.id)}>
+                          {project.name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+                <div>
+                  <Label htmlFor="document-activity">Activity</Label>
+                  <select
+                    id="document-activity"
+                    className="mt-1 block w-full rounded-md border bg-input-background px-3 py-2 text-sm text-foreground shadow-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                    value={uploadForm.activityId}
+                    onChange={(event) => handleUploadChange('activityId', event.target.value)}
+                    disabled={!uploadForm.projectId}
+                  >
+                    <option value="">Select activity</option>
+                    {activities.map((activity) => (
+                      <option key={activity.id} value={String(activity.id)}>
+                        {activity.name || activity.title || `Activity ${activity.id}`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="document-type">Document Type</Label>
+                  <select
+                    id="document-type"
+                    className="mt-1 block w-full rounded-md border bg-input-background px-3 py-2 text-sm text-foreground shadow-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                    value={uploadForm.documentType}
+                    onChange={(event) => handleUploadChange('documentType', event.target.value)}
+                  >
+                    <option value="Technical">Technical</option>
+                    <option value="HSE">HSE</option>
+                    <option value="Finance">Finance</option>
+                    <option value="Report">Report</option>
+                  </select>
+                </div>
+                <div>
+                  <Label htmlFor="document-status">Status</Label>
+                  <select
+                    id="document-status"
+                    className="mt-1 block w-full rounded-md border bg-input-background px-3 py-2 text-sm text-foreground shadow-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                    value={uploadForm.status}
+                    onChange={(event: ChangeEvent<HTMLSelectElement>) => handleUploadChange('status', event.target.value)}
+                  >
+                    <option value="Review">Review</option>
+                    <option value="Approved">Approved</option>
+                    <option value="Rejected">Rejected</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="document-file">File</Label>
+                <input
+                  id="document-file"
+                  type="file"
+                  onChange={handleFileChange}
+                  className="mt-1 block w-full text-sm text-gray-700"
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button variant="outline" type="button">
+                  Cancel
+                </Button>
+              </DialogClose>
+              <Button onClick={handleUploadDocument} disabled={uploading}>
+                {uploading ? 'Uploading...' : 'Upload'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Search and Filters */}
@@ -230,19 +512,19 @@ export function Documents() {
                     to={`/documents/${doc.id}`}
                     className="hover:underline"
                   >
-                    {doc.name}
+                    {doc.name || doc.title}
                   </Link>
                 </TableCell>
                 <TableCell>
-                  <Badge variant="outline">{doc.type}</Badge>
+                  <Badge variant="outline">{doc.type || doc.documentType || 'Report'}</Badge>
                 </TableCell>
-                <TableCell>{doc.block}</TableCell>
+                <TableCell>{getDocumentBlockName(doc)}</TableCell>
                 <TableCell className="text-sm text-gray-600">
-                  {doc.project || "-"}
+                  {getDocumentProjectName(doc)}
                 </TableCell>
                 <TableCell>{doc.uploadDate}</TableCell>
                 <TableCell className="text-sm text-gray-600">
-                  {doc.uploadedBy}
+                  {doc.uploadedBy || getActiveUserName()}
                 </TableCell>
                 <TableCell>{doc.size}</TableCell>
                 <TableCell>
@@ -257,7 +539,20 @@ export function Documents() {
                         View
                       </Button>
                     </Link>
-                    <Button size="sm" variant="ghost">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handlePreviewDocument(doc.id)}
+                      disabled={previewingId === doc.id}
+                    >
+                      Preview
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleDownloadDocument(doc.id)}
+                      disabled={downloadingId === doc.id}
+                    >
                       <Download className="h-4 w-4" />
                     </Button>
                   </div>

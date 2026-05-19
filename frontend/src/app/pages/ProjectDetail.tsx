@@ -106,6 +106,7 @@ function ProjectDetail() {
   const [risks, setRisks] = useState<Risk[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [expandedActivities, setExpandedActivities] = useState<number[]>([]);
   const [activeTab, setActiveTab] = useState<'gantt' | 'activities' | 'plan-actual' | 'budget' | 'documents' | 'risks'>('gantt');
 
@@ -161,6 +162,20 @@ function ProjectDetail() {
     });
     return rows;
   }, [activities, expandedActivities]);
+
+  const handleDownloadDocument = async (documentId: number) => {
+    try {
+      setDownloadingId(documentId);
+      setError(null);
+      const presigned = await documentsApi.getPresignedUrl(documentId, 'download');
+      window.open(presigned.url, '_blank');
+    } catch (err) {
+      console.error('Error fetching document download link:', err);
+      setError('Failed to generate download link');
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   const statistics = useMemo(() => {
     let completed = 0;
@@ -218,15 +233,28 @@ function ProjectDetail() {
     };
   }, [activities, risks]);
 
+  const activityBudgetTotal = useMemo(
+    () => activities.reduce((sum, activity) => sum + Number(activity.plannedCost ?? 0), 0),
+    [activities]
+  );
+
+  const activitySpentTotal = useMemo(
+    () => activities.reduce((sum, activity) => sum + Number(activity.actualCost ?? 0), 0),
+    [activities]
+  );
+
   const budgetChartData = useMemo(() => {
-    if (!project?.startDate || !project?.endDate || !project.budget) return [];
+    const budgetValue = activities.length > 0 ? activityBudgetTotal : Number(project?.budget ?? 0);
+    const spentValue = activities.length > 0 ? activitySpentTotal : Number(project?.spent ?? 0);
+
+    if (!project?.startDate || !project?.endDate || budgetValue <= 0) return [];
     const start = new Date(project.startDate);
     const end = new Date(project.endDate);
     const months: { month: string; budget: number; actual: number }[] = [];
     const current = new Date(start.getFullYear(), start.getMonth(), 1);
     const totalMonths = Math.max((end.getFullYear() - start.getFullYear()) * 12 + end.getMonth() - start.getMonth() + 1, 1);
-    const monthlyBudget = Number(project.budget) / totalMonths;
-    const monthlyActual = Number(project.spent ?? 0) / totalMonths;
+    const monthlyBudget = budgetValue / totalMonths;
+    const monthlyActual = spentValue / totalMonths;
 
     while (current <= end) {
       months.push({
@@ -238,7 +266,7 @@ function ProjectDetail() {
     }
 
     return months;
-  }, [project]);
+  }, [project, activities.length, activityBudgetTotal, activitySpentTotal]);
 
   const planVsActualData = useMemo(
     () =>
@@ -288,8 +316,8 @@ function ProjectDetail() {
     );
   }
 
-  const budgetValue = Number(project.budget ?? 0);
-  const spentValue = Number(project.spent ?? 0);
+  const budgetValue = activities.length > 0 ? activityBudgetTotal : Number(project.budget ?? 0);
+  const spentValue = activities.length > 0 ? activitySpentTotal : Number(project.spent ?? 0);
   const remainingValue = Math.max(budgetValue - spentValue, 0);
   const utilization = budgetValue > 0 ? Math.round((spentValue / budgetValue) * 100) : 0;
 
@@ -581,7 +609,8 @@ function ProjectDetail() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => doc.fileUrl && window.open(doc.fileUrl, '_blank')}
+                            onClick={() => handleDownloadDocument(doc.id)}
+                            disabled={downloadingId === doc.id}
                           >
                             <Download className="h-4 w-4" />
                           </Button>

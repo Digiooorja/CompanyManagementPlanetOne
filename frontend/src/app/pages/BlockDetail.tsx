@@ -126,7 +126,7 @@ export function BlockDetail() {
       </div>
 
       {/* Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4">
         <Card className="p-4">
           <p className="text-sm text-gray-600">Operator</p>
           <p className="text-lg mt-1">{block.operator}</p>
@@ -138,6 +138,14 @@ export function BlockDetail() {
         <Card className="p-4">
           <p className="text-sm text-gray-600">Area</p>
           <p className="text-lg mt-1">{block.area}</p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-sm text-gray-600">Budget</p>
+          <p className="text-lg mt-1">{block.budget != null ? `$${Number(block.budget).toLocaleString()}` : '-'}</p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-sm text-gray-600">Spent</p>
+          <p className="text-lg mt-1">{block.spent != null ? `$${Number(block.spent).toLocaleString()}` : '-'}</p>
         </Card>
         <Card className="p-4">
           <p className="text-sm text-gray-600">Active Projects</p>
@@ -161,7 +169,7 @@ export function BlockDetail() {
               Joint Venture Partners
             </h3>
             <div className="space-y-2">
-              {(block.partners || []).map((partner, index) => (
+              {(block.partners || []).map((partner: any, index: number) => (
                 <div
                   key={index}
                   className="flex items-center justify-between p-3 bg-gray-50 rounded"

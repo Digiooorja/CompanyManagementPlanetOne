@@ -9,7 +9,7 @@ import { Separator } from "../components/ui/separator";
 import { Input } from "../components/ui/input";
 import { Select } from "../components/ui/select";
 import { ArrowLeft, Calendar, User, FileText, MessageSquare, Plus, Trash2, CheckCircle } from "lucide-react";
-import { activitiesApi } from "../../services/api";
+import { activitiesApi, commentsApi, departmentsApi } from "../../services/api";
 
 export function ActivityDetail() {
   const { id } = useParams();
@@ -20,26 +20,9 @@ export function ActivityDetail() {
     { id: 2, name: "Safety Procedures", type: "HSE", uploadDate: "2026-04-12" },
     { id: 3, name: "Equipment Specifications", type: "Technical", uploadDate: "2026-04-14" },
   ]);
-  const [comments, setComments] = useState<any[]>([
-    {
-      id: 1,
-      user: "Mike Chen",
-      date: "2026-04-28 10:30",
-      text: "Started the review process. Initial assessment looks good, but need to verify some equipment specifications.",
-    },
-    {
-      id: 2,
-      user: "Sarah Johnson",
-      date: "2026-04-29 14:15",
-      text: "Thanks for the update. Please prioritize the safety procedures review.",
-    },
-    {
-      id: 3,
-      user: "Mike Chen",
-      date: "2026-05-01 09:00",
-      text: "Safety procedures have been reviewed and approved. Moving on to final compliance check.",
-    },
-  ]);
+  const [comments, setComments] = useState<any[]>([]);
+  const [departments, setDepartments] = useState<any[]>([]);
+  const [commentDepartmentId, setCommentDepartmentId] = useState<number | string>('');
   const [newComment, setNewComment] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -59,20 +42,30 @@ export function ActivityDetail() {
       try {
         setLoading(true);
         if (id) {
-          const data = await activitiesApi.getById(parseInt(id));
-          // Transform the data to ensure all expected fields are available
+          const [activityData, commentData, departmentData] = await Promise.all([
+            activitiesApi.getById(parseInt(id)),
+            commentsApi.getByActivityId(parseInt(id)),
+            departmentsApi.getAll()
+          ]);
+
           const transformedActivity = {
-            ...data,
-            title: data.title || data.name,
-            project: typeof data.project === 'object' ? data.project?.name : data.project
+            ...activityData,
+            title: activityData.title || activityData.name,
+            project: typeof activityData.project === 'object' ? activityData.project?.name : activityData.project
           };
           setActivity(transformedActivity);
-          // Transform sub-activities
-          const transformedSubActivities = (data.subActivities || []).map((sub: any) => ({
+
+          const transformedSubActivities = (activityData.subActivities || []).map((sub: any) => ({
             ...sub,
             title: sub.title || sub.name
           }));
           setSubActivities(transformedSubActivities);
+
+          setComments(Array.isArray(commentData) ? commentData : []);
+          setDepartments(Array.isArray(departmentData) ? departmentData : []);
+          if (Array.isArray(departmentData) && departmentData.length > 0) {
+            setCommentDepartmentId(departmentData[0].id);
+          }
         }
       } catch (err) {
         console.error('Error fetching activity:', err);
@@ -190,21 +183,35 @@ export function ActivityDetail() {
     setLinkedDocuments([newDoc, ...linkedDocuments]);
   };
 
-  const handlePostComment = () => {
+  const handlePostComment = async () => {
     if (!newComment.trim()) {
       setError('Comment cannot be empty');
       return;
     }
-    setComments([
-      {
-        id: Date.now(),
-        user: 'You',
-        date: new Date().toISOString().slice(0, 16).replace('T', ' '),
-        text: newComment.trim(),
-      },
-      ...comments,
-    ]);
-    setNewComment('');
+
+    if (!commentDepartmentId) {
+      setError('Please select a department for the comment');
+      return;
+    }
+
+    if (!activity) return;
+
+    try {
+      setActivityActionLoading(true);
+      const comment = await commentsApi.create({
+        activityId: activity.id,
+        content: newComment.trim(),
+        departmentId: Number(commentDepartmentId)
+      });
+      setComments([comment, ...comments]);
+      setNewComment('');
+      setError(null);
+    } catch (err) {
+      console.error('Error posting comment:', err);
+      setError('Failed to post comment');
+    } finally {
+      setActivityActionLoading(false);
+    }
   };
 
   const handleEditActivity = async () => {
@@ -566,32 +573,55 @@ export function ActivityDetail() {
               Comments
             </h3>
             <div className="space-y-4">
-              {comments.map((comment) => (
-                <div key={comment.id} className="space-y-2">
-                  <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                      <User className="h-4 w-4 text-blue-600" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-sm">{comment.user}</span>
-                        <span className="text-xs text-gray-500">{comment.date}</span>
+              {comments.length === 0 ? (
+                <p className="text-sm text-gray-500">No comments yet. Add the first department-tagged comment.</p>
+              ) : (
+                comments.map((comment) => (
+                  <div key={comment.id} className="space-y-2">
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                        <User className="h-4 w-4 text-blue-600" />
                       </div>
-                      <p className="text-sm text-gray-700 mt-1">{comment.text}</p>
+                      <div className="flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium text-sm">{comment.author?.username || comment.user || 'Unknown'}</span>
+                          <span className="text-xs text-gray-500">{comment.createdAt ? new Date(comment.createdAt).toLocaleString() : comment.date}</span>
+                          {comment.department?.name && (
+                            <Badge variant="outline" className="text-xs">
+                              {comment.department.name}
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-700 mt-1">{comment.content || comment.text}</p>
+                      </div>
                     </div>
+                    <Separator />
                   </div>
-                  <Separator />
-                </div>
-              ))}
+                ))
+              )}
             </div>
-            <div className="mt-4 space-y-2">
+            <div className="mt-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Comment Department</label>
+                <select
+                  className="w-full rounded-md border px-3 py-2"
+                  value={commentDepartmentId}
+                  onChange={(e) => setCommentDepartmentId(e.target.value)}
+                >
+                  {departments.map((dept) => (
+                    <option key={dept.id} value={dept.id}>{dept.name}</option>
+                  ))}
+                </select>
+              </div>
               <Textarea
                 placeholder="Add a comment..."
                 rows={3}
                 value={newComment}
                 onChange={(e) => setNewComment(e.target.value)}
               />
-              <Button size="sm" onClick={handlePostComment}>Post Comment</Button>
+              <Button size="sm" onClick={handlePostComment} disabled={activityActionLoading}>
+                Post Comment
+              </Button>
             </div>
           </Card>
         </div>

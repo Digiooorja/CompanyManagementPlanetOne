@@ -42,6 +42,19 @@ router.get('/', async (req, res) => {
         {
           association: 'project',
           attributes: ['id', 'name', 'description', 'status']
+        },
+        {
+          association: 'comments',
+          include: [
+            {
+              association: 'author',
+              attributes: ['id', 'username', 'firstName', 'lastName']
+            },
+            {
+              association: 'department',
+              attributes: ['id', 'name']
+            }
+          ]
         }
       ],
       order: [['createdAt', 'DESC']]
@@ -64,6 +77,19 @@ router.get('/:id', async (req, res) => {
         {
           association: 'project',
           attributes: ['id', 'name', 'description', 'status']
+        },
+        {
+          association: 'comments',
+          include: [
+            {
+              association: 'author',
+              attributes: ['id', 'username', 'firstName', 'lastName']
+            },
+            {
+              association: 'department',
+              attributes: ['id', 'name']
+            }
+          ]
         }
       ]
     });

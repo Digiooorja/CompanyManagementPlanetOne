@@ -2,6 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const Department = require('../models/Department');
 const { authMiddleware } = require('../middleware/auth');
 
 const router = express.Router();
@@ -9,11 +10,20 @@ const router = express.Router();
 // Register
 router.post('/register', async (req, res) => {
   try {
-    const { username, email, password, firstName, lastName, department, role } = req.body;
+    const { username, email, password, firstName, lastName, department, departmentId, role } = req.body;
 
     // Validate input
     if (!username || !email || !password) {
       return res.status(400).json({ error: 'Username, email, and password are required' });
+    }
+
+    // If a departmentId is provided, verify it exists
+    let selectedDepartment = null;
+    if (departmentId) {
+      selectedDepartment = await Department.findByPk(departmentId);
+      if (!selectedDepartment) {
+        return res.status(400).json({ error: 'Invalid departmentId' });
+      }
     }
 
     // Check if user already exists
@@ -36,7 +46,8 @@ router.post('/register', async (req, res) => {
       password: hashedPassword,
       firstName,
       lastName,
-      department: department || 'Operations',
+      departmentId: selectedDepartment ? selectedDepartment.id : undefined,
+      department: selectedDepartment ? selectedDepartment.name : department || 'Operations',
       role: role || 'User'
     });
 
@@ -56,6 +67,7 @@ router.post('/register', async (req, res) => {
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
+        departmentId: user.departmentId,
         department: user.department,
         role: user.role
       }
@@ -97,7 +109,13 @@ router.post('/login', async (req, res) => {
 
     // Generate token
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role, department: user.department },
+      {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        departmentId: user.departmentId,
+        department: user.department
+      },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -111,6 +129,7 @@ router.post('/login', async (req, res) => {
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
+        departmentId: user.departmentId,
         department: user.department,
         role: user.role
       }
@@ -125,7 +144,13 @@ router.post('/login', async (req, res) => {
 router.get('/me', authMiddleware, async (req, res) => {
   try {
     const user = await User.findByPk(req.user.id, {
-      attributes: { exclude: ['password'] }
+      attributes: { exclude: ['password'] },
+      include: [
+        {
+          association: 'departmentDetails',
+          attributes: ['id', 'name']
+        }
+      ]
     });
 
     if (!user) {
@@ -143,7 +168,13 @@ router.get('/me', authMiddleware, async (req, res) => {
 router.get('/users', authMiddleware, async (req, res) => {
   try {
     const users = await User.findAll({
-      attributes: { exclude: ['password'] }
+      attributes: { exclude: ['password'] },
+      include: [
+        {
+          association: 'departmentDetails',
+          attributes: ['id', 'name']
+        }
+      ]
     });
 
     res.json(users);
@@ -157,7 +188,7 @@ router.get('/users', authMiddleware, async (req, res) => {
 router.put('/:id', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
-    const { firstName, lastName, department, role, active } = req.body;
+    const { firstName, lastName, department, departmentId, role, active } = req.body;
 
     // Check authorization - can only update own profile unless admin
     if (req.user.id !== parseInt(id) && req.user.role !== 'Admin') {
@@ -170,11 +201,20 @@ router.put('/:id', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
+    let selectedDepartment = null;
+    if (departmentId !== undefined) {
+      selectedDepartment = await Department.findByPk(departmentId);
+      if (!selectedDepartment) {
+        return res.status(400).json({ error: 'Invalid departmentId' });
+      }
+    }
+
     // Update fields
     await user.update({
       firstName,
       lastName,
-      department,
+      departmentId: selectedDepartment ? selectedDepartment.id : user.departmentId,
+      department: selectedDepartment ? selectedDepartment.name : department !== undefined ? department : user.department,
       role: req.user.role === 'Admin' ? role : user.role, // Only admins can change role
       active: req.user.role === 'Admin' ? active : user.active // Only admins can deactivate
     });
@@ -187,6 +227,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
+        departmentId: user.departmentId,
         department: user.department,
         role: user.role
       }

@@ -2,6 +2,32 @@ const express = require('express');
 const router = express.Router();
 const Project = require('../models/Project');
 
+function sumDecimalField(records, field) {
+  if (!Array.isArray(records)) return 0;
+  return records.reduce((sum, item) => sum + Number(item?.[field] ?? 0), 0);
+}
+
+function normalizeProject(project) {
+  const projectJson = project.toJSON();
+  const activityBudget = Array.isArray(projectJson.activities)
+    ? sumDecimalField(projectJson.activities, 'plannedCost')
+    : 0;
+  const activitySpent = Array.isArray(projectJson.activities)
+    ? sumDecimalField(projectJson.activities, 'actualCost')
+    : 0;
+
+  return {
+    ...projectJson,
+    budget: Array.isArray(projectJson.activities)
+      ? activityBudget
+      : Number(projectJson.budget ?? 0),
+    spent: Array.isArray(projectJson.activities)
+      ? activitySpent
+      : Number(projectJson.spent ?? 0),
+    block: projectJson.blockDetails?.name || projectJson.block,
+  };
+}
+
 // GET all projects
 router.get('/', async (req, res) => {
   try {
@@ -17,16 +43,18 @@ router.get('/', async (req, res) => {
         {
           association: 'blockDetails',
           attributes: ['id', 'name']
+        },
+        {
+          association: 'activities',
+          attributes: ['plannedCost', 'actualCost']
         }
       ]
     });
 
     const normalizedProjects = projects.map((proj) => {
-      const projectJson = proj.toJSON();
-      return {
-        ...projectJson,
-        block: projectJson.blockDetails?.name || projectJson.block,
-      };
+      const normalized = normalizeProject(proj);
+      delete normalized.activities;
+      return normalized;
     });
 
     res.json(normalizedProjects);
@@ -43,15 +71,16 @@ router.get('/:id', async (req, res) => {
         {
           association: 'blockDetails',
           attributes: ['id', 'name']
+        },
+        {
+          association: 'activities',
+          attributes: ['plannedCost', 'actualCost']
         }
       ]
     });
     if (!project) return res.status(404).json({ message: 'Project not found' });
-    const projectJson = project.toJSON();
-    res.json({
-      ...projectJson,
-      block: projectJson.blockDetails?.name || projectJson.block,
-    });
+    const normalized = normalizeProject(project);
+    res.json(normalized);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

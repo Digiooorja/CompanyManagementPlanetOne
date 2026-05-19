@@ -6,9 +6,11 @@ async function apiCall<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
+  const token = localStorage.getItem('token');
   const defaultOptions: RequestInit = {
     headers: {
       'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options.headers,
     },
   };
@@ -16,6 +18,25 @@ async function apiCall<T>(
   const response = await fetch(url, {
     ...defaultOptions,
     ...options,
+  });
+
+  if (!response.ok) {
+    throw new Error(`API Error ${url}: ${response.status} ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+async function apiUpload<T>(endpoint: string, formData: FormData): Promise<T> {
+  const url = `${API_BASE_URL}${endpoint}`;
+  const token = localStorage.getItem('token');
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: formData,
   });
 
   if (!response.ok) {
@@ -54,6 +75,17 @@ export const activitiesApi = {
   }),
 };
 
+export const commentsApi = {
+  getByActivityId: (activityId: number) => apiCall<any[]>(`/comments?activityId=${activityId}`),
+  create: (data: any) => apiCall('/comments', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: number, data: any) => apiCall(`/comments/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: number) => apiCall(`/comments/${id}`, { method: 'DELETE' }),
+};
+
+export const departmentsApi = {
+  getAll: () => apiCall<any[]>('/departments'),
+};
+
 // Blocks API
 export const blocksApi = {
   getAll: () => apiCall<any[]>('/blocks'),
@@ -68,7 +100,10 @@ export const documentsApi = {
   getAll: () => apiCall<any[]>('/documents'),
   getByProjectId: (projectId: number) => apiCall<any[]>(`/documents?projectId=${projectId}`),
   getById: (id: number) => apiCall<any>(`/documents/${id}`),
+  getPresignedUrl: (id: number, type: 'download' | 'preview' = 'download') => apiCall<{ url: string; expiresIn: number }>(`/documents/${id}/presigned?type=${type}`),
   create: (data: any) => apiCall('/documents', { method: 'POST', body: JSON.stringify(data) }),
+  upload: (formData: FormData) => apiUpload<any>('/documents', formData),
+  uploadVersion: (documentId: number, formData: FormData) => apiUpload<any>(`/documents/${documentId}/versions`, formData),
   update: (id: number, data: any) => apiCall(`/documents/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: number) => apiCall(`/documents/${id}`, { method: 'DELETE' }),
 };

@@ -1,6 +1,32 @@
 const express = require('express');
 const router = express.Router();
 const Block = require('../models/Block');
+const Project = require('../models/Project');
+
+function sumDecimalField(records, field) {
+  if (!Array.isArray(records)) return 0;
+  return records.reduce((sum, item) => sum + Number(item?.[field] ?? 0), 0);
+}
+
+function normalizeProjectBudget(project) {
+  const projectJson = project.toJSON();
+  const activityBudget = Array.isArray(projectJson.activities)
+    ? sumDecimalField(projectJson.activities, 'plannedCost')
+    : 0;
+  const activitySpent = Array.isArray(projectJson.activities)
+    ? sumDecimalField(projectJson.activities, 'actualCost')
+    : 0;
+
+  return {
+    ...projectJson,
+    budget: Array.isArray(projectJson.activities) && projectJson.activities.length > 0
+      ? activityBudget
+      : Number(projectJson.budget ?? 0),
+    spent: Array.isArray(projectJson.activities) && projectJson.activities.length > 0
+      ? activitySpent
+      : Number(projectJson.spent ?? 0),
+  };
+}
 
 // GET all blocks
 router.get('/', async (req, res) => {
@@ -17,7 +43,28 @@ router.get('/:id', async (req, res) => {
   try {
     const block = await Block.findByPk(req.params.id);
     if (!block) return res.status(404).json({ message: 'Block not found' });
-    res.json(block);
+
+    const blockProjects = await Project.findAll({
+      where: { blockId: block.id },
+      include: [
+        {
+          association: 'activities',
+          attributes: ['plannedCost', 'actualCost']
+        }
+      ]
+    });
+
+    const normalizedProjects = blockProjects.map((proj) => normalizeProjectBudget(proj));
+    const blockBudget = sumDecimalField(normalizedProjects, 'budget');
+    const blockSpent = sumDecimalField(normalizedProjects, 'spent');
+
+    const blockJson = block.toJSON();
+    res.json({
+      ...blockJson,
+      budget: blockBudget,
+      spent: blockSpent,
+      projects: normalizedProjects,
+    });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

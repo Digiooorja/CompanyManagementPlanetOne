@@ -29,6 +29,14 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING,
     allowNull: true
   },
+  departmentId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'departments',
+      key: 'id'
+    }
+  },
   department: {
     type: DataTypes.ENUM('Head', 'Executive Manager', 'Finance & Accounts', 'Operations', 'HSE', 'Procurement', 'Commercial', 'HR'),
     defaultValue: 'Operations'

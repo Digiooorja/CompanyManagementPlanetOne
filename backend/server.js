@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
+const { Op } = require('sequelize');
 const sequelize = require('./database');
 
 require('dotenv').config();
@@ -20,11 +21,16 @@ require('./models/Report');
 require('./models/Risk');
 require('./models/User');
 require('./models/Workflow');
+require('./models/Department');
+require('./models/Comment');
 
 // Define associations after all models are loaded
 const Project = require('./models/Project');
 const Activity = require('./models/Activity');
 const Block = require('./models/Block');
+const User = require('./models/User');
+const Department = require('./models/Department');
+const Comment = require('./models/Comment');
 
 Activity.belongsTo(Project, {
   foreignKey: 'projectId',
@@ -46,6 +52,46 @@ Block.hasMany(Project, {
   as: 'projects'
 });
 
+User.belongsTo(Department, {
+  foreignKey: 'departmentId',
+  as: 'departmentDetails'
+});
+
+Department.hasMany(User, {
+  foreignKey: 'departmentId',
+  as: 'users'
+});
+
+Comment.belongsTo(Activity, {
+  foreignKey: 'activityId',
+  as: 'activity'
+});
+
+Activity.hasMany(Comment, {
+  foreignKey: 'activityId',
+  as: 'comments'
+});
+
+Comment.belongsTo(User, {
+  foreignKey: 'userId',
+  as: 'author'
+});
+
+User.hasMany(Comment, {
+  foreignKey: 'userId',
+  as: 'comments'
+});
+
+Comment.belongsTo(Department, {
+  foreignKey: 'departmentId',
+  as: 'department'
+});
+
+Department.hasMany(Comment, {
+  foreignKey: 'departmentId',
+  as: 'comments'
+});
+
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
@@ -61,6 +107,8 @@ const financeRoutes = require('./routes/finance');
 const notificationsRoutes = require('./routes/notifications');
 const reportsRoutes = require('./routes/reports');
 const risksRoutes = require('./routes/risks');
+const departmentsRoutes = require('./routes/departments');
+const commentsRoutes = require('./routes/comments');
 const adminRoutes = require('./routes/admin');
 const authRoutes = require('./routes/auth');
 
@@ -74,6 +122,8 @@ app.use('/api/finance', financeRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/risks', risksRoutes);
+app.use('/api/departments', departmentsRoutes);
+app.use('/api/comments', commentsRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/auth', authRoutes);
 
@@ -82,8 +132,42 @@ const startServer = async () => {
     await sequelize.authenticate();
     console.log('Database connected');
 
-    await sequelize.sync();
+    await sequelize.sync({ alter: true });
     console.log('Database synchronized');
+
+    const departmentNames = [
+      'Executive Management',
+      'Procurement',
+      'Accounts',
+      'Operations',
+      'Finance & Accounts',
+      'HSE',
+      'Commercial',
+      'HR'
+    ];
+
+    for (const name of departmentNames) {
+      await Department.findOrCreate({
+        where: { name }
+      });
+    }
+
+    const usersToMap = await User.findAll({
+      where: {
+        departmentId: null,
+        department: { [Op.ne]: null }
+      }
+    });
+
+    for (const user of usersToMap) {
+      const department = await Department.findOne({
+        where: { name: user.department }
+      });
+      if (department) {
+        user.departmentId = department.id;
+        await user.save();
+      }
+    }
 
     app.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`);
