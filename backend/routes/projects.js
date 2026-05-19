@@ -46,6 +46,8 @@ router.get('/', async (req, res) => {
         },
         {
           association: 'activities',
+          where: { parentActivityId: null },
+          required: false,
           attributes: ['plannedCost', 'actualCost']
         }
       ]
@@ -74,6 +76,8 @@ router.get('/:id', async (req, res) => {
         },
         {
           association: 'activities',
+          where: { parentActivityId: null },
+          required: false,
           attributes: ['plannedCost', 'actualCost']
         }
       ]

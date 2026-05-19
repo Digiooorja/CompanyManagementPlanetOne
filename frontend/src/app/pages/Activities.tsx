@@ -296,8 +296,8 @@ export function Activities() {
             </TableHeader>
             <TableBody>
               {parentActivities.map((activity) => (
-                <tbody key={activity.id}>
-                  <TableRow className="hover:bg-gray-50">
+                <>
+                  <TableRow key={`activity-${activity.id}`} className="hover:bg-gray-50">
                     <TableCell className="w-10">
                       {activity.subActivities && activity.subActivities.length > 0 && (
                         <Button
@@ -351,39 +351,42 @@ export function Activities() {
                       </Link>
                     </TableCell>
                   </TableRow>
-                  
-                  {/* Sub-activities rows */}
+
                   {expandedActivities.has(activity.id) && activity.subActivities && activity.subActivities.length > 0 && (
-                    <>
-                          {activity.subActivities.map((subActivity: any) => (
-                        <TableRow key={subActivity.id} className="bg-gray-50 hover:bg-gray-100">
-                          <TableCell></TableCell>
-                          <TableCell>
-                            <div className="pl-6 text-sm font-medium text-gray-700">
-                              ↳ {subActivity.title}
-                            </div>
-                          </TableCell>
-                          <TableCell></TableCell>
-                          <TableCell>
-                            <Badge variant={getStatusColor(subActivity.status)}>
-                              {subActivity.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell></TableCell>
-                          <TableCell></TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <Progress value={subActivity.progress} className="h-2 w-20" />
-                              <span className="text-sm">{subActivity.progress}%</span>
-                            </div>
-                          </TableCell>
-                          <TableCell></TableCell>
-                          <TableCell></TableCell>
-                        </TableRow>
-                      ))}
-                    </>
+                    activity.subActivities.map((subActivity: any) => (
+                      <TableRow key={`subactivity-${subActivity.id}`} className="bg-gray-50 hover:bg-gray-100 cursor-pointer">
+                        <TableCell></TableCell>
+                        <TableCell>
+                          <Link to={`/activities/${subActivity.id}`} className="pl-6 text-sm font-medium text-gray-700 hover:underline block">
+                            ↳ {subActivity.title}
+                          </Link>
+                        </TableCell>
+                        <TableCell></TableCell>
+                        <TableCell>
+                          <Badge variant={getStatusColor(subActivity.status)}>
+                            {subActivity.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell></TableCell>
+                        <TableCell></TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Progress value={subActivity.progress} className="h-2 w-20" />
+                            <span className="text-sm">{subActivity.progress}%</span>
+                          </div>
+                        </TableCell>
+                        <TableCell></TableCell>
+                        <TableCell>
+                          <Link to={`/activities/${subActivity.id}`}>
+                            <Button size="sm" variant="ghost">
+                              View
+                            </Button>
+                          </Link>
+                        </TableCell>
+                      </TableRow>
+                    ))
                   )}
-                </tbody>
+                </>
               ))}
             </TableBody>
           </Table>

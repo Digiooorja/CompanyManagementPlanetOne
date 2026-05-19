@@ -25,11 +25,14 @@ function sanitizeSegment(name) {
 // GET all documents
 router.get('/', async (req, res) => {
   try {
-    const { projectId } = req.query;
+    const { projectId, activityId } = req.query;
     const where = {};
     
     if (projectId) {
       where.projectId = projectId;
+    }
+    if (activityId) {
+      where.activityId = activityId;
     }
     
     const documents = await Document.findAll({ where });

@@ -233,19 +233,24 @@ function ProjectDetail() {
     };
   }, [activities, risks]);
 
-  const activityBudgetTotal = useMemo(
-    () => activities.reduce((sum, activity) => sum + Number(activity.plannedCost ?? 0), 0),
+  const mainActivities = useMemo(
+    () => activities.filter((item) => !item.parentActivityId),
     [activities]
+  );
+
+  const activityBudgetTotal = useMemo(
+    () => mainActivities.reduce((sum, activity) => sum + Number(activity.plannedCost ?? 0), 0),
+    [mainActivities]
   );
 
   const activitySpentTotal = useMemo(
-    () => activities.reduce((sum, activity) => sum + Number(activity.actualCost ?? 0), 0),
-    [activities]
+    () => mainActivities.reduce((sum, activity) => sum + Number(activity.actualCost ?? 0), 0),
+    [mainActivities]
   );
 
   const budgetChartData = useMemo(() => {
-    const budgetValue = activities.length > 0 ? activityBudgetTotal : Number(project?.budget ?? 0);
-    const spentValue = activities.length > 0 ? activitySpentTotal : Number(project?.spent ?? 0);
+    const budgetValue = mainActivities.length > 0 ? activityBudgetTotal : Number(project?.budget ?? 0);
+    const spentValue = mainActivities.length > 0 ? activitySpentTotal : Number(project?.spent ?? 0);
 
     if (!project?.startDate || !project?.endDate || budgetValue <= 0) return [];
     const start = new Date(project.startDate);
@@ -270,12 +275,12 @@ function ProjectDetail() {
 
   const planVsActualData = useMemo(
     () =>
-      activities.map((activity) => ({
+      mainActivities.map((activity) => ({
         name: activity.name.length > 16 ? `${activity.name.slice(0, 16)}...` : activity.name,
         planned: activity.plannedCost ?? 0,
         actual: activity.actualCost ?? 0,
       })),
-    [activities]
+    [mainActivities]
   );
 
   const ganttActivities = useMemo<GanttActivity[]>(() => {
@@ -316,8 +321,8 @@ function ProjectDetail() {
     );
   }
 
-  const budgetValue = activities.length > 0 ? activityBudgetTotal : Number(project.budget ?? 0);
-  const spentValue = activities.length > 0 ? activitySpentTotal : Number(project.spent ?? 0);
+  const budgetValue = mainActivities.length > 0 ? activityBudgetTotal : Number(project.budget ?? 0);
+  const spentValue = mainActivities.length > 0 ? activitySpentTotal : Number(project.spent ?? 0);
   const remainingValue = Math.max(budgetValue - spentValue, 0);
   const utilization = budgetValue > 0 ? Math.round((spentValue / budgetValue) * 100) : 0;
 

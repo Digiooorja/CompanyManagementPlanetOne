@@ -8,18 +8,23 @@ import { Progress } from "../components/ui/progress";
 import { Separator } from "../components/ui/separator";
 import { Input } from "../components/ui/input";
 import { Select } from "../components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogClose
+} from "../components/ui/dialog";
 import { ArrowLeft, Calendar, User, FileText, MessageSquare, Plus, Trash2, CheckCircle } from "lucide-react";
-import { activitiesApi, commentsApi, departmentsApi } from "../../services/api";
+import { activitiesApi, commentsApi, departmentsApi, documentsApi } from "../../services/api";
 
 export function ActivityDetail() {
   const { id } = useParams();
   const [activity, setActivity] = useState<any>(null);
   const [subActivities, setSubActivities] = useState<any[]>([]);
-  const [linkedDocuments, setLinkedDocuments] = useState<any[]>([
-    { id: 1, name: "Drilling Plan - Well B-3", type: "Technical", uploadDate: "2026-04-10" },
-    { id: 2, name: "Safety Procedures", type: "HSE", uploadDate: "2026-04-12" },
-    { id: 3, name: "Equipment Specifications", type: "Technical", uploadDate: "2026-04-14" },
-  ]);
+  const [linkedDocuments, setLinkedDocuments] = useState<any[]>([]);
   const [comments, setComments] = useState<any[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
   const [commentDepartmentId, setCommentDepartmentId] = useState<number | string>('');
@@ -32,49 +37,78 @@ export function ActivityDetail() {
     description: '',
     status: 'Active',
     priority: 'Medium',
+    progress: 0,
+    plannedCost: '',
+    actualCost: ''
+  });
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [activityForm, setActivityForm] = useState({
+    name: '',
+    description: '',
+    status: 'Active',
+    priority: 'Medium',
+    assignedTo: '',
+    dueDate: '',
+    plannedStartDate: '',
+    plannedEndDate: '',
+    actualStartDate: '',
+    actualEndDate: '',
+    plannedCost: '',
+    actualCost: '',
     progress: 0
   });
   const navigate = useNavigate();
   const [activityActionLoading, setActivityActionLoading] = useState(false);
 
-  useEffect(() => {
-    const fetchActivityDetails = async () => {
-      try {
-        setLoading(true);
-        if (id) {
-          const [activityData, commentData, departmentData] = await Promise.all([
-            activitiesApi.getById(parseInt(id)),
-            commentsApi.getByActivityId(parseInt(id)),
-            departmentsApi.getAll()
-          ]);
+  const fetchActivityDetails = async () => {
+    try {
+      setLoading(true);
+      if (id) {
+        const [activityData, commentData, departmentData, documentData] = await Promise.all([
+          activitiesApi.getById(parseInt(id)),
+          commentsApi.getByActivityId(parseInt(id)),
+          departmentsApi.getAll(),
+          documentsApi.getByActivityId(parseInt(id))
+        ]);
 
-          const transformedActivity = {
-            ...activityData,
-            title: activityData.title || activityData.name,
-            project: typeof activityData.project === 'object' ? activityData.project?.name : activityData.project
-          };
-          setActivity(transformedActivity);
+        const transformedActivity = {
+          ...activityData,
+          title: activityData.title || activityData.name,
+          project: typeof activityData.project === 'object' ? activityData.project?.name : activityData.project
+        };
+        setActivity(transformedActivity);
 
-          const transformedSubActivities = (activityData.subActivities || []).map((sub: any) => ({
-            ...sub,
-            title: sub.title || sub.name
-          }));
-          setSubActivities(transformedSubActivities);
+        const transformedSubActivities = (activityData.subActivities || []).map((sub: any) => ({
+          ...sub,
+          title: sub.title || sub.name
+        }));
+        setSubActivities(transformedSubActivities);
 
-          setComments(Array.isArray(commentData) ? commentData : []);
-          setDepartments(Array.isArray(departmentData) ? departmentData : []);
-          if (Array.isArray(departmentData) && departmentData.length > 0) {
-            setCommentDepartmentId(departmentData[0].id);
-          }
+        setComments(Array.isArray(commentData) ? commentData : []);
+        setDepartments(Array.isArray(departmentData) ? departmentData : []);
+        setLinkedDocuments(
+          Array.isArray(documentData)
+            ? documentData.map((doc: any) => ({
+                ...doc,
+                name: doc.title || doc.name,
+                type: doc.documentType || doc.type,
+                uploadDate: doc.uploadDate ? new Date(doc.uploadDate).toISOString().split('T')[0] : ''
+              }))
+            : []
+        );
+        if (Array.isArray(departmentData) && departmentData.length > 0) {
+          setCommentDepartmentId(departmentData[0].id);
         }
-      } catch (err) {
-        console.error('Error fetching activity:', err);
-        setError('Failed to load activity details');
-      } finally {
-        setLoading(false);
       }
-    };
+    } catch (err) {
+      console.error('Error fetching activity:', err);
+      setError('Failed to load activity details');
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchActivityDetails();
   }, [id]);
 
@@ -84,27 +118,56 @@ export function ActivityDetail() {
       return;
     }
 
+    const plannedCost = parseFloat(newSubActivity.plannedCost) || 0;
+    const actualCost = parseFloat(newSubActivity.actualCost) || 0;
+    if (plannedCost < 0 || actualCost < 0) {
+      setError('Costs must be zero or positive values');
+      return;
+    }
+
+    const parentPlannedCost = Number(activity?.plannedCost || 0);
+    if (parentPlannedCost > 0) {
+      const existingPlannedTotal = subActivities.reduce(
+        (sum, sub) => sum + Number(sub.plannedCost || 0),
+        0
+      );
+      if (existingPlannedTotal + plannedCost > parentPlannedCost) {
+        const message = 'This sub-activity would exceed the main activity planned budget. Please reduce the sub-activity planned cost.';
+        window.alert(message);
+        setError(message);
+        return;
+      }
+    }
+
     try {
-      const subActivity = await activitiesApi.createSubActivity(parseInt(id!), newSubActivity);
-      setSubActivities([...subActivities, subActivity]);
+      await activitiesApi.createSubActivity(parseInt(id!), {
+        ...newSubActivity,
+        plannedCost,
+        actualCost
+      });
+      await fetchActivityDetails();
       setNewSubActivity({
         name: '',
         description: '',
         status: 'Active',
         priority: 'Medium',
-        progress: 0
+        progress: 0,
+        plannedCost: '',
+        actualCost: ''
       });
       setShowSubActivityForm(false);
+      setError(null);
     } catch (err) {
       console.error('Error creating sub-activity:', err);
-      setError('Failed to create sub-activity');
+      const message = err instanceof Error ? err.message : 'Failed to create sub-activity';
+      setError(message);
     }
   };
 
   const handleDeleteSubActivity = async (subActivityId: number) => {
     try {
       await activitiesApi.delete(subActivityId);
-      setSubActivities(subActivities.filter(sa => sa.id !== subActivityId));
+      await fetchActivityDetails();
     } catch (err) {
       console.error('Error deleting sub-activity:', err);
       setError('Failed to delete sub-activity');
@@ -214,15 +277,55 @@ export function ActivityDetail() {
     }
   };
 
-  const handleEditActivity = async () => {
+  const handleEditActivity = () => {
     if (!activity) return;
-    const name = window.prompt('Edit activity name', activity.name);
-    const description = window.prompt('Edit activity description', activity.description);
-    if (name === null || description === null) return;
+    setActivityForm({
+      name: activity.name || '',
+      description: activity.description || '',
+      status: activity.status || 'Active',
+      priority: activity.priority || 'Medium',
+      assignedTo: activity.assignedTo || '',
+      dueDate: activity.dueDate || '',
+      plannedStartDate: activity.plannedStartDate || '',
+      plannedEndDate: activity.plannedEndDate || '',
+      actualStartDate: activity.actualStartDate || '',
+      actualEndDate: activity.actualEndDate || '',
+      plannedCost: activity.plannedCost != null ? String(activity.plannedCost) : '',
+      actualCost: activity.actualCost != null ? String(activity.actualCost) : '',
+      progress: activity.progress != null ? activity.progress : 0
+    });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleSaveActivity = async () => {
+    if (!activity) return;
     try {
       setActivityActionLoading(true);
-      const updated: any = await activitiesApi.update(activity.id, { name, description });
-      setActivity({ ...activity, name: updated.name, description: updated.description });
+      const updatedPayload = {
+        name: activityForm.name.trim(),
+        description: activityForm.description.trim(),
+        status: activityForm.status,
+        priority: activityForm.priority,
+        assignedTo: activityForm.assignedTo.trim(),
+        dueDate: activityForm.dueDate,
+        plannedStartDate: activityForm.plannedStartDate,
+        plannedEndDate: activityForm.plannedEndDate,
+        actualStartDate: activityForm.actualStartDate,
+        actualEndDate: activityForm.actualEndDate,
+        plannedCost: activityForm.plannedCost ? parseFloat(activityForm.plannedCost) : 0,
+        actualCost: activityForm.actualCost ? parseFloat(activityForm.actualCost) : 0,
+        progress: Number(activityForm.progress) || 0
+      };
+
+      const updated: any = await activitiesApi.update(activity.id, updatedPayload);
+      setActivity({
+        ...activity,
+        ...updated,
+        title: updated.title || updated.name || activity.title,
+        project: typeof updated.project === 'object' ? updated.project?.name : updated.project || activity.project
+      });
+      setError(null);
+      setIsEditDialogOpen(false);
     } catch (err) {
       console.error('Error editing activity:', err);
       setError('Failed to edit activity');
@@ -350,17 +453,33 @@ export function ActivityDetail() {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-3xl">{displayActivity.name}</h1>
-          <div className="flex items-center gap-4 mt-2 text-sm text-gray-600">
-            {displayActivity.dueDate && (
-              <div className="flex items-center gap-1">
-                <Calendar className="h-4 w-4" />
-                Due: {displayActivity.dueDate}
-              </div>
-            )}
-            {displayActivity.assignedTo && (
-              <div className="flex items-center gap-1">
-                <User className="h-4 w-4" />
-                {displayActivity.assignedTo}
+          <div className="flex flex-col gap-3 mt-2 text-sm text-gray-600">
+            <div className="flex flex-wrap items-center gap-4">
+              {displayActivity.dueDate && (
+                <div className="flex items-center gap-1">
+                  <Calendar className="h-4 w-4" />
+                  Due: {displayActivity.dueDate}
+                </div>
+              )}
+              {displayActivity.assignedTo && (
+                <div className="flex items-center gap-1">
+                  <User className="h-4 w-4" />
+                  {displayActivity.assignedTo}
+                </div>
+              )}
+            </div>
+            {(displayActivity.plannedCost != null || displayActivity.actualCost != null) && (
+              <div className="flex flex-wrap items-center gap-4">
+                {displayActivity.plannedCost != null && (
+                  <div className="text-sm text-gray-700">
+                    Planned: ${Number(displayActivity.plannedCost).toLocaleString()}
+                  </div>
+                )}
+                {displayActivity.actualCost != null && (
+                  <div className="text-sm text-gray-700">
+                    Actual: ${Number(displayActivity.actualCost).toLocaleString()}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -464,6 +583,30 @@ export function ActivityDetail() {
                     </Select>
                   </div>
                 </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Planned Cost</label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="0.00"
+                      value={newSubActivity.plannedCost}
+                      onChange={(e) => setNewSubActivity({...newSubActivity, plannedCost: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Actual Cost</label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="0.00"
+                      value={newSubActivity.actualCost}
+                      onChange={(e) => setNewSubActivity({...newSubActivity, actualCost: e.target.value})}
+                    />
+                  </div>
+                </div>
                 <div className="flex gap-2">
                   <Button size="sm" onClick={handleCreateSubActivity}>Create</Button>
                   <Button size="sm" variant="outline" onClick={() => setShowSubActivityForm(false)}>Cancel</Button>
@@ -499,6 +642,10 @@ export function ActivityDetail() {
                       </div>
                     </div>
                     <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-4 text-sm text-gray-700">
+                        <div>Planned Cost: ${Number(subActivity.plannedCost || 0).toLocaleString()}</div>
+                        <div>Actual Cost: ${Number(subActivity.actualCost || 0).toLocaleString()}</div>
+                      </div>
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-gray-600">Progress</span>
                         <span className="text-sm font-medium">{subActivity.progress}%</span>
@@ -690,6 +837,154 @@ export function ActivityDetail() {
                 Delete Activity
               </Button>
             </div>
+
+            <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+              <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>Edit Activity</DialogTitle>
+                  <DialogDescription>
+                    Update the activity details and save your changes.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium">Name</label>
+                    <Input
+                      value={activityForm.name}
+                      onChange={(event) => setActivityForm({ ...activityForm, name: event.target.value })}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium">Description</label>
+                    <Textarea
+                      value={activityForm.description}
+                      onChange={(event) => setActivityForm({ ...activityForm, description: event.target.value })}
+                      rows={4}
+                    />
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium">Status</label>
+                      <Select
+                        value={activityForm.status}
+                        onValueChange={(value) => setActivityForm({ ...activityForm, status: value })}
+                      >
+                        <option value="Active">Active</option>
+                        <option value="In Progress">In Progress</option>
+                        <option value="Completed">Completed</option>
+                        <option value="On Hold">On Hold</option>
+                      </Select>
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium">Priority</label>
+                      <Select
+                        value={activityForm.priority}
+                        onValueChange={(value) => setActivityForm({ ...activityForm, priority: value })}
+                      >
+                        <option value="Low">Low</option>
+                        <option value="Medium">Medium</option>
+                        <option value="High">High</option>
+                        <option value="Critical">Critical</option>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium">Assigned To</label>
+                      <Input
+                        value={activityForm.assignedTo}
+                        onChange={(event) => setActivityForm({ ...activityForm, assignedTo: event.target.value })}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium">Due Date</label>
+                      <Input
+                        type="date"
+                        value={activityForm.dueDate}
+                        onChange={(event) => setActivityForm({ ...activityForm, dueDate: event.target.value })}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium">Planned Start</label>
+                      <Input
+                        type="date"
+                        value={activityForm.plannedStartDate}
+                        onChange={(event) => setActivityForm({ ...activityForm, plannedStartDate: event.target.value })}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium">Planned End</label>
+                      <Input
+                        type="date"
+                        value={activityForm.plannedEndDate}
+                        onChange={(event) => setActivityForm({ ...activityForm, plannedEndDate: event.target.value })}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium">Actual Start</label>
+                      <Input
+                        type="date"
+                        value={activityForm.actualStartDate}
+                        onChange={(event) => setActivityForm({ ...activityForm, actualStartDate: event.target.value })}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium">Actual End</label>
+                      <Input
+                        type="date"
+                        value={activityForm.actualEndDate}
+                        onChange={(event) => setActivityForm({ ...activityForm, actualEndDate: event.target.value })}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium">Planned Cost</label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={activityForm.plannedCost}
+                        onChange={(event) => setActivityForm({ ...activityForm, plannedCost: event.target.value })}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium">Actual Cost</label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={activityForm.actualCost}
+                        onChange={(event) => setActivityForm({ ...activityForm, actualCost: event.target.value })}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium">Progress (%)</label>
+                      <Input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="1"
+                        value={String(activityForm.progress)}
+                        onChange={(event) => setActivityForm({ ...activityForm, progress: Number(event.target.value) })}
+                      />
+                    </div>
+                  </div>
+                </div>
+                <DialogFooter className="space-x-2">
+                  <DialogClose asChild>
+                    <Button variant="outline">Cancel</Button>
+                  </DialogClose>
+                  <Button onClick={handleSaveActivity} disabled={activityActionLoading}>
+                    Save Changes
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </Card>
         </div>
       </div>

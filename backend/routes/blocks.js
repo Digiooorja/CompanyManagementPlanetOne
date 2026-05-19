@@ -49,6 +49,8 @@ router.get('/:id', async (req, res) => {
       include: [
         {
           association: 'activities',
+          where: { parentActivityId: null },
+          required: false,
           attributes: ['plannedCost', 'actualCost']
         }
       ]
