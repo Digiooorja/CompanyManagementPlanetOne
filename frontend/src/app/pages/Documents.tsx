@@ -40,7 +40,7 @@ export function Documents() {
     status: "Review",
     blockId: "",
     projectId: "",
-    activityId: ""
+    activityIds: [] as string[]
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -96,7 +96,7 @@ export function Documents() {
           ...current,
           blockId: value,
           projectId: '',
-          activityId: ''
+          activityIds: []
         };
       }
 
@@ -111,9 +111,17 @@ export function Documents() {
     setUploadForm((current) => ({
       ...current,
       projectId,
-      activityId: ''
+      activityIds: []
     }));
     await fetchActivitiesForProject(projectId);
+  };
+
+  const handleActivitySelection = (event: ChangeEvent<HTMLSelectElement>) => {
+    const selectedValues = Array.from(event.target.selectedOptions, (option) => option.value);
+    setUploadForm((current) => ({
+      ...current,
+      activityIds: selectedValues
+    }));
   };
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -127,8 +135,8 @@ export function Documents() {
       return;
     }
 
-    if (!uploadForm.projectId && !uploadForm.activityId) {
-      setError('Please choose at least a project or activity');
+    if (!uploadForm.projectId && uploadForm.activityIds.length === 0) {
+      setError('Please choose at least a project or tagged activity');
       return;
     }
 
@@ -148,8 +156,8 @@ export function Documents() {
       if (uploadForm.projectId) {
         formData.append('projectId', uploadForm.projectId);
       }
-      if (uploadForm.activityId) {
-        formData.append('activityId', uploadForm.activityId);
+      if (uploadForm.activityIds.length > 0) {
+        formData.append('activityIds', JSON.stringify(uploadForm.activityIds));
       }
 
       await documentsApi.upload(formData);
@@ -165,7 +173,7 @@ export function Documents() {
         status: 'Review',
         blockId: '',
         projectId: '',
-        activityId: ''
+        activityIds: []
       });
     } catch (err) {
       console.error('Error uploading document:', err);
@@ -223,6 +231,21 @@ export function Documents() {
 
     const block = blocks.find((blockItem) => String(blockItem.id) === String(project.blockId));
     return block?.name || document?.block || '-';
+  };
+
+  const getDocumentActivities = (document: any) => {
+    const truncateName = (name: string) => {
+      if (!name) return '';
+      return name.length > 10 ? `${name.slice(0, 10)}...` : name;
+    };
+
+    if (Array.isArray(document.activityTags) && document.activityTags.length > 0) {
+      return document.activityTags.map(truncateName).join(', ');
+    }
+    if (document.activityId) {
+      return `Activity ${document.activityId}`;
+    }
+    return '-';
   };
 
   const getActiveUserName = () => {
@@ -326,21 +349,22 @@ export function Documents() {
                   </select>
                 </div>
                 <div>
-                  <Label htmlFor="document-activity">Activity</Label>
+                  <Label htmlFor="document-activities">Tagged Activities</Label>
                   <select
-                    id="document-activity"
+                    id="document-activities"
+                    multiple
                     className="mt-1 block w-full rounded-md border bg-input-background px-3 py-2 text-sm text-foreground shadow-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                    value={uploadForm.activityId}
-                    onChange={(event) => handleUploadChange('activityId', event.target.value)}
+                    value={uploadForm.activityIds}
+                    onChange={handleActivitySelection}
                     disabled={!uploadForm.projectId}
                   >
-                    <option value="">Select activity</option>
                     {activities.map((activity) => (
                       <option key={activity.id} value={String(activity.id)}>
                         {activity.name || activity.title || `Activity ${activity.id}`}
                       </option>
                     ))}
                   </select>
+                  <p className="text-xs text-gray-500 mt-1">Hold Ctrl/Cmd to select multiple activities.</p>
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -496,6 +520,7 @@ export function Documents() {
               <TableHead>Type</TableHead>
               <TableHead>Block</TableHead>
               <TableHead>Project</TableHead>
+              <TableHead>Activities</TableHead>
               <TableHead>Upload Date</TableHead>
               <TableHead>Uploaded By</TableHead>
               <TableHead>Size</TableHead>
@@ -521,6 +546,9 @@ export function Documents() {
                 <TableCell>{getDocumentBlockName(doc)}</TableCell>
                 <TableCell className="text-sm text-gray-600">
                   {getDocumentProjectName(doc)}
+                </TableCell>
+                <TableCell className="text-sm text-gray-600">
+                  {getDocumentActivities(doc)}
                 </TableCell>
                 <TableCell>{doc.uploadDate}</TableCell>
                 <TableCell className="text-sm text-gray-600">

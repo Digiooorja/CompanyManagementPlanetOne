@@ -3,9 +3,14 @@ import { Link, useParams } from "react-router-dom";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import { Textarea } from "../components/ui/textarea";
 import { Separator } from "../components/ui/separator";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "../components/ui/dialog";
 import { ArrowLeft, FileText, Download, Share2, Trash2, Clock } from "lucide-react";
-import { documentsApi } from "../../services/api";
+import { documentsApi, activitiesApi } from "../../services/api";
 import { useAuth } from "../contexts/AuthContext";
 
 export function DocumentDetail() {
@@ -17,6 +22,17 @@ export function DocumentDetail() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [uploadingVersion, setUploadingVersion] = useState(false);
+  const [activities, setActivities] = useState<any[]>([]);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editForm, setEditForm] = useState({
+    title: "",
+    author: "",
+    documentType: "Report",
+    status: "Review",
+    description: "",
+    activityIds: [] as string[]
+  });
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const previewableMimeTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg', 'image/gif'];
@@ -50,9 +66,36 @@ export function DocumentDetail() {
     }
   };
 
+  const loadActivities = async () => {
+    try {
+      const data = await activitiesApi.getAll();
+      setActivities(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Error loading activities for edit form:', err);
+      setActivities([]);
+    }
+  };
+
   useEffect(() => {
     loadDocument();
+    loadActivities();
   }, [id]);
+
+  useEffect(() => {
+    if (!document) return;
+    setEditForm({
+      title: document.title || document.name || '',
+      author: document.author || document.uploadedBy || '',
+      documentType: document.documentType || document.type || 'Report',
+      status: document.status || 'Review',
+      description: document.content || document.description || '',
+      activityIds: Array.isArray(document.activityIds)
+        ? document.activityIds.map(String)
+        : document.activityId
+          ? [String(document.activityId)]
+          : []
+    });
+  }, [document]);
 
   const getLatestDocumentId = () => {
     if (!document) return null;
@@ -118,6 +161,49 @@ export function DocumentDetail() {
     }
   };
 
+  const handleEditFieldChange = (field: keyof Omit<typeof editForm, 'activityIds'>, value: string) => {
+    setEditForm((current) => ({
+      ...current,
+      [field]: value
+    }));
+  };
+
+  const handleEditActivitySelection = (event: ChangeEvent<HTMLSelectElement>) => {
+    const selectedValues = Array.from(event.target.selectedOptions, (option) => option.value);
+    setEditForm((current) => ({
+      ...current,
+      activityIds: selectedValues
+    }));
+  };
+
+  const handleSaveDocumentDetails = async () => {
+    if (!document) return;
+
+    setEditSaving(true);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      await documentsApi.update(document.id, {
+        title: editForm.title,
+        author: editForm.author,
+        documentType: editForm.documentType,
+        status: editForm.status,
+        content: editForm.description,
+        activityId: editForm.activityIds.length > 0 ? Number(editForm.activityIds[0]) : null,
+        activityIds: editForm.activityIds.map(Number)
+      });
+      await loadDocument();
+      setSuccessMessage('Document details saved successfully.');
+      setEditOpen(false);
+    } catch (err) {
+      console.error('Error updating document:', err);
+      setError('Failed to update document details');
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   const documentTitle = document?.title || document?.name || 'Document';
   const documentType = document?.documentType || document?.type || 'Document';
   const documentStatus = document?.status || 'Unknown';
@@ -129,6 +215,7 @@ export function DocumentDetail() {
     { label: 'Document Type', value: documentType },
     { label: 'Block', value: document?.block || document?.blockName || 'Unknown' },
     { label: 'Project', value: document?.project || document?.projectId || 'Unknown' },
+    { label: 'Tagged Activities', value: Array.isArray(document?.activityTags) && document.activityTags.length > 0 ? document.activityTags.join(', ') : document?.activityId ? `Activity ${document.activityId}` : 'None' },
     { label: 'File Size', value: document?.size ? `${document.size} bytes` : 'Unknown' },
     { label: 'Version', value: documentVersion },
     { label: 'Created Date', value: documentUploadDate },
@@ -344,6 +431,106 @@ export function DocumentDetail() {
           <Card className="p-4">
             <h4 className="font-medium mb-3">Actions</h4>
             <div className="space-y-2">
+              <Dialog open={editOpen} onOpenChange={setEditOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" className="w-full">
+                    Edit Details
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle>Edit Document Details</DialogTitle>
+                  </DialogHeader>
+                  <div className="grid gap-4">
+                    <div>
+                      <Label htmlFor="edit-title">Title</Label>
+                      <Input
+                        id="edit-title"
+                        value={editForm.title}
+                        onChange={(event) => handleEditFieldChange('title', event.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="edit-author">Author</Label>
+                      <Input
+                        id="edit-author"
+                        value={editForm.author}
+                        onChange={(event) => handleEditFieldChange('author', event.target.value)}
+                      />
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <Label htmlFor="edit-document-type">Document Type</Label>
+                        <Select
+                          value={editForm.documentType}
+                          onValueChange={(value) => handleEditFieldChange('documentType', value)}
+                        >
+                          <SelectTrigger id="edit-document-type">
+                            <SelectValue placeholder="Select type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Technical">Technical</SelectItem>
+                            <SelectItem value="Finance">Finance</SelectItem>
+                            <SelectItem value="Report">Report</SelectItem>
+                            <SelectItem value="Other">Other</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label htmlFor="edit-status">Status</Label>
+                        <Select
+                          value={editForm.status}
+                          onValueChange={(value) => handleEditFieldChange('status', value)}
+                        >
+                          <SelectTrigger id="edit-status">
+                            <SelectValue placeholder="Select status" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Review">Review</SelectItem>
+                            <SelectItem value="Approved">Approved</SelectItem>
+                            <SelectItem value="Draft">Draft</SelectItem>
+                            <SelectItem value="Revision">Revision</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div>
+                      <Label htmlFor="edit-description">Description</Label>
+                      <Textarea
+                        id="edit-description"
+                        value={editForm.description}
+                        onChange={(event) => handleEditFieldChange('description', event.target.value)}
+                        className="min-h-[120px]"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="edit-activities">Tagged Activities</Label>
+                      <select
+                        id="edit-activities"
+                        multiple
+                        value={editForm.activityIds}
+                        onChange={handleEditActivitySelection}
+                        className="mt-2 block w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      >
+                        {activities.map((activity) => (
+                          <option key={activity.id} value={String(activity.id)}>
+                            {activity.name || activity.title || `Activity ${activity.id}`}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-gray-500 mt-2">Hold Control (Windows) or Command (Mac) to select multiple activities.</p>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <DialogClose asChild>
+                      <Button variant="ghost">Cancel</Button>
+                    </DialogClose>
+                    <Button onClick={handleSaveDocumentDetails} disabled={editSaving}>
+                      {editSaving ? 'Saving...' : 'Save Changes'}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
               <Button variant="outline" className="w-full" onClick={handleUploadNewVersion} disabled={uploadingVersion}>
                 Upload New Version
               </Button>

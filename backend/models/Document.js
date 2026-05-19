@@ -26,7 +26,35 @@ const Document = sequelize.define('Document', {
       model: 'activities',
       key: 'id'
     },
-    comment: 'Link document to an activity'
+    comment: 'Link document to a primary activity'
+  },
+  activityIds: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    comment: 'JSON array of tagged activity IDs for this document',
+    get() {
+      const rawValue = this.getDataValue('activityIds');
+      if (!rawValue) return [];
+      try {
+        return JSON.parse(rawValue);
+      } catch (err) {
+        return [];
+      }
+    },
+    set(value) {
+      if (Array.isArray(value)) {
+        this.setDataValue('activityIds', JSON.stringify(value));
+      } else if (typeof value === 'string') {
+        try {
+          const parsed = JSON.parse(value);
+          this.setDataValue('activityIds', Array.isArray(parsed) ? JSON.stringify(parsed) : value);
+        } catch {
+          this.setDataValue('activityIds', value);
+        }
+      } else {
+        this.setDataValue('activityIds', value);
+      }
+    }
   },
   filename: {
     type: DataTypes.STRING,

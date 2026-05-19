@@ -27,16 +27,55 @@ router.get('/', async (req, res) => {
   try {
     const { projectId, activityId } = req.query;
     const where = {};
-    
+
     if (projectId) {
       where.projectId = projectId;
     }
     if (activityId) {
       where.activityId = activityId;
     }
-    
+
     const documents = await Document.findAll({ where });
-    res.json(documents);
+    let documentData = documents.map((doc) => doc.toJSON());
+
+    if (activityId) {
+      documentData = documentData.filter((doc) => {
+        const taggedIds = Array.isArray(doc.activityIds) ? doc.activityIds : [];
+        return Number(doc.activityId) === Number(activityId) || taggedIds.includes(Number(activityId));
+      });
+    }
+
+    const allActivityIds = Array.from(
+      new Set(
+        documentData.flatMap((doc) => {
+          const ids = Array.isArray(doc.activityIds) ? doc.activityIds : [];
+          return doc.activityId ? [...ids, Number(doc.activityId)] : ids;
+        })
+      )
+    );
+
+    if (allActivityIds.length > 0) {
+      const activityRecords = await Activity.findAll({
+        where: { id: allActivityIds }
+      });
+      const activityMap = activityRecords.reduce((map, activity) => {
+        map[activity.id] = activity.name || activity.title || `Activity ${activity.id}`;
+        return map;
+      }, {});
+
+      documentData = documentData.map((doc) => {
+        const allIds = Array.isArray(doc.activityIds) ? doc.activityIds.slice() : [];
+        if (doc.activityId) {
+          allIds.unshift(Number(doc.activityId));
+        }
+        return {
+          ...doc,
+          activityTags: allIds.map((activityId) => activityMap[activityId] || `Activity ${activityId}`)
+        };
+      });
+    }
+
+    res.json(documentData);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -48,7 +87,38 @@ router.get('/:id', async (req, res) => {
     const document = await Document.findByPk(req.params.id);
     if (!document) return res.status(404).json({ message: 'Document not found' });
 
-    const rootDocumentId = document.rootDocumentId || document.id;
+    const documentData = document.toJSON();
+    const taggedActivityIds = Array.isArray(documentData.activityIds)
+      ? documentData.activityIds
+      : [];
+
+    const activityIdsToResolve = [...taggedActivityIds];
+    if (documentData.activityId) {
+      activityIdsToResolve.push(Number(documentData.activityId));
+    }
+
+    if (activityIdsToResolve.length > 0) {
+      const taggedActivities = await Activity.findAll({
+        where: {
+          id: activityIdsToResolve
+        }
+      });
+      const activityMap = taggedActivities.reduce((map, activity) => {
+        map[activity.id] = activity.name || activity.title || `Activity ${activity.id}`;
+        return map;
+      }, {});
+
+      const allIds = Array.isArray(documentData.activityIds) ? documentData.activityIds.slice() : [];
+      if (documentData.activityId) {
+        allIds.unshift(Number(documentData.activityId));
+      }
+
+      documentData.activityTags = allIds.map((activityId) => activityMap[activityId] || `Activity ${activityId}`);
+    } else {
+      documentData.activityTags = [];
+    }
+
+    const rootDocumentId = documentData.rootDocumentId || documentData.id;
     const allVersions = await Document.findAll({
       where: {
         [Op.or]: [
@@ -59,7 +129,6 @@ router.get('/:id', async (req, res) => {
       order: [['versionNumber', 'ASC']]
     });
 
-    const documentData = document.toJSON();
     documentData.versions = allVersions.map((version) => version.toJSON());
     res.json(documentData);
   } catch (err) {
@@ -105,7 +174,22 @@ router.get('/:id/presigned', async (req, res) => {
 // POST new document with file upload (field: file). Accepts activityId or projectId.
 router.post('/', upload.single('file'), async (req, res) => {
   try {
-    const { title, author, projectId, activityId, documentType, status } = req.body;
+    let { title, author, projectId, activityId, activityIds, documentType, status } = req.body;
+
+    const parsedActivityIds = (() => {
+      if (!activityIds) return [];
+      if (Array.isArray(activityIds)) return activityIds.map((id) => Number(id));
+      try {
+        const parsed = JSON.parse(activityIds);
+        return Array.isArray(parsed) ? parsed.map((id) => Number(id)) : [Number(activityIds)];
+      } catch {
+        return String(activityIds).split(',').map((id) => Number(id.trim())).filter(Boolean);
+      }
+    })();
+
+    if (!activityId && parsedActivityIds.length > 0) {
+      activityId = String(parsedActivityIds[0]);
+    }
 
     if (!req.file) {
       return res.status(400).json({ message: 'File is required (multipart/form-data, field name "file")' });
@@ -157,12 +241,24 @@ router.post('/', upload.single('file'), async (req, res) => {
 
     await s3.upload(params).promise();
 
+    const parsedActivityIds = (() => {
+      if (!activityIds) return [];
+      if (Array.isArray(activityIds)) return activityIds.map((id) => Number(id));
+      try {
+        const parsed = JSON.parse(activityIds);
+        return Array.isArray(parsed) ? parsed.map((id) => Number(id)) : [Number(activityIds)];
+      } catch {
+        return String(activityIds).split(',').map((id) => Number(id.trim())).filter(Boolean);
+      }
+    })();
+
     const newDocument = await Document.create({
       title: title || originalName,
       content: req.body.content || '',
       author: author || 'system',
       projectId: projectId || null,
-      activityId: activityId || null,
+      activityId: activityId || parsedActivityIds[0] || null,
+      activityIds: parsedActivityIds.length > 0 ? parsedActivityIds : null,
       documentType: documentType || 'Report',
       uploadDate: new Date(),
       status: status || 'Review',
@@ -242,6 +338,7 @@ router.post('/:id/versions', upload.single('file'), async (req, res) => {
       author: author || originalDocument.author || 'system',
       projectId: originalDocument.projectId || null,
       activityId: originalDocument.activityId || null,
+      activityIds: Array.isArray(originalDocument.activityIds) ? originalDocument.activityIds : null,
       documentType: documentType || originalDocument.documentType || 'Report',
       uploadDate: new Date(),
       status: status || originalDocument.status || 'Review',
@@ -271,6 +368,8 @@ router.put('/:id', async (req, res) => {
       content: req.body.content || document.content,
       author: req.body.author || document.author,
       projectId: req.body.projectId || document.projectId,
+      activityId: req.body.activityId !== undefined ? req.body.activityId : document.activityId,
+      activityIds: req.body.activityIds !== undefined ? req.body.activityIds : document.activityIds,
       documentType: req.body.documentType || document.documentType,
       uploadDate: req.body.uploadDate || document.uploadDate,
       status: req.body.status || document.status
