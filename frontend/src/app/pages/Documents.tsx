@@ -1,4 +1,4 @@
-import { useState, useEffect, ChangeEvent } from "react";
+import { useState, useEffect, useMemo, ChangeEvent, useRef } from "react";
 import { Link } from "react-router-dom";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
@@ -24,6 +24,7 @@ import { documentsApi, blocksApi, activitiesApi, projectsApi } from "../../servi
 export function Documents() {
   const [filterBlock, setFilterBlock] = useState("all");
   const [filterType, setFilterType] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [documents, setDocuments] = useState<any[]>([]);
   const [blocks, setBlocks] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
@@ -33,6 +34,7 @@ export function Documents() {
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [previewingId, setPreviewingId] = useState<number | null>(null);
   const [file, setFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadForm, setUploadForm] = useState({
     title: "",
     author: "",
@@ -248,12 +250,87 @@ export function Documents() {
     return '-';
   };
 
+  const documentTypeOptions = useMemo(() => {
+    const typeSet = new Set<string>();
+    documents.forEach((doc) => {
+      const type = String(doc.documentType || doc.type || '').trim();
+      if (type) {
+        typeSet.add(type);
+      }
+    });
+    return Array.from(typeSet).sort((a, b) => a.localeCompare(b));
+  }, [documents]);
+
+  const documentCategoryCounts = useMemo(() => {
+    const counts: Record<string, number> = {
+      Technical: 0,
+      Finance: 0,
+      HSE: 0,
+      Legal: 0,
+    };
+
+    documents.forEach((doc) => {
+      const rawType = String(doc.documentType || doc.type || '').toLowerCase();
+      if (rawType.includes('technical')) {
+        counts.Technical += 1;
+      } else if (/finance|financial/.test(rawType)) {
+        counts.Finance += 1;
+      } else if (/hse|health|safety/.test(rawType)) {
+        counts.HSE += 1;
+      } else if (rawType.includes('legal')) {
+        counts.Legal += 1;
+      }
+    });
+
+    return counts;
+  }, [documents]);
+
+  const renderedDocuments = useMemo(() => {
+    const normalizedSearch = searchQuery.trim().toLowerCase();
+
+    return documents.filter((doc) => {
+      const project = projects.find((projectItem) => String(projectItem.id) === String(doc?.projectId));
+      const block = blocks.find((blockItem) => String(blockItem.id) === String(project?.blockId));
+      const documentType = String(doc.documentType || doc.type || '').toLowerCase();
+
+      if (filterBlock !== 'all' && String(block?.id) !== String(filterBlock)) {
+        return false;
+      }
+
+      if (filterType !== 'all' && filterType) {
+        if (!documentType.includes(String(filterType).toLowerCase())) {
+          return false;
+        }
+      }
+
+      if (!normalizedSearch) {
+        return true;
+      }
+
+      const searchableText = [
+        doc.title,
+        doc.name,
+        doc.filename,
+        doc.documentType,
+        doc.type,
+        doc.status,
+        getDocumentProjectName(doc),
+        getDocumentBlockName(doc),
+        Array.isArray(doc.activityTags) ? doc.activityTags.join(' ') : '',
+        doc.uploadedBy,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      return searchableText.includes(normalizedSearch);
+    });
+  }, [documents, searchQuery, filterBlock, filterType, blocks, projects]);
+
   const getActiveUserName = () => {
     if (!user) return '-';
     return `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username || '-';
   };
-
-  const renderedDocuments = documents;
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -284,7 +361,7 @@ export function Documents() {
               Upload Document
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent onOpenAutoFocus={(e) => e.preventDefault()}>
             <DialogHeader>
               <DialogTitle>Upload Document</DialogTitle>
               <DialogDescription>
@@ -398,22 +475,29 @@ export function Documents() {
               </div>
               <div>
                 <Label htmlFor="document-file">File</Label>
+
                 <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <label
-                    htmlFor="document-file"
-                    className="inline-flex cursor-pointer items-center justify-center rounded-md border border-input px-4 py-2 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-muted"
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-fit"
                   >
                     Browse
-                  </label>
-                  <div className="min-h-[38px] flex-1 rounded-md border bg-input-background px-3 py-2 text-sm text-gray-700 shadow-sm">
-                    {file ? file.name : 'No file selected'}
+                  </Button>
+
+                  <div className="min-h-[38px] flex-1 rounded-md border bg-input-background px-3 py-2 text-sm text-gray-700 shadow-sm flex items-center">
+                    {file ? file.name : "No file selected"}
                   </div>
                 </div>
+
                 <input
+                  ref={fileInputRef}
                   id="document-file"
                   type="file"
                   onChange={handleFileChange}
-                  className="hidden"
+                  style={{ display: "none" }}
+                  accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv"
                 />
               </div>
             </div>
@@ -441,6 +525,8 @@ export function Documents() {
               type="search"
               placeholder="Search documents..."
               className="pl-10"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
             />
           </div>
           <Select value={filterBlock} onValueChange={setFilterBlock}>
@@ -449,9 +535,11 @@ export function Documents() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Blocks</SelectItem>
-              <SelectItem value="block-a">Block A</SelectItem>
-              <SelectItem value="block-b">Block B</SelectItem>
-              <SelectItem value="block-c">Block C</SelectItem>
+              {blocks.map((block) => (
+                <SelectItem key={block.id} value={String(block.id)}>
+                  {block.name}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Select value={filterType} onValueChange={setFilterType}>
@@ -460,11 +548,11 @@ export function Documents() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Types</SelectItem>
-              <SelectItem value="technical">Technical</SelectItem>
-              <SelectItem value="finance">Finance</SelectItem>
-              <SelectItem value="hse">HSE</SelectItem>
-              <SelectItem value="legal">Legal</SelectItem>
-              <SelectItem value="environmental">Environmental</SelectItem>
+              {documentTypeOptions.map((typeOption) => (
+                <SelectItem key={typeOption} value={typeOption}>
+                  {typeOption}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -489,7 +577,7 @@ export function Documents() {
             <FolderOpen className="h-8 w-8 text-blue-600" />
             <div>
               <p className="font-medium">Technical</p>
-              <p className="text-sm text-gray-500">24 files</p>
+              <p className="text-sm text-gray-500">{documentCategoryCounts.Technical} files</p>
             </div>
           </div>
         </Card>
@@ -498,7 +586,7 @@ export function Documents() {
             <FolderOpen className="h-8 w-8 text-green-600" />
             <div>
               <p className="font-medium">Finance</p>
-              <p className="text-sm text-gray-500">12 files</p>
+              <p className="text-sm text-gray-500">{documentCategoryCounts.Finance} files</p>
             </div>
           </div>
         </Card>
@@ -507,7 +595,7 @@ export function Documents() {
             <FolderOpen className="h-8 w-8 text-orange-600" />
             <div>
               <p className="font-medium">HSE</p>
-              <p className="text-sm text-gray-500">18 files</p>
+              <p className="text-sm text-gray-500">{documentCategoryCounts.HSE} files</p>
             </div>
           </div>
         </Card>
@@ -516,7 +604,7 @@ export function Documents() {
             <FolderOpen className="h-8 w-8 text-purple-600" />
             <div>
               <p className="font-medium">Legal</p>
-              <p className="text-sm text-gray-500">8 files</p>
+              <p className="text-sm text-gray-500">{documentCategoryCounts.Legal} files</p>
             </div>
           </div>
         </Card>

@@ -23,18 +23,18 @@ export function ExecutiveDashboard() {
 
   const countdownCards = [
     {
-      title: "Licence Expiry",
-      date: "2026-08-15",
-      daysLeft: 106,
-      status: "warning",
-      block: "Block A",
+      title: "Drilling Deadline",
+      date: "2026-08-30",
+      daysLeft: 103,
+      status: "critical",
+      block: "Deep Water Block",
     },
     {
-      title: "Drilling Deadline",
-      date: "2026-06-30",
-      daysLeft: 60,
-      status: "critical",
-      block: "Block B",
+      title: "Licence Expiry",
+      date: "2027-08-15",
+      daysLeft: 465,
+      status: "warning",
+      block: "Shallow Water Block",
     },
     {
       title: "Contract Expiry",
