@@ -445,6 +445,11 @@ router.put('/:id', async (req, res) => {
       actualCost
     });
 
+    // Recalculate this activity's own progress from its sub-activities (if any).
+    // This ensures that any manually supplied progress value is overridden by the
+    // weighted-average calculation whenever children exist.
+    await updateParentProgress(activity.id);
+
     if (oldParentActivityId && oldParentActivityId !== newParentActivityId) {
       await updateParentActualCost(oldParentActivityId);
       await updateParentProgress(oldParentActivityId, true);
