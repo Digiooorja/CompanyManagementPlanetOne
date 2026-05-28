@@ -6,7 +6,8 @@ import { Button } from "../components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "../components/ui/table";
 import { ArrowLeft, MapPin, Calendar, Users, FileText } from "lucide-react";
-import { blocksApi, projectsApi } from "../../services/api";
+import { blocksApi, projectsApi, documentsApi, registersApi } from "../../services/api";
+import { formatDisplayDateOrDefault } from "../lib/date";
 
 export function BlockDetail() {
   const { id } = useParams();
@@ -32,6 +33,31 @@ export function BlockDetail() {
 
         const blockProjects = await projectsApi.getByBlockId(Number(id));
         setProjects(blockProjects);
+
+        // Load documents for all projects under this block
+        try {
+          const projectIds = Array.isArray(blockProjects) ? blockProjects.map((p: any) => p.id).filter(Boolean) : [];
+          let allDocs: any[] = [];
+          if (projectIds.length > 0) {
+            const docsPerProject = await Promise.all(
+              projectIds.map((pid: number) => documentsApi.getByProjectId(pid))
+            );
+            allDocs = docsPerProject.flat();
+          }
+          setDocuments(allDocs);
+        } catch (docErr) {
+          console.warn('Failed to load block documents:', docErr);
+          setDocuments([]);
+        }
+
+        // Load registers from backend
+        try {
+          const regs = await registersApi.getAll();
+          setRegisters(Array.isArray(regs) ? regs : []);
+        } catch (regErr) {
+          console.warn('Failed to load registers:', regErr);
+          setRegisters([]);
+        }
       } catch (err) {
         console.error('Error loading block detail:', err);
         setError(err instanceof Error ? err.message : 'Unable to load block details');
@@ -43,35 +69,8 @@ export function BlockDetail() {
     fetchBlockDetail();
   }, [id]);
 
-  const documents = [
-    {
-      id: 1,
-      name: "Licence Agreement",
-      type: "Legal",
-      uploadDate: "2020-03-15",
-      size: "2.4 MB",
-    },
-    {
-      id: 2,
-      name: "Environmental Impact Assessment",
-      type: "Environmental",
-      uploadDate: "2020-05-20",
-      size: "5.1 MB",
-    },
-    {
-      id: 3,
-      name: "Field Development Plan",
-      type: "Technical",
-      uploadDate: "2021-01-10",
-      size: "12.8 MB",
-    },
-  ];
-
-  const registers = [
-    { id: 1, name: "Risk Register", entries: 12, lastUpdated: "2026-04-28" },
-    { id: 2, name: "Asset Register", entries: 45, lastUpdated: "2026-04-30" },
-    { id: 3, name: "Compliance Register", entries: 28, lastUpdated: "2026-04-25" },
-  ];
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [registers, setRegisters] = useState<any[]>([]);
 
   if (loading) {
     return (
@@ -118,7 +117,7 @@ export function BlockDetail() {
             </div>
             <div className="flex items-center gap-1">
               <Calendar className="h-4 w-4" />
-              Licence: {block.licenceStart} - {block.licenceExpiry}
+              Licence: {formatDisplayDateOrDefault(block.licenceStart)} - {formatDisplayDateOrDefault(block.licenceExpiry)}
             </div>
           </div>
         </div>
@@ -233,13 +232,13 @@ export function BlockDetail() {
                   <TableRow key={doc.id}>
                     <TableCell className="flex items-center gap-2">
                       <FileText className="h-4 w-4" />
-                      {doc.name}
+                      {doc.title}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">{doc.type}</Badge>
+                      <Badge variant="outline">{doc.documentType || doc.type}</Badge>
                     </TableCell>
-                    <TableCell>{doc.uploadDate}</TableCell>
-                    <TableCell>{doc.size}</TableCell>
+                    <TableCell>{formatDisplayDateOrDefault(doc.uploadDate)}</TableCell>
+                    <TableCell>{doc.size ? `${doc.size} bytes` : 'Unknown'}</TableCell>
                     <TableCell>
                       <Link to={`/documents/${doc.id}`}>
                         <Button size="sm" variant="ghost">
@@ -261,10 +260,10 @@ export function BlockDetail() {
                 <Card key={register.id} className="p-4">
                   <h4 className="font-medium mb-2">{register.name}</h4>
                   <p className="text-sm text-gray-600">
-                    {register.entries} entries
+                    {Array.isArray(register.value) ? `${register.value.length} entries` : (register.value && typeof register.value === 'object') ? `${Object.keys(register.value).length} entries` : 'Entries: N/A'}
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
-                    Updated: {register.lastUpdated}
+                    Updated: {formatDisplayDateOrDefault(register.updatedAt || register.updatedAt)}
                   </p>
                   <Link to={`/registers/${register.id}`}>
                     <Button size="sm" variant="outline" className="w-full mt-3">

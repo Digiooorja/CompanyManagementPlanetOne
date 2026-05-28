@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -38,6 +39,8 @@ export function ActivityDetail() {
     status: 'Active',
     priority: 'Medium',
     progress: 0,
+    plannedStartDate: '',
+    plannedEndDate: '',
     plannedCost: '',
     actualCost: ''
   });
@@ -48,7 +51,6 @@ export function ActivityDetail() {
     status: 'Active',
     priority: 'Medium',
     assignedTo: '',
-    dueDate: '',
     plannedStartDate: '',
     plannedEndDate: '',
     actualStartDate: '',
@@ -59,6 +61,14 @@ export function ActivityDetail() {
   });
   const navigate = useNavigate();
   const [activityActionLoading, setActivityActionLoading] = useState(false);
+  const { user } = useAuth();
+  const departmentName = user?.department || user?.departmentDetails?.name || '';
+  const isOperationsUser = departmentName.toLowerCase().includes('operation');
+  const isFinanceUser = departmentName.toLowerCase().includes('finance');
+  const isAdminUser = user?.role === 'Admin';
+  const canEditFields = isAdminUser || isOperationsUser;
+  const canEditActualCost = isAdminUser || isFinanceUser;
+  const canCreateActivity = isAdminUser || isOperationsUser;
 
   const fetchActivityDetails = async () => {
     try {
@@ -112,6 +122,30 @@ export function ActivityDetail() {
     fetchActivityDetails();
   }, [id]);
 
+  const normalizeDateInputValue = (value: string | Date | null | undefined) => {
+    if (!value) return '';
+    if (typeof value === 'string') return value.slice(0, 10);
+    return value.toISOString().split('T')[0];
+  };
+
+  const resetSubActivityForm = () => {
+    const parentPlannedStartDate = activity?.plannedStartDate
+      ? normalizeDateInputValue(activity.plannedStartDate)
+      : '';
+
+    setNewSubActivity({
+      name: '',
+      description: '',
+      status: 'Active',
+      priority: 'Medium',
+      progress: 0,
+      plannedStartDate: parentPlannedStartDate,
+      plannedEndDate: '',
+      plannedCost: '',
+      actualCost: ''
+    });
+  };
+
   const handleCreateSubActivity = async () => {
     if (!newSubActivity.name.trim() || !newSubActivity.description.trim()) {
       setError('Sub-activity name and description are required');
@@ -146,15 +180,7 @@ export function ActivityDetail() {
         actualCost
       });
       await fetchActivityDetails();
-      setNewSubActivity({
-        name: '',
-        description: '',
-        status: 'Active',
-        priority: 'Medium',
-        progress: 0,
-        plannedCost: '',
-        actualCost: ''
-      });
+      resetSubActivityForm();
       setShowSubActivityForm(false);
       setError(null);
     } catch (err) {
@@ -278,14 +304,13 @@ export function ActivityDetail() {
   };
 
   const handleEditActivity = () => {
-    if (!activity) return;
+    if (!activity || (!canEditFields && !canEditActualCost)) return;
     setActivityForm({
       name: activity.name || '',
       description: activity.description || '',
       status: activity.status || 'Active',
       priority: activity.priority || 'Medium',
       assignedTo: activity.assignedTo || '',
-      dueDate: activity.dueDate || '',
       plannedStartDate: activity.plannedStartDate || '',
       plannedEndDate: activity.plannedEndDate || '',
       actualStartDate: activity.actualStartDate || '',
@@ -299,23 +324,32 @@ export function ActivityDetail() {
 
   const handleSaveActivity = async () => {
     if (!activity) return;
+    if (!canEditFields && !canEditActualCost) {
+      setError('You do not have permission to update this activity');
+      return;
+    }
+
     try {
       setActivityActionLoading(true);
-      const updatedPayload = {
-        name: activityForm.name.trim(),
-        description: activityForm.description.trim(),
-        status: activityForm.status,
-        priority: activityForm.priority,
-        assignedTo: activityForm.assignedTo.trim(),
-        dueDate: activityForm.dueDate,
-        plannedStartDate: activityForm.plannedStartDate,
-        plannedEndDate: activityForm.plannedEndDate,
-        actualStartDate: activityForm.actualStartDate,
-        actualEndDate: activityForm.actualEndDate,
-        plannedCost: activityForm.plannedCost ? parseFloat(activityForm.plannedCost) : 0,
-        actualCost: activityForm.actualCost ? parseFloat(activityForm.actualCost) : 0,
-        progress: Number(activityForm.progress) || 0
-      };
+      const updatedPayload: any = {};
+
+      if (canEditFields) {
+        updatedPayload.name = activityForm.name.trim();
+        updatedPayload.description = activityForm.description.trim();
+        updatedPayload.status = activityForm.status;
+        updatedPayload.priority = activityForm.priority;
+        updatedPayload.assignedTo = activityForm.assignedTo.trim();
+        updatedPayload.plannedStartDate = activityForm.plannedStartDate;
+        updatedPayload.plannedEndDate = activityForm.plannedEndDate;
+        updatedPayload.actualStartDate = activityForm.actualStartDate;
+        updatedPayload.actualEndDate = activityForm.actualEndDate;
+        updatedPayload.plannedCost = activityForm.plannedCost ? parseFloat(activityForm.plannedCost) : 0;
+        updatedPayload.progress = Number(activityForm.progress) || 0;
+      }
+
+      if (canEditActualCost) {
+        updatedPayload.actualCost = activityForm.actualCost ? parseFloat(activityForm.actualCost) : 0;
+      }
 
       const updated: any = await activitiesApi.update(activity.id, updatedPayload);
       setActivity({
@@ -352,12 +386,12 @@ export function ActivityDetail() {
 
   const handleChangeDueDate = async () => {
     if (!activity) return;
-    const dueDate = window.prompt('Enter new due date (YYYY-MM-DD)', activity.dueDate || '');
-    if (dueDate === null) return;
+    const plannedEnd = window.prompt('Enter new planned end date (YYYY-MM-DD)', activity.plannedEndDate || '');
+    if (plannedEnd === null) return;
     try {
       setActivityActionLoading(true);
-      const updated: any = await activitiesApi.update(activity.id, { dueDate });
-      setActivity({ ...activity, dueDate: updated.dueDate });
+      const updated: any = await activitiesApi.update(activity.id, { plannedEndDate: plannedEnd });
+      setActivity({ ...activity, plannedEndDate: updated.plannedEndDate });
     } catch (err) {
       console.error('Error changing due date:', err);
       setError('Failed to change due date');
@@ -407,7 +441,7 @@ export function ActivityDetail() {
     priority: "Medium",
     progress: 0,
     assignedTo: "Unassigned",
-    dueDate: new Date().toISOString().split('T')[0]
+    plannedEndDate: new Date().toISOString().split('T')[0]
   };
 
 
@@ -455,12 +489,12 @@ export function ActivityDetail() {
           <h1 className="text-3xl">{displayActivity.name}</h1>
           <div className="flex flex-col gap-3 mt-2 text-sm text-gray-600">
             <div className="flex flex-wrap items-center gap-4">
-              {displayActivity.dueDate && (
-                <div className="flex items-center gap-1">
-                  <Calendar className="h-4 w-4" />
-                  Due: {displayActivity.dueDate}
-                </div>
-              )}
+              {displayActivity.plannedEndDate && (
+                  <div className="flex items-center gap-1">
+                    <Calendar className="h-4 w-4" />
+                    Planned End: {displayActivity.plannedEndDate}
+                  </div>
+                )}
               {displayActivity.assignedTo && (
                 <div className="flex items-center gap-1">
                   <User className="h-4 w-4" />
@@ -509,10 +543,10 @@ export function ActivityDetail() {
           </div>
           <Progress value={displayActivity.progress} className="h-3" />
           <div className="flex gap-2 mt-4">
-            <Button size="sm" variant="outline" onClick={handleUpdateActivityProgress} disabled={activityActionLoading}>
+            <Button size="sm" variant="outline" onClick={handleUpdateActivityProgress} disabled={!canEditFields || activityActionLoading}>
               Update Progress
             </Button>
-            <Button size="sm" variant="outline" onClick={handleChangeActivityStatus} disabled={activityActionLoading}>
+            <Button size="sm" variant="outline" onClick={handleChangeActivityStatus} disabled={!canEditFields || activityActionLoading}>
               Change Status
             </Button>
           </div>
@@ -536,13 +570,25 @@ export function ActivityDetail() {
           <Card className="p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg">Sub-Activities</h3>
-              <Button 
-                size="sm" 
-                onClick={() => setShowSubActivityForm(!showSubActivityForm)}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add Sub-Activity
-              </Button>
+              {canCreateActivity ? (
+                <Button 
+                  size="sm" 
+                  onClick={() => {
+                    if (!showSubActivityForm) {
+                      resetSubActivityForm();
+                    }
+                    setShowSubActivityForm(!showSubActivityForm);
+                  }}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Sub-Activity
+                </Button>
+              ) : (
+                <Button size="sm" variant="secondary" disabled title="Only Operations department users can add sub-activities">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Sub-Activity
+                </Button>
+              )}
             </div>
 
             {showSubActivityForm && (
@@ -585,6 +631,24 @@ export function ActivityDetail() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
+                    <label className="block text-sm font-medium mb-1">Planned Start Date</label>
+                    <Input
+                      type="date"
+                      value={newSubActivity.plannedStartDate}
+                      onChange={(e) => setNewSubActivity({...newSubActivity, plannedStartDate: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Planned End Date</label>
+                    <Input
+                      type="date"
+                      value={newSubActivity.plannedEndDate}
+                      onChange={(e) => setNewSubActivity({...newSubActivity, plannedEndDate: e.target.value})}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
                     <label className="block text-sm font-medium mb-1">Planned Cost</label>
                     <Input
                       type="number"
@@ -622,7 +686,12 @@ export function ActivityDetail() {
                   <div key={subActivity.id} className="p-4 border rounded hover:bg-gray-50">
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex-1">
-                        <h4 className="font-medium">{subActivity.name}</h4>
+                        <Link
+                          to={`/activities/${subActivity.id}`}
+                          className="block font-medium text-slate-900 hover:underline"
+                        >
+                          {subActivity.name}
+                        </Link>
                         <p className="text-sm text-gray-600 mt-1">{subActivity.description}</p>
                       </div>
                       <div className="flex gap-2">
@@ -805,11 +874,11 @@ export function ActivityDetail() {
                   <Separator />
                 </>
               )}
-              {displayActivity.dueDate && (
+              {displayActivity.plannedEndDate && (
                 <>
                   <div>
-                    <p className="text-gray-600">Due Date</p>
-                    <p className="mt-1">{displayActivity.dueDate}</p>
+                    <p className="text-gray-600">Planned End Date</p>
+                    <p className="mt-1">{displayActivity.plannedEndDate}</p>
                   </div>
                   <Separator />
                 </>
@@ -824,16 +893,22 @@ export function ActivityDetail() {
           <Card className="p-4">
             <h4 className="font-medium mb-3">Actions</h4>
             <div className="space-y-2">
-              <Button variant="outline" className="w-full" onClick={handleEditActivity}>
-                Edit Activity
-              </Button>
-              <Button variant="outline" className="w-full" onClick={handleReassign}>
+              {canEditFields || canEditActualCost ? (
+                <Button variant="outline" className="w-full" onClick={handleEditActivity}>
+                  Edit Activity
+                </Button>
+              ) : (
+                <Button variant="outline" className="w-full" disabled title="Only Operations or Finance can edit this activity">
+                  Edit Activity
+                </Button>
+              )}
+              <Button variant="outline" className="w-full" onClick={handleReassign} disabled={!canEditFields} title={!canEditFields ? 'Only Operations department users can reassign' : undefined}>
                 Reassign
               </Button>
-              <Button variant="outline" className="w-full" onClick={handleChangeDueDate}>
-                Change Due Date
+              <Button variant="outline" className="w-full" onClick={handleChangeDueDate} disabled={!canEditFields} title={!canEditFields ? 'Only Operations department users can change planned end date' : undefined}>
+                Change Planned End
               </Button>
-              <Button variant="destructive" className="w-full" onClick={handleDeleteActivity}>
+              <Button variant="destructive" className="w-full" onClick={handleDeleteActivity} disabled={!canEditFields} title={!canEditFields ? 'Only Operations department users can delete activities' : undefined}>
                 Delete Activity
               </Button>
             </div>
@@ -850,6 +925,7 @@ export function ActivityDetail() {
                   <div className="grid gap-2">
                     <label className="text-sm font-medium">Name</label>
                     <Input
+                      disabled={!canEditFields}
                       value={activityForm.name}
                       onChange={(event) => setActivityForm({ ...activityForm, name: event.target.value })}
                     />
@@ -857,6 +933,7 @@ export function ActivityDetail() {
                   <div className="grid gap-2">
                     <label className="text-sm font-medium">Description</label>
                     <Textarea
+                      disabled={!canEditFields}
                       value={activityForm.description}
                       onChange={(event) => setActivityForm({ ...activityForm, description: event.target.value })}
                       rows={4}
@@ -866,6 +943,7 @@ export function ActivityDetail() {
                     <div className="grid gap-2">
                       <label className="text-sm font-medium">Status</label>
                       <Select
+                        disabled={!canEditFields}
                         value={activityForm.status}
                         onValueChange={(value) => setActivityForm({ ...activityForm, status: value })}
                       >
@@ -878,6 +956,7 @@ export function ActivityDetail() {
                     <div className="grid gap-2">
                       <label className="text-sm font-medium">Priority</label>
                       <Select
+                        disabled={!canEditFields}
                         value={activityForm.priority}
                         onValueChange={(value) => setActivityForm({ ...activityForm, priority: value })}
                       >
@@ -892,23 +971,26 @@ export function ActivityDetail() {
                     <div className="grid gap-2">
                       <label className="text-sm font-medium">Assigned To</label>
                       <Input
+                        disabled={!canEditFields}
                         value={activityForm.assignedTo}
                         onChange={(event) => setActivityForm({ ...activityForm, assignedTo: event.target.value })}
                       />
                     </div>
                     <div className="grid gap-2">
-                      <label className="text-sm font-medium">Due Date</label>
-                      <Input
-                        type="date"
-                        value={activityForm.dueDate}
-                        onChange={(event) => setActivityForm({ ...activityForm, dueDate: event.target.value })}
-                      />
+                      <label className="text-sm font-medium">Planned End</label>
+                        <Input
+                          disabled={!canEditFields}
+                          type="date"
+                          value={activityForm.plannedEndDate}
+                          onChange={(event) => setActivityForm({ ...activityForm, plannedEndDate: event.target.value })}
+                        />
                     </div>
                   </div>
                   <div className="grid gap-2 sm:grid-cols-2">
                     <div className="grid gap-2">
                       <label className="text-sm font-medium">Planned Start</label>
                       <Input
+                        disabled={!canEditFields}
                         type="date"
                         value={activityForm.plannedStartDate}
                         onChange={(event) => setActivityForm({ ...activityForm, plannedStartDate: event.target.value })}
@@ -917,6 +999,7 @@ export function ActivityDetail() {
                     <div className="grid gap-2">
                       <label className="text-sm font-medium">Planned End</label>
                       <Input
+                        disabled={!canEditFields}
                         type="date"
                         value={activityForm.plannedEndDate}
                         onChange={(event) => setActivityForm({ ...activityForm, plannedEndDate: event.target.value })}
@@ -927,6 +1010,7 @@ export function ActivityDetail() {
                     <div className="grid gap-2">
                       <label className="text-sm font-medium">Actual Start</label>
                       <Input
+                        disabled={!canEditFields}
                         type="date"
                         value={activityForm.actualStartDate}
                         onChange={(event) => setActivityForm({ ...activityForm, actualStartDate: event.target.value })}
@@ -935,6 +1019,7 @@ export function ActivityDetail() {
                     <div className="grid gap-2">
                       <label className="text-sm font-medium">Actual End</label>
                       <Input
+                        disabled={!canEditFields}
                         type="date"
                         value={activityForm.actualEndDate}
                         onChange={(event) => setActivityForm({ ...activityForm, actualEndDate: event.target.value })}
@@ -945,6 +1030,7 @@ export function ActivityDetail() {
                     <div className="grid gap-2">
                       <label className="text-sm font-medium">Planned Cost</label>
                       <Input
+                        disabled={!canEditFields}
                         type="number"
                         step="0.01"
                         value={activityForm.plannedCost}
@@ -954,6 +1040,7 @@ export function ActivityDetail() {
                     <div className="grid gap-2">
                       <label className="text-sm font-medium">Actual Cost</label>
                       <Input
+                        disabled={!canEditActualCost}
                         type="number"
                         step="0.01"
                         value={activityForm.actualCost}
@@ -965,6 +1052,7 @@ export function ActivityDetail() {
                     <div className="grid gap-2">
                       <label className="text-sm font-medium">Progress (%)</label>
                       <Input
+                        disabled={!canEditFields}
                         type="number"
                         min="0"
                         max="100"

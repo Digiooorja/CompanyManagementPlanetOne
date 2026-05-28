@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
-const { Op } = require('sequelize');
+const { Op, QueryTypes } = require('sequelize');
 const sequelize = require('./database');
 
 require('dotenv').config();
@@ -27,6 +27,7 @@ require('./models/Comment');
 // Define associations after all models are loaded
 const Project = require('./models/Project');
 const Activity = require('./models/Activity');
+const Finance = require('./models/Finance');
 const Block = require('./models/Block');
 const User = require('./models/User');
 const Department = require('./models/Department');
@@ -35,6 +36,16 @@ const Comment = require('./models/Comment');
 Activity.belongsTo(Project, {
   foreignKey: 'projectId',
   as: 'project'
+});
+
+Finance.belongsTo(Activity, {
+  foreignKey: 'activityId',
+  as: 'activity'
+});
+
+Activity.hasMany(Finance, {
+  foreignKey: 'activityId',
+  as: 'financeItems'
 });
 
 Project.hasMany(Activity, {
@@ -132,7 +143,9 @@ const startServer = async () => {
     await sequelize.authenticate();
     console.log('Database connected');
 
-    await sequelize.sync({ alter: true });
+    // Apply schema changes without dropping existing data so startup preserves records.
+    const queryInterface = sequelize.getQueryInterface();
+    await sequelize.sync({ alter: true, force: false });
     console.log('Database synchronized');
 
     const departmentNames = [
@@ -152,21 +165,36 @@ const startServer = async () => {
       });
     }
 
-    const usersToMap = await User.findAll({
-      where: {
-        departmentId: null,
-        department: { [Op.ne]: null }
-      }
-    });
+    let usersTable = null;
 
-    for (const user of usersToMap) {
-      const department = await Department.findOne({
-        where: { name: user.department }
-      });
-      if (department) {
-        user.departmentId = department.id;
-        await user.save();
+    try {
+      usersTable = await queryInterface.describeTable('users');
+    } catch (err) {
+      usersTable = null;
+    }
+
+    if (usersTable && usersTable.department) {
+      const legacyUsers = await sequelize.query(
+        'SELECT id, department FROM users WHERE department IS NOT NULL AND "departmentId" IS NULL',
+        { type: QueryTypes.SELECT }
+      );
+
+      for (const legacyUser of legacyUsers) {
+        const department = await Department.findOne({
+          where: { name: legacyUser.department }
+        });
+        if (department) {
+          await sequelize.query(
+            'UPDATE users SET "departmentId" = :departmentId WHERE id = :userId',
+            {
+              replacements: { departmentId: department.id, userId: legacyUser.id },
+              type: QueryTypes.UPDATE
+            }
+          );
+        }
       }
+
+      await queryInterface.removeColumn('users', 'department');
     }
 
     app.listen(PORT, () => {

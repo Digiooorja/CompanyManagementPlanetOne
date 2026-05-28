@@ -1,6 +1,12 @@
 -- PostgreSQL schema for DOS Planet One Project Tracking backend
 -- Run this file against your PostgreSQL database to create the required tables.
 
+CREATE TABLE IF NOT EXISTS departments (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(255) NOT NULL UNIQUE,
+  description TEXT
+);
+
 CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
   username VARCHAR(255) NOT NULL UNIQUE,
@@ -8,6 +14,7 @@ CREATE TABLE IF NOT EXISTS users (
   password VARCHAR(255) NOT NULL,
   role VARCHAR(50) NOT NULL CHECK (role IN ('Admin', 'Manager', 'User')),
   active BOOLEAN NOT NULL DEFAULT true,
+  "departmentId" INTEGER REFERENCES departments(id),
   "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
   "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -73,9 +80,17 @@ CREATE TABLE IF NOT EXISTS documents (
 CREATE TABLE IF NOT EXISTS finances (
   id SERIAL PRIMARY KEY,
   item VARCHAR(255) NOT NULL,
-  amount NUMERIC NOT NULL,
+  amount NUMERIC(15,2) NOT NULL DEFAULT 0,
   category VARCHAR(255) NOT NULL,
   type VARCHAR(50) NOT NULL CHECK (type IN ('Income', 'Expense')),
+  recordType VARCHAR(50) NOT NULL DEFAULT 'Entry' CHECK (recordType IN ('Entry', 'Invoice', 'AFE')),
+  "activityId" INTEGER REFERENCES activities(id),
+  "approvalDepartment" VARCHAR(255),
+  status VARCHAR(50) NOT NULL DEFAULT 'Pending' CHECK (status IN ('Pending', 'Under Review', 'Approved', 'Paid', 'Rejected')),
+  "invoiceNumber" VARCHAR(255),
+  "afeNumber" VARCHAR(255),
+  "transactionDetails" TEXT,
+  "transactionDate" TIMESTAMPTZ,
   "date" TIMESTAMPTZ NOT NULL DEFAULT now(),
   "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
   "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()

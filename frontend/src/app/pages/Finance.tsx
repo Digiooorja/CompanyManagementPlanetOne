@@ -1,126 +1,282 @@
-import { useState, useEffect } from "react";
-import { Card } from "../components/ui/card";
-import { Badge } from "../components/ui/badge";
-import { Button } from "../components/ui/button";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "../components/ui/table";
-import { Progress } from "../components/ui/progress";
-import { DollarSign, TrendingUp, TrendingDown, FileText, AlertCircle } from "lucide-react";
-import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
-import { financeApi } from "../../services/api";
+import { useState, useEffect, useMemo, type MouseEvent } from 'react';
+import { Card } from '../components/ui/card';
+import { Badge } from '../components/ui/badge';
+import { Button } from '../components/ui/button';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '../components/ui/table';
+import { Progress } from '../components/ui/progress';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { Textarea } from '../components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription, DialogClose } from '../components/ui/dialog';
+import { DollarSign, TrendingUp, TrendingDown, FileText, AlertCircle, CheckCircle } from 'lucide-react';
+import { LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from 'recharts';
+import { useAuth } from '../contexts/AuthContext';
+import { financeApi, activitiesApi } from '../../services/api';
 
 export function Finance() {
+  const { user } = useAuth();
+  const [financeItems, setFinanceItems] = useState<any[]>([]);
+  const [activities, setActivities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isAfeOpen, setIsAfeOpen] = useState(false);
+  const [isPaymentOpen, setIsPaymentOpen] = useState(false);
+  const [selectedInvoice, setSelectedInvoice] = useState<any | null>(null);
+  const [transactionDetails, setTransactionDetails] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [newAfe, setNewAfe] = useState({
+    item: '',
+    amount: '',
+    category: '',
+    type: 'Expense',
+    activityId: '',
+    approvalDepartment: '',
+    afeNumber: '',
+    status: 'Pending'
+  });
+
+  const departmentName = user?.department || user?.departmentDetails?.name || '';
+  const canEdit = useMemo(() => {
+    const department = String(departmentName).toLowerCase();
+    return user?.role === 'Admin' || department.includes('finance') || department.includes('account');
+  }, [departmentName, user]);
 
   useEffect(() => {
-    const fetchFinanceData = async () => {
+    const loadData = async () => {
       try {
         setLoading(true);
         setError(null);
-        await financeApi.getAll();
+        const [financeData, activitiesData] = await Promise.all([
+          financeApi.getAll(),
+          activitiesApi.getAll(),
+        ]);
+        setFinanceItems(Array.isArray(financeData) ? financeData : []);
+        setActivities(Array.isArray(activitiesData) ? activitiesData : []);
       } catch (err) {
-        console.error('Error fetching finance data:', err);
-        setError(null);
+        console.error('Error loading finance data:', err);
+        setError('Unable to load finance data');
+        setFinanceItems([]);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchFinanceData();
+    loadData();
   }, []);
 
+  const activityOptions = useMemo(() => {
+    const options: Array<{ id: number; name: string }> = [];
+
+    activities.forEach((activity) => {
+      options.push({ id: activity.id, name: activity.name });
+      if (Array.isArray(activity.subActivities)) {
+        activity.subActivities.forEach((subActivity: any) => {
+          options.push({ id: subActivity.id, name: `↳ ${subActivity.name}` });
+        });
+      }
+    });
+
+    return options;
+  }, [activities]);
+
+  const activityMap = useMemo(() => {
+    const map = new Map<number, any>();
+    activities.forEach((activity) => {
+      map.set(activity.id, activity);
+      if (Array.isArray(activity.subActivities)) {
+        activity.subActivities.forEach((subActivity: any) => map.set(subActivity.id, subActivity));
+      }
+    });
+    return map;
+  }, [activities]);
+
+  const invoiceItems = useMemo(
+    () => financeItems.filter((item) => item.recordType === 'Invoice'),
+    [financeItems]
+  );
+
+  const afeItems = useMemo(
+    () => financeItems.filter((item) => item.recordType === 'AFE'),
+    [financeItems]
+  );
+
+  const summary = useMemo(() => {
+    const totalBudget = financeItems
+      .filter((item) => item.recordType === 'AFE')
+      .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const totalInvoices = invoiceItems.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const paidInvoices = invoiceItems
+      .filter((item) => item.status === 'Paid')
+      .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const pendingInvoices = invoiceItems
+      .filter((item) => item.status !== 'Paid')
+      .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+
+    return {
+      totalBudget,
+      totalInvoices,
+      paidInvoices,
+      pendingInvoices,
+    };
+  }, [financeItems, invoiceItems]);
+
   const budgetData = [
-    { block: "Block A", budget: 25000000, actual: 18500000, variance: 6500000 },
-    { block: "Block B", budget: 42000000, actual: 38200000, variance: 3800000 },
-    { block: "Block C", budget: 15000000, actual: 2100000, variance: 12900000 },
+    { block: 'Block A', budget: 25000000, actual: 18500000, variance: 6500000 },
+    { block: 'Block B', budget: 42000000, actual: 38200000, variance: 3800000 },
+    { block: 'Block C', budget: 15000000, actual: 2100000, variance: 12900000 },
   ];
 
   const monthlySpend = [
-    { month: "Nov", spend: 8500000 },
-    { month: "Dec", spend: 9200000 },
-    { month: "Jan", spend: 7800000 },
-    { month: "Feb", spend: 8900000 },
-    { month: "Mar", spend: 9500000 },
-    { month: "Apr", spend: 8100000 },
+    { month: 'Nov', spend: 8500000 },
+    { month: 'Dec', spend: 9200000 },
+    { month: 'Jan', spend: 7800000 },
+    { month: 'Feb', spend: 8900000 },
+    { month: 'Mar', spend: 9500000 },
+    { month: 'Apr', spend: 8100000 },
   ];
 
   const categorySpend = [
-    { name: "Drilling", value: 45000000 },
-    { name: "Equipment", value: 18000000 },
-    { name: "Personnel", value: 12000000 },
-    { name: "Services", value: 8000000 },
-    { name: "Other", value: 5000000 },
+    { name: 'Drilling', value: 45000000 },
+    { name: 'Equipment', value: 18000000 },
+    { name: 'Personnel', value: 12000000 },
+    { name: 'Services', value: 8000000 },
+    { name: 'Other', value: 5000000 },
   ];
 
-  const invoices = [
-    {
-      id: 1,
-      invoiceNo: "INV-2026-001",
-      vendor: "Drilling Services Ltd",
-      description: "Well A-1 Drilling Operations",
-      amount: 2500000,
-      dueDate: "2026-05-15",
-      status: "Pending",
-      aging: 10,
-    },
-    {
-      id: 2,
-      invoiceNo: "INV-2026-002",
-      vendor: "Equipment Rentals Inc",
-      description: "Equipment Lease Q2 2026",
-      amount: 450000,
-      dueDate: "2026-05-08",
-      status: "Approved",
-      aging: 3,
-    },
-    {
-      id: 3,
-      invoiceNo: "INV-2026-003",
-      vendor: "Seismic Survey Co",
-      description: "Block C Survey Phase 1",
-      amount: 1200000,
-      dueDate: "2026-05-20",
-      status: "Under Review",
-      aging: 15,
-    },
-    {
-      id: 4,
-      invoiceNo: "INV-2026-004",
-      vendor: "Environmental Consultants",
-      description: "Impact Assessment",
-      amount: 85000,
-      dueDate: "2026-05-05",
-      status: "Paid",
-      aging: 0,
-    },
-  ];
-
-  const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"];
+  const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "Paid":
-        return "default";
-      case "Approved":
-        return "secondary";
-      case "Pending":
-        return "outline";
-      case "Under Review":
-        return "outline";
+      case 'Paid':
+        return 'default';
+      case 'Approved':
+        return 'secondary';
+      case 'Pending':
+      case 'Under Review':
+      case 'Rejected':
+        return 'outline';
       default:
-        return "outline";
+        return 'outline';
     }
   };
 
+  const handleOpenPayment = (invoice: any) => {
+    setSelectedInvoice(invoice);
+    setTransactionDetails(invoice.transactionDetails || '');
+    setIsPaymentOpen(true);
+  };
+
+  const handleSavePayment = async () => {
+    if (!selectedInvoice) return;
+    setSaving(true);
+
+    try {
+      await financeApi.update(selectedInvoice.id, {
+        ...selectedInvoice,
+        status: 'Paid',
+        transactionDetails: transactionDetails.trim(),
+        transactionDate: new Date().toISOString(),
+      });
+      const data = await financeApi.getAll();
+      setFinanceItems(Array.isArray(data) ? data : []);
+      setIsPaymentOpen(false);
+      setSelectedInvoice(null);
+      setTransactionDetails('');
+    } catch (err) {
+      console.error('Error saving payment details:', err);
+      setError('Unable to save payment details');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleInvoiceStatusChange = async (invoice: any, status: string) => {
+    if (status === 'Paid') {
+      handleOpenPayment(invoice);
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await financeApi.update(invoice.id, { ...invoice, status });
+      const data = await financeApi.getAll();
+      setFinanceItems(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Error updating invoice status:', err);
+      setError('Unable to update invoice status');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCreateAfe = async () => {
+    if (!newAfe.item || !newAfe.amount || !newAfe.category) {
+      setError('AFE title, amount and category are required');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await financeApi.create({
+        item: newAfe.item,
+        amount: Number(newAfe.amount),
+        category: newAfe.category,
+        type: newAfe.type,
+        recordType: 'AFE',
+        activityId: newAfe.activityId && newAfe.activityId !== 'none' ? Number(newAfe.activityId) : null,
+        approvalDepartment: newAfe.approvalDepartment || null,
+        afeNumber: newAfe.afeNumber || null,
+        status: newAfe.status,
+      });
+      const data = await financeApi.getAll();
+      setFinanceItems(Array.isArray(data) ? data : []);
+      setIsAfeOpen(false);
+      setNewAfe({
+        item: '',
+        amount: '',
+        category: '',
+        type: 'Expense',
+        activityId: '',
+        approvalDepartment: '',
+        afeNumber: '',
+        status: 'Pending',
+      });
+      setError(null);
+    } catch (err) {
+      console.error('Error creating AFE:', err);
+      setError('Unable to create new AFE');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <Card className="p-8">
+          <p className="text-center text-gray-500">Loading finance data...</p>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-3xl">Finance</h1>
-          <p className="text-gray-500 mt-1">Financial management and AFE tracking</p>
+          <p className="text-gray-500 mt-1">Financial management, invoices, and AFE approvals</p>
         </div>
-        <Button>
+        
+        <Button type="button" onClick={(e: MouseEvent<HTMLButtonElement>) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setError(null);
+          setIsAfeOpen( () => true);
+          {console.log('Open AFE Dialog')}
+        }} disabled={!canEdit}>
           <FileText className="h-4 w-4 mr-2" />
           New AFE
         </Button>
@@ -132,13 +288,6 @@ export function Finance() {
         </Card>
       )}
 
-      {loading ? (
-        <Card className="p-8">
-          <p className="text-center text-gray-500">Loading finance data...</p>
-        </Card>
-      ) : (
-        <>
-      {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="p-4">
           <div className="flex items-center gap-3">
@@ -146,8 +295,8 @@ export function Finance() {
               <DollarSign className="h-5 w-5 text-blue-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-600">Total Budget</p>
-              <p className="text-xl">$82.0M</p>
+              <p className="text-sm text-gray-600">AFE Budget</p>
+              <p className="text-xl">${(summary.totalBudget / 1000000).toFixed(1)}M</p>
             </div>
           </div>
         </Card>
@@ -157,8 +306,8 @@ export function Finance() {
               <TrendingUp className="h-5 w-5 text-green-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-600">Total Spent</p>
-              <p className="text-xl">$58.8M</p>
+              <p className="text-sm text-gray-600">Invoice Amount</p>
+              <p className="text-xl">${(summary.totalInvoices / 1000000).toFixed(1)}M</p>
             </div>
           </div>
         </Card>
@@ -168,8 +317,8 @@ export function Finance() {
               <TrendingDown className="h-5 w-5 text-orange-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-600">Remaining</p>
-              <p className="text-xl">$23.2M</p>
+              <p className="text-sm text-gray-600">Paid Invoices</p>
+              <p className="text-xl">${(summary.paidInvoices / 1000000).toFixed(1)}M</p>
             </div>
           </div>
         </Card>
@@ -180,206 +329,264 @@ export function Finance() {
             </div>
             <div>
               <p className="text-sm text-gray-600">Pending Invoices</p>
-              <p className="text-xl">$4.2M</p>
+              <p className="text-xl">${(summary.pendingInvoices / 1000000).toFixed(1)}M</p>
             </div>
           </div>
         </Card>
       </div>
 
-      {/* Tabs */}
       <Tabs defaultValue="afe" className="w-full">
-        <TabsList>
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="afe">AFE Overview</TabsTrigger>
           <TabsTrigger value="invoices">Invoices</TabsTrigger>
-          <TabsTrigger value="reports">Financial Reports</TabsTrigger>
+          <TabsTrigger value="summary">Finance Summary</TabsTrigger>
         </TabsList>
 
         <TabsContent value="afe" className="space-y-6 mt-6">
-          {/* Budget vs Actual by Block */}
           <Card className="p-6">
-            <h3 className="text-lg mb-4">Budget vs Actual by Block</h3>
-            <div className="space-y-4">
-              {budgetData.map((item) => (
-                <div key={item.block}>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-medium">{item.block}</span>
-                    <div className="text-sm text-gray-600">
-                      ${(item.actual / 1000000).toFixed(1)}M / $
-                      {(item.budget / 1000000).toFixed(1)}M
-                    </div>
-                  </div>
-                  <Progress
-                    value={(item.actual / item.budget) * 100}
-                    className="h-3"
-                  />
-                  <div className="flex items-center justify-between mt-1 text-xs text-gray-500">
-                    <span>
-                      {((item.actual / item.budget) * 100).toFixed(0)}% spent
-                    </span>
-                    <span className="text-green-600">
-                      ${(item.variance / 1000000).toFixed(1)}M remaining
-                    </span>
-                  </div>
-                </div>
-              ))}
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-semibold">AFE Requests</h3>
+                <p className="text-sm text-gray-500">Approve by the assigned department before invoices can be cleared.</p>
+              </div>
             </div>
-          </Card>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Monthly Spend Trend */}
-            <Card className="p-6">
-              <h3 className="text-lg mb-4">Monthly Spend Trend</h3>
-              <ResponsiveContainer width="100%" height={250}>
-                <LineChart data={monthlySpend}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis />
-                  <Tooltip
-                    formatter={(value: number) =>
-                      `$${(value / 1000000).toFixed(1)}M`
-                    }
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="spend"
-                    stroke="#3b82f6"
-                    strokeWidth={2}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </Card>
-
-            {/* Spend by Category */}
-            <Card className="p-6">
-              <h3 className="text-lg mb-4">Spend by Category</h3>
-              <ResponsiveContainer width="100%" height={250}>
-                <PieChart>
-                  <Pie
-                    data={categorySpend}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={(entry) =>
-                      `${entry.name}: $${(entry.value / 1000000).toFixed(0)}M`
-                    }
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {categorySpend.map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={COLORS[index % COLORS.length]}
-                      />
+            {afeItems.length === 0 ? (
+              <div className="py-12 text-center text-gray-500">No AFE requests found.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>AFE No.</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Activity</TableHead>
+                      <TableHead>Approval Dept</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {afeItems.map((afe) => (
+                      <TableRow key={afe.id}>
+                        <TableCell>{afe.afeNumber || `AFE-${afe.id}`}</TableCell>
+                        <TableCell>{afe.item}</TableCell>
+                        <TableCell>${Number(afe.amount || 0).toLocaleString()}</TableCell>
+                        <TableCell>{activityMap.get(afe.activityId)?.name || (afe.activityId ? `Activity ${afe.activityId}` : '-')}</TableCell>
+                        <TableCell>{afe.approvalDepartment || 'Finance'}</TableCell>
+                        <TableCell>
+                          <Badge variant={getStatusColor(afe.status)}>{afe.status}</Badge>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </Pie>
-                  <Tooltip
-                    formatter={(value: number) =>
-                      `$${(value / 1000000).toFixed(1)}M`
-                    }
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </Card>
-          </div>
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </Card>
         </TabsContent>
 
         <TabsContent value="invoices" className="mt-6">
           <Card className="p-6">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Invoice No.</TableHead>
-                  <TableHead>Vendor</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Due Date</TableHead>
-                  <TableHead>Aging (days)</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {invoices.map((invoice) => (
-                  <TableRow key={invoice.id}>
-                    <TableCell className="font-mono text-sm">
-                      {invoice.invoiceNo}
-                    </TableCell>
-                    <TableCell>{invoice.vendor}</TableCell>
-                    <TableCell className="text-sm text-gray-600">
-                      {invoice.description}
-                    </TableCell>
-                    <TableCell>
-                      ${(invoice.amount / 1000000).toFixed(2)}M
-                    </TableCell>
-                    <TableCell>{invoice.dueDate}</TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          invoice.aging > 10
-                            ? "destructive"
-                            : invoice.aging > 5
-                            ? "default"
-                            : "outline"
-                        }
-                      >
-                        {invoice.aging} days
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={getStatusColor(invoice.status)}>
-                        {invoice.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Button size="sm" variant="ghost">
-                        View
-                      </Button>
-                    </TableCell>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-semibold">Invoice Register</h3>
+                <p className="text-sm text-gray-500">Invoices are linked to activities so cost impacts are transparent.</p>
+              </div>
+              <div className="text-sm text-gray-600">
+                Editing is enabled for Finance and Accounts users.
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Invoice No.</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead>Activity</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Approval Dept</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="reports" className="mt-6">
-          <Card className="p-6">
-            <h3 className="text-lg mb-4">Available Financial Reports</h3>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded">
-                <div>
-                  <p className="font-medium">Monthly Financial Summary</p>
-                  <p className="text-sm text-gray-600">April 2026</p>
-                </div>
-                <Button size="sm" variant="outline">
-                  Download PDF
-                </Button>
-              </div>
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded">
-                <div>
-                  <p className="font-medium">AFE Status Report</p>
-                  <p className="text-sm text-gray-600">All Blocks - Q2 2026</p>
-                </div>
-                <Button size="sm" variant="outline">
-                  Download Excel
-                </Button>
-              </div>
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded">
-                <div>
-                  <p className="font-medium">Vendor Payment Analysis</p>
-                  <p className="text-sm text-gray-600">YTD 2026</p>
-                </div>
-                <Button size="sm" variant="outline">
-                  Download PDF
-                </Button>
-              </div>
+                </TableHeader>
+                <TableBody>
+                  {invoiceItems.map((invoice) => (
+                    <TableRow key={invoice.id}>
+                      <TableCell>{invoice.invoiceNumber || `INV-${invoice.id}`}</TableCell>
+                      <TableCell>{invoice.item}</TableCell>
+                      <TableCell>{activityMap.get(invoice.activityId)?.name || (invoice.activityId ? `Activity ${invoice.activityId}` : '-')}</TableCell>
+                      <TableCell>${Number(invoice.amount || 0).toLocaleString()}</TableCell>
+                      <TableCell>
+                        <Select
+                          value={invoice.status}
+                          onValueChange={(value) => canEdit && handleInvoiceStatusChange(invoice, value)}
+                          disabled={!canEdit}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Status" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Pending">Pending</SelectItem>
+                            <SelectItem value="Under Review">Under Review</SelectItem>
+                            <SelectItem value="Approved">Approved</SelectItem>
+                            <SelectItem value="Paid">Paid</SelectItem>
+                            <SelectItem value="Rejected">Rejected</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell>{invoice.approvalDepartment || 'Finance'}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Button variant="ghost" size="sm" disabled={!canEdit}>
+                            Edit
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => handleOpenPayment(invoice)}
+                            disabled={!canEdit || invoice.status === 'Paid'}
+                          >
+                            <CheckCircle className="h-4 w-4 mr-1" />
+                            Pay
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
           </Card>
         </TabsContent>
+
+        <TabsContent value="summary" className="mt-6">
+          <Card className="p-6">
+            <h3 className="text-lg font-semibold mb-4">Finance Summary</h3>
+            <p className="text-sm text-gray-600">Records are loaded from the finance database and remain editable by Finance and Accounts roles.</p>
+          </Card>
+        </TabsContent>
       </Tabs>
-        </>
-      )}
+
+      <Dialog open={isAfeOpen} onOpenChange={setIsAfeOpen}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Create New AFE</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <div>
+              <Label htmlFor="afe-item">AFE Title</Label>
+              <Input
+                id="afe-item"
+                value={newAfe.item}
+                onChange={(e) => setNewAfe((current) => ({ ...current, item: e.target.value }))}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="afe-amount">Amount</Label>
+                <Input
+                  id="afe-amount"
+                  type="number"
+                  value={newAfe.amount}
+                  onChange={(e) => setNewAfe((current) => ({ ...current, amount: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label htmlFor="afe-category">Category</Label>
+                <Input
+                  id="afe-category"
+                  value={newAfe.category}
+                  onChange={(e) => setNewAfe((current) => ({ ...current, category: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="afe-activity">Linked Activity</Label>
+                <Select
+                  value={newAfe.activityId}
+                  onValueChange={(value) => setNewAfe((current) => ({ ...current, activityId: value }))}
+                >
+                  <SelectTrigger id="afe-activity">
+                    <SelectValue placeholder="Choose activity" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {activityOptions.map((activity) => (
+                      <SelectItem key={activity.id} value={String(activity.id)}>
+                        {activity.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="afe-department">Approval Department</Label>
+                <Input
+                  id="afe-department"
+                  value={newAfe.approvalDepartment}
+                  onChange={(e) => setNewAfe((current) => ({ ...current, approvalDepartment: e.target.value }))}
+                  placeholder="Finance, Accounts, etc."
+                />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="afe-number">AFE Number</Label>
+              <Input
+                id="afe-number"
+                value={newAfe.afeNumber}
+                onChange={(e) => setNewAfe((current) => ({ ...current, afeNumber: e.target.value }))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button onClick={handleCreateAfe} disabled={!canEdit || saving}>
+              {saving ? 'Saving...' : 'Create AFE'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isPaymentOpen} onOpenChange={setIsPaymentOpen}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Record Payment</DialogTitle>
+            <DialogDescription>
+              Enter transaction details for clearing this invoice and marking it paid.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <div>
+              <Label>Invoice</Label>
+              <p className="text-sm text-gray-700">{selectedInvoice?.invoiceNumber || `INV-${selectedInvoice?.id}`}</p>
+            </div>
+            <div>
+              <Label>Amount</Label>
+              <p className="text-sm text-gray-700">${Number(selectedInvoice?.amount || 0).toLocaleString()}</p>
+            </div>
+            <div>
+              <Label htmlFor="transaction-details">Transaction Details</Label>
+              <Textarea
+                id="transaction-details"
+                value={transactionDetails}
+                onChange={(e) => setTransactionDetails(e.target.value)}
+                rows={4}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button onClick={handleSavePayment} disabled={!canEdit || saving || !transactionDetails.trim()}>
+              {saving ? 'Saving...' : 'Mark as Paid'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

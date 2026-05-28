@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
+import { formatDisplayDateOrDefault } from "../lib/date";
 import { Progress } from "../components/ui/progress";
 import { 
   Calendar, 
@@ -175,7 +176,7 @@ export function ExecutiveDashboard() {
                     </p>
                     <p>
                       <span className="font-medium">Licence Expiry:</span>{' '}
-                      {block.licenceExpiry ? new Date(block.licenceExpiry).toLocaleDateString() : 'Not set'}
+                      {block.licenceExpiry ? formatDisplayDateOrDefault(block.licenceExpiry) : 'Not set'}
                     </p>
                   </div>
 

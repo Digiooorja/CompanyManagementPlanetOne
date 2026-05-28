@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { departmentsApi } from '../../services/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -15,18 +16,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { Loader2, AlertCircle } from 'lucide-react';
 
-const DEPARTMENTS = [
-  'Head',
-  'Executive Manager',
-  'Finance & Accounts',
-  'Operations',
-  'HSE',
-  'Procurement',
-  'Commercial',
-  'HR'
-];
-
 export const Register = () => {
+  const [departments, setDepartments] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     username: '',
     email: '',
@@ -34,12 +25,28 @@ export const Register = () => {
     confirmPassword: '',
     firstName: '',
     lastName: '',
-    department: 'Operations'
+    departmentId: ''
   });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { register } = useAuth();
+
+  useEffect(() => {
+    const loadDepartments = async () => {
+      try {
+        const departmentList = await departmentsApi.getAll();
+        setDepartments(Array.isArray(departmentList) ? departmentList : []);
+        if (Array.isArray(departmentList) && departmentList.length > 0) {
+          setFormData((prev) => ({ ...prev, departmentId: String(departmentList[0].id) }));
+        }
+      } catch (error) {
+        console.error('Failed to load departments:', error);
+      }
+    };
+
+    loadDepartments();
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -47,7 +54,7 @@ export const Register = () => {
   };
 
   const handleDepartmentChange = (value: string) => {
-    setFormData(prev => ({ ...prev, department: value }));
+    setFormData(prev => ({ ...prev, departmentId: value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -79,7 +86,7 @@ export const Register = () => {
         password: formData.password,
         firstName: formData.firstName,
         lastName: formData.lastName,
-        department: formData.department
+        departmentId: formData.departmentId ? Number(formData.departmentId) : undefined
       });
       navigate('/');
     } catch (err: any) {
@@ -167,14 +174,14 @@ export const Register = () => {
 
               <div className="space-y-1">
                 <Label htmlFor="department" className="text-sm">Department</Label>
-                <Select value={formData.department} onValueChange={handleDepartmentChange}>
-                  <SelectTrigger id="department" disabled={isLoading}>
+                <Select value={formData.departmentId} onValueChange={handleDepartmentChange}>
+                  <SelectTrigger id="department" disabled={isLoading || departments.length === 0}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {DEPARTMENTS.map(dept => (
-                      <SelectItem key={dept} value={dept}>
-                        {dept}
+                    {departments.map((dept) => (
+                      <SelectItem key={dept.id} value={String(dept.id)}>
+                        {dept.name}
                       </SelectItem>
                     ))}
                   </SelectContent>

@@ -100,7 +100,8 @@ router.post('/', async (req, res) => {
       startDate: req.body.startDate,
       endDate: req.body.endDate,
       blockId: req.body.blockId,
-      block: req.body.block
+      block: req.body.block,
+      manager: req.body.manager
     });
     res.status(201).json(project);
   } catch (err) {
@@ -121,7 +122,8 @@ router.put('/:id', async (req, res) => {
       startDate: req.body.startDate || project.startDate,
       endDate: req.body.endDate || project.endDate,
       blockId: req.body.blockId || project.blockId,
-      block: req.body.block || project.block
+      block: req.body.block || project.block,
+      manager: req.body.manager || project.manager
     });
 
     res.json(project);

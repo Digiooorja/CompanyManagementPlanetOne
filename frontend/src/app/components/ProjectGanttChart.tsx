@@ -13,6 +13,7 @@ interface Activity {
   plannedCost?: number;
   actualCost?: number;
   dependencies?: string;
+  order?: number;
   subactivities?: Activity[];
 }
 
@@ -73,21 +74,31 @@ export function ProjectGanttChart({ activities, projectStartDate, projectEndDate
   const projectStart = parseDate(projectStartDate);
   const projectEnd = parseDate(projectEndDate);
 
-  const startDate = projectStart
-    ? activityStartDates.length > 0
-      ? new Date(Math.min(projectStart.getTime(), ...activityStartDates.map((d) => d.getTime())))
-      : projectStart
-    : activityStartDates.length > 0
-    ? new Date(Math.min(...activityStartDates.map((d) => d.getTime())))
-    : null;
+  // const startDate = projectStart
+  //   ? activityStartDates.length > 0
+  //     ? new Date(Math.min(projectStart.getTime(), ...activityStartDates.map((d) => d.getTime())))
+  //     : projectStart
+  //   : activityStartDates.length > 0
+  //   ? new Date(Math.min(...activityStartDates.map((d) => d.getTime())))
+  //   : null;
 
-  const endDate = projectEnd
-    ? activityEndDates.length > 0
-      ? new Date(Math.max(projectEnd.getTime(), ...activityEndDates.map((d) => d.getTime())))
-      : projectEnd
-    : activityEndDates.length > 0
-    ? new Date(Math.max(...activityEndDates.map((d) => d.getTime())))
-    : null;
+  // const endDate = projectEnd
+  //   ? activityEndDates.length > 0
+  //     ? new Date(Math.max(projectEnd.getTime(), ...activityEndDates.map((d) => d.getTime())))
+  //     : projectEnd
+  //   : activityEndDates.length > 0
+  //   ? new Date(Math.max(...activityEndDates.map((d) => d.getTime())))
+  //   : null;
+
+    // Use min of all activity start dates, ignore the prop projectStartDate
+  const startDate = activityStartDates.length > 0
+  ? new Date(Math.min(...activityStartDates.map((d) => d.getTime())))
+  : projectStart || null;
+
+    // Use min of all activity start dates, ignore the prop projectStartDate
+  const endDate = activityEndDates.length > 0
+  ? new Date(Math.max(...activityEndDates.map((d) => d.getTime())))
+  : projectEnd || null;
 
   const dayMs = 1000 * 60 * 60 * 24;
   const totalDays = startDate && endDate ? Math.max(Math.ceil((endDate.getTime() - startDate.getTime()) / dayMs), 1) : 0;
@@ -96,11 +107,24 @@ export function ProjectGanttChart({ activities, projectStartDate, projectEndDate
   const flattenActivities = (activities: Activity[]): Array<Activity & { level: number; parentId?: number }> => {
     const flattened: Array<Activity & { level: number; parentId?: number }> = [];
 
-    activities.forEach(activity => {
+    // Sort activities by order field
+    const sortedActivities = [...activities].sort((a, b) => {
+      const orderA = a.order ?? 0;
+      const orderB = b.order ?? 0;
+      return orderA - orderB;
+    });
+
+    sortedActivities.forEach(activity => {
       flattened.push({ ...activity, level: 0 });
       // Only include subactivities if parent is expanded
       if (activity.subactivities && expandedActivities.has(activity.id)) {
-        activity.subactivities.forEach(subactivity => {
+        // Sort sub-activities by order as well
+        const sortedSubs = [...activity.subactivities].sort((a, b) => {
+          const orderA = a.order ?? 0;
+          const orderB = b.order ?? 0;
+          return orderA - orderB;
+        });
+        sortedSubs.forEach(subactivity => {
           flattened.push({ ...subactivity, level: 1, parentId: activity.id });
         });
       }

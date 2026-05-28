@@ -12,8 +12,9 @@ const Finance = sequelize.define('Finance', {
     allowNull: false
   },
   amount: {
-    type: DataTypes.DECIMAL,
-    allowNull: false
+    type: DataTypes.DECIMAL(15, 2),
+    allowNull: false,
+    defaultValue: 0
   },
   category: {
     type: DataTypes.STRING,
@@ -22,6 +23,44 @@ const Finance = sequelize.define('Finance', {
   type: {
     type: DataTypes.ENUM('Income', 'Expense'),
     allowNull: false
+  },
+  recordType: {
+    type: DataTypes.ENUM('Entry', 'Invoice', 'AFE'),
+    allowNull: false,
+    defaultValue: 'Entry'
+  },
+  activityId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'activities',
+      key: 'id'
+    }
+  },
+  approvalDepartment: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  status: {
+    type: DataTypes.ENUM('Pending', 'Under Review', 'Approved', 'Paid', 'Rejected'),
+    allowNull: false,
+    defaultValue: 'Pending'
+  },
+  invoiceNumber: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  afeNumber: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  transactionDetails: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  transactionDate: {
+    type: DataTypes.DATE,
+    allowNull: true
   },
   date: {
     type: DataTypes.DATE,

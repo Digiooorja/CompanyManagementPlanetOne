@@ -7,6 +7,7 @@ import { Textarea } from "../components/ui/textarea";
 import { Separator } from "../components/ui/separator";
 import { ArrowLeft, CheckCircle, XCircle, MessageSquare, Clock } from "lucide-react";
 import { workflowsApi } from "../../services/api";
+import { formatDisplayDateOrDefault } from "../lib/date";
 
 export function WorkflowDetail() {
   const { id } = useParams();
@@ -134,7 +135,7 @@ export function WorkflowDetail() {
           <div className="flex items-center gap-4 mt-2 text-sm text-gray-600">
             <Badge variant="outline">{currentWorkflow.type}</Badge>
             <span>Submitted by {currentWorkflow.submittedBy}</span>
-            <span>{currentWorkflow.submitDate}</span>
+            <span>{formatDisplayDateOrDefault(currentWorkflow.submitDate)}</span>
           </div>
         </div>
         <div className="flex flex-col items-start md:items-end gap-3">
@@ -183,7 +184,7 @@ export function WorkflowDetail() {
           </div>
           <div>
             <p className="text-sm text-gray-600">Due Date</p>
-            <p className="text-xl mt-1">{currentWorkflow.dueDate}</p>
+            <p className="text-xl mt-1">{formatDisplayDateOrDefault(currentWorkflow.dueDate)}</p>
           </div>
           <div>
             <p className="text-sm text-gray-600">Days Remaining</p>
@@ -208,7 +209,7 @@ export function WorkflowDetail() {
               Workflow Timeline
             </h3>
             <div className="space-y-6">
-              {workflowSteps.map((step, index) => (
+              {workflowSteps.map((step: any, index: number) => (
                 <div key={index} className="flex items-start gap-4">
                   <div className="flex flex-col items-center">
                     <div
@@ -347,12 +348,12 @@ export function WorkflowDetail() {
               <Separator />
               <div>
                 <p className="text-gray-600">Submit Date</p>
-                <p className="mt-1">{currentWorkflow.submitDate}</p>
+                <p className="mt-1">{formatDisplayDateOrDefault(currentWorkflow.submitDate)}</p>
               </div>
               <Separator />
               <div>
                 <p className="text-gray-600">Due Date</p>
-                <p className="mt-1">{currentWorkflow.dueDate}</p>
+                <p className="mt-1">{formatDisplayDateOrDefault(currentWorkflow.dueDate)}</p>
               </div>
             </div>
           </Card>

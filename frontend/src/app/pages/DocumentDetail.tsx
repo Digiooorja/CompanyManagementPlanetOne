@@ -17,6 +17,7 @@ export function DocumentDetail() {
   const { id } = useParams();
   const { user } = useAuth();
   const [document, setDocument] = useState<any | null>(null);
+  const [selectedVersionId, setSelectedVersionId] = useState<number | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,6 +38,15 @@ export function DocumentDetail() {
 
   const previewableMimeTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg', 'image/gif'];
 
+  const getSelectedVersion = (doc: any, versionId: number | null) => {
+    if (!doc) return null;
+    const versions = Array.isArray(doc.versions) ? doc.versions : [];
+    if (versionId != null) {
+      return versions.find((version: any) => Number(version.id) === Number(versionId)) || (Number(doc.id) === Number(versionId) ? doc : versions[versions.length - 1] || doc);
+    }
+    return versions.length > 0 ? versions[versions.length - 1] : doc;
+  };
+
   const loadDocument = async () => {
     if (!id) return;
     try {
@@ -50,14 +60,8 @@ export function DocumentDetail() {
       const latestVersion = Array.isArray(doc?.versions) && doc.versions.length > 0
         ? doc.versions[doc.versions.length - 1]
         : null;
-      const previewTarget = latestVersion || doc;
 
-      if (previewTarget?.mimeType && previewableMimeTypes.includes(previewTarget.mimeType)) {
-        const presigned = await documentsApi.getPresignedUrl(Number(previewTarget.id), 'preview');
-        setPreviewUrl(presigned.url);
-      } else {
-        setPreviewUrl(null);
-      }
+      setSelectedVersionId(latestVersion ? Number(latestVersion.id) : Number(doc.id));
     } catch (err) {
       console.error('Error loading document detail:', err);
       setError('Failed to load document details');
@@ -65,6 +69,31 @@ export function DocumentDetail() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const loadPreviewUrl = async () => {
+      if (!document) {
+        setPreviewUrl(null);
+        return;
+      }
+
+      const target = getSelectedVersion(document, selectedVersionId);
+      if (!target || !target.mimeType || !previewableMimeTypes.includes(target.mimeType)) {
+        setPreviewUrl(null);
+        return;
+      }
+
+      try {
+        const presigned = await documentsApi.getPresignedUrl(Number(target.id), 'preview');
+        setPreviewUrl(presigned.url);
+      } catch (err) {
+        console.error('Error loading preview URL:', err);
+        setPreviewUrl(null);
+      }
+    };
+
+    loadPreviewUrl();
+  }, [document, selectedVersionId]);
 
   const loadActivities = async () => {
     try {
@@ -113,6 +142,16 @@ export function DocumentDetail() {
       window.open(presigned.url, '_blank');
     } catch (err) {
       console.error('Error downloading document:', err);
+      setError('Failed to generate download link');
+    }
+  };
+
+  const handleDownloadVersion = async (versionId: number) => {
+    try {
+      const presigned = await documentsApi.getPresignedUrl(Number(versionId), 'download');
+      window.open(presigned.url, '_blank');
+    } catch (err) {
+      console.error('Error downloading document version:', err);
       setError('Failed to generate download link');
     }
   };
@@ -223,17 +262,32 @@ export function DocumentDetail() {
     { label: 'Status', value: documentStatus },
   ];
 
-  const workflowSteps = document?.versions?.length > 0
+  const versionItems = document?.versions?.length > 0
     ? document.versions.map((version: any, index: number) => ({
+        id: Number(version.id),
         step: version.label || `Version ${version.versionNumber || index + 1}`,
         status: version.status || 'Completed',
         date: version.uploadDate ? new Date(version.uploadDate).toLocaleDateString() : documentUploadDate,
         user: version.author || document?.author || 'Unknown',
-        version: version.versionNumber != null ? String(version.versionNumber) : `${index + 1}`
+        version: version.versionNumber != null ? String(version.versionNumber) : `${index + 1}`,
+        mimeType: version.mimeType,
       }))
     : [
-        { step: 'Uploaded', status: 'Completed', date: documentUploadDate, user: document?.author || 'Unknown', version: documentVersion },
+        {
+          id: Number(document?.id),
+          step: 'Uploaded',
+          status: 'Completed',
+          date: documentUploadDate,
+          user: document?.author || 'Unknown',
+          version: documentVersion,
+          mimeType: document?.mimeType,
+        },
       ];
+
+  const selectedVersion = getSelectedVersion(document, selectedVersionId);
+  const selectedMimeType = selectedVersion?.mimeType || document?.mimeType;
+  const isPdf = selectedMimeType === 'application/pdf';
+  const isImage = selectedMimeType?.startsWith('image/');
 
   if (loading) {
     return (
@@ -266,8 +320,6 @@ export function DocumentDetail() {
   }
 
   const canPreview = previewUrl !== null;
-  const isPdf = document.mimeType === 'application/pdf';
-  const isImage = document.mimeType?.startsWith('image/');
 
   return (
     <div className="space-y-6">
@@ -339,9 +391,11 @@ export function DocumentDetail() {
           <Card className="p-6">
             <div className="flex flex-col gap-2">
               <h3 className="text-lg">File Preview</h3>
-              {Array.isArray(document?.versions) && document?.versions.length > 1 ? (
-                <p className="text-sm text-gray-500">Preview and download always use the latest version.</p>
-              ) : null}
+              {Array.isArray(document?.versions) && document?.versions.length > 0 ? (
+                <p className="text-sm text-gray-500">Preview is currently displaying the selected version. You can also download any version below.</p>
+              ) : (
+                <p className="text-sm text-gray-500">Preview and download use the current document version.</p>
+              )}
             </div>
             <div className="bg-gray-100 rounded-lg h-96 overflow-hidden">
               {canPreview ? (
@@ -387,29 +441,43 @@ export function DocumentDetail() {
               Version History
             </h3>
             <div className="space-y-3">
-              {workflowSteps.map((version: { step: string; status: string; date: string; user: string; version?: string }, index: number) => (
-                <div key={index}>
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start gap-3">
-                      <Badge variant={index === 0 ? 'default' : 'outline'}>
-                        v{version.step === 'Uploaded' ? documentVersion : version.step}
-                      </Badge>
-                      <div>
-                        <p className="text-sm">{version.step}</p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          {version.date} by {version.user}
-                        </p>
+              {versionItems.map((version: any, index: number) => {
+                const isSelected = selectedVersionId === version.id;
+                return (
+                  <div key={version.id} className="rounded-lg border p-3">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-start gap-3">
+                        <Badge variant={isSelected ? 'default' : 'outline'}>
+                          v{version.version}
+                        </Badge>
+                        <div>
+                          <p className="text-sm font-medium">{version.step}</p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {version.date} by {version.user}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant={isSelected ? 'secondary' : 'outline'}
+                          onClick={() => setSelectedVersionId(Number(version.id))}
+                        >
+                          {isSelected ? 'Selected' : 'Preview'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleDownloadVersion(Number(version.id))}
+                        >
+                          <Download className="h-4 w-4" />
+                        </Button>
                       </div>
                     </div>
-                    {index > 0 && (
-                      <Button size="sm" variant="ghost">
-                        <Download className="h-4 w-4" />
-                      </Button>
-                    )}
+                    {index < versionItems.length - 1 && <Separator className="mt-3" />}
                   </div>
-                  {index < workflowSteps.length - 1 && <Separator className="mt-3" />}
-                </div>
-              ))}
+                );
+              })}
             </div>
           </Card>
         </div>

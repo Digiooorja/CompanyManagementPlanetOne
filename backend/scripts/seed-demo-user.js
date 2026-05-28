@@ -32,7 +32,6 @@ async function seedDemoUser() {
       firstName: 'Demo',
       lastName: 'User',
       departmentId: department.id,
-      department: department.name,
       role: 'User',
       active: true
     });

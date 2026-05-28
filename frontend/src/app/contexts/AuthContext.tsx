@@ -6,7 +6,12 @@ interface User {
   email: string;
   firstName: string;
   lastName: string;
-  department: string;
+  departmentId?: number;
+  department?: string;
+  departmentDetails?: {
+    id: number;
+    name: string;
+  };
   role: string;
 }
 

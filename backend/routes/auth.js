@@ -17,13 +17,19 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'Username, email, and password are required' });
     }
 
-    // If a departmentId is provided, verify it exists
     let selectedDepartment = null;
     if (departmentId) {
       selectedDepartment = await Department.findByPk(departmentId);
       if (!selectedDepartment) {
         return res.status(400).json({ error: 'Invalid departmentId' });
       }
+    } else if (department) {
+      selectedDepartment = await Department.findOne({ where: { name: department } });
+      if (!selectedDepartment) {
+        return res.status(400).json({ error: 'Invalid department name' });
+      }
+    } else {
+      selectedDepartment = await Department.findOne({ where: { name: 'Operations' } });
     }
 
     // Check if user already exists
@@ -46,14 +52,21 @@ router.post('/register', async (req, res) => {
       password: hashedPassword,
       firstName,
       lastName,
-      departmentId: selectedDepartment ? selectedDepartment.id : undefined,
-      department: selectedDepartment ? selectedDepartment.name : department || 'Operations',
+      departmentId: selectedDepartment ? selectedDepartment.id : null,
       role: role || 'User'
     });
 
+    const departmentName = selectedDepartment ? selectedDepartment.name : null;
+
     // Generate token
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role, department: user.department },
+      {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        departmentId: user.departmentId,
+        department: departmentName
+      },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -68,7 +81,7 @@ router.post('/register', async (req, res) => {
         firstName: user.firstName,
         lastName: user.lastName,
         departmentId: user.departmentId,
-        department: user.department,
+        department: departmentName,
         role: user.role
       }
     });
@@ -89,7 +102,15 @@ router.post('/login', async (req, res) => {
     }
 
     // Find user
-    const user = await User.findOne({ where: { email } });
+    const user = await User.findOne({
+      where: { email },
+      include: [
+        {
+          association: 'departmentDetails',
+          attributes: ['id', 'name']
+        }
+      ]
+    });
 
     if (!user) {
       return res.status(401).json({ error: 'Invalid email or password' });
@@ -107,6 +128,8 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
+    const departmentName = user.departmentDetails?.name || null;
+
     // Generate token
     const token = jwt.sign(
       {
@@ -114,7 +137,7 @@ router.post('/login', async (req, res) => {
         email: user.email,
         role: user.role,
         departmentId: user.departmentId,
-        department: user.department
+        department: departmentName
       },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
@@ -130,7 +153,8 @@ router.post('/login', async (req, res) => {
         firstName: user.firstName,
         lastName: user.lastName,
         departmentId: user.departmentId,
-        department: user.department,
+        department: departmentName,
+        departmentDetails: user.departmentDetails,
         role: user.role
       }
     });
@@ -157,7 +181,10 @@ router.get('/me', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    res.json(user);
+    const result = user.toJSON();
+    result.department = user.departmentDetails?.name || null;
+
+    res.json(result);
   } catch (error) {
     console.error('Get user error:', error);
     res.status(500).json({ error: 'Failed to get user' });
@@ -177,7 +204,13 @@ router.get('/users', authMiddleware, async (req, res) => {
       ]
     });
 
-    res.json(users);
+    const response = users.map((user) => {
+      const userJSON = user.toJSON();
+      userJSON.department = userJSON.departmentDetails?.name || null;
+      return userJSON;
+    });
+
+    res.json(response);
   } catch (error) {
     console.error('Get users error:', error);
     res.status(500).json({ error: 'Failed to get users' });
@@ -207,30 +240,36 @@ router.put('/:id', authMiddleware, async (req, res) => {
       if (!selectedDepartment) {
         return res.status(400).json({ error: 'Invalid departmentId' });
       }
+    } else if (department !== undefined) {
+      selectedDepartment = await Department.findOne({ where: { name: department } });
+      if (!selectedDepartment) {
+        return res.status(400).json({ error: 'Invalid department name' });
+      }
     }
 
-    // Update fields
     await user.update({
       firstName,
       lastName,
       departmentId: selectedDepartment ? selectedDepartment.id : user.departmentId,
-      department: selectedDepartment ? selectedDepartment.name : department !== undefined ? department : user.department,
       role: req.user.role === 'Admin' ? role : user.role, // Only admins can change role
       active: req.user.role === 'Admin' ? active : user.active // Only admins can deactivate
     });
 
+    await user.reload({
+      include: [
+        {
+          association: 'departmentDetails',
+          attributes: ['id', 'name']
+        }
+      ]
+    });
+
+    const result = user.toJSON();
+    result.department = user.departmentDetails?.name || null;
+
     res.json({
       message: 'User updated successfully',
-      user: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        departmentId: user.departmentId,
-        department: user.department,
-        role: user.role
-      }
+      user: result
     });
   } catch (error) {
     console.error('Update user error:', error);

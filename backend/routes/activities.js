@@ -2,6 +2,23 @@ const express = require('express');
 const router = express.Router();
 const Activity = require('../models/Activity');
 const { Op } = require('sequelize');
+const { authMiddleware } = require('../middleware/auth');
+
+function getDepartmentName(user) {
+  return String(user?.department || user?.departmentDetails?.name || '').toLowerCase();
+}
+
+function isOperationsUser(user) {
+  const department = getDepartmentName(user);
+  return user?.role === 'Admin' || department.includes('operation');
+}
+
+function isFinanceUser(user) {
+  const department = getDepartmentName(user);
+  return user?.role === 'Admin' || department.includes('finance');
+}
+
+router.use(authMiddleware);
 
 async function sumSubActivityCosts(parentActivityId, excludeActivityId = null) {
   const where = { parentActivityId };
@@ -88,8 +105,10 @@ router.get('/', async (req, res) => {
             'actualStartDate',
             'actualEndDate',
             'plannedCost',
-            'actualCost'
-          ]
+            'actualCost',
+            'order'
+          ],
+          order: [['order', 'ASC']]
         },
         {
           association: 'project',
@@ -109,7 +128,7 @@ router.get('/', async (req, res) => {
           ]
         }
       ],
-      order: [['createdAt', 'DESC']]
+      order: [['order', 'ASC']]
     });
     res.json(activities);
   } catch (err) {
@@ -124,7 +143,8 @@ router.get('/:id', async (req, res) => {
       include: [
         {
           association: 'subActivities',
-          attributes: ['id', 'name', 'description', 'status', 'priority', 'assignedTo', 'dueDate', 'progress', 'parentActivityId', 'plannedCost', 'actualCost']
+          attributes: ['id', 'name', 'description', 'status', 'priority', 'assignedTo', 'dueDate', 'progress', 'parentActivityId', 'plannedCost', 'actualCost', 'order'],
+          order: [['order', 'ASC']]
         },
         {
           association: 'project',
@@ -159,7 +179,7 @@ router.get('/:id/sub-activities', async (req, res) => {
       where: {
         parentActivityId: req.params.id
       },
-      order: [['createdAt', 'ASC']]
+      order: [['order', 'ASC']]
     });
     res.json(subActivities);
   } catch (err) {
@@ -170,6 +190,10 @@ router.get('/:id/sub-activities', async (req, res) => {
 // POST new activity (parent or sub-activity)
 router.post('/', async (req, res) => {
   try {
+    if (!isOperationsUser(req.user)) {
+      return res.status(403).json({ message: 'Only Operations department users can create activities' });
+    }
+
     const plannedCost = req.body.plannedCost !== undefined ? parseFloat(req.body.plannedCost) || 0 : 0;
     const actualCost = req.body.actualCost !== undefined ? parseFloat(req.body.actualCost) || 0 : 0;
     let parentActivity = null;
@@ -186,6 +210,21 @@ router.post('/', async (req, res) => {
       }
     }
 
+    // Calculate next order for this parent/project combination
+    const siblings = await Activity.findAll({
+      where: {
+        parentActivityId: req.body.parentActivityId || null,
+        projectId: req.body.projectId || null
+      },
+      attributes: ['order'],
+      raw: true
+    });
+    
+    const maxOrder = siblings.length > 0 
+      ? Math.max(...siblings.map(s => s.order || 0))
+      : 0;
+    const nextOrder = maxOrder + 1;
+
     const activity = await Activity.create({
       name: req.body.name,
       description: req.body.description,
@@ -195,9 +234,12 @@ router.post('/', async (req, res) => {
       priority: req.body.priority || 'Medium',
       assignedTo: req.body.assignedTo || null,
       dueDate: req.body.dueDate || null,
+      plannedStartDate: req.body.plannedStartDate || null,
+      plannedEndDate: req.body.plannedEndDate || null,
       progress: req.body.progress || 0,
       plannedCost,
-      actualCost
+      actualCost,
+      order: nextOrder
     });
 
     if (parentActivity) {
@@ -210,9 +252,83 @@ router.post('/', async (req, res) => {
   }
 });
 
+// PUT - Update activity order (must come before /:id to match correctly)
+router.put('/:id/order', async (req, res) => {
+  try {
+    if (!isOperationsUser(req.user)) {
+      return res.status(403).json({ message: 'Only Operations department users can update activity order' });
+    }
+
+    const activity = await Activity.findByPk(req.params.id);
+    if (!activity) {
+      return res.status(404).json({ message: 'Activity not found' });
+    }
+
+    const { direction } = req.body; // 'up' or 'down'
+    if (!['up', 'down'].includes(direction)) {
+      return res.status(400).json({ message: 'Direction must be "up" or "down"' });
+    }
+
+    // Find all activities with same parent/project to determine new order
+    const whereClause = {
+      parentActivityId: activity.parentActivityId,
+      projectId: activity.projectId
+    };
+
+    const siblings = await Activity.findAll({
+      where: whereClause,
+      order: [['order', 'ASC']]
+    });
+
+    const currentIndex = siblings.findIndex(a => a.id === activity.id);
+    
+    if (direction === 'up' && currentIndex === 0) {
+      return res.status(400).json({ message: 'Activity is already at the top' });
+    }
+    if (direction === 'down' && currentIndex === siblings.length - 1) {
+      return res.status(400).json({ message: 'Activity is already at the bottom' });
+    }
+
+    if (direction === 'up' && currentIndex > 0) {
+      const sibling = siblings[currentIndex - 1];
+      await activity.update({ order: sibling.order });
+      await sibling.update({ order: activity.order });
+    } else if (direction === 'down' && currentIndex < siblings.length - 1) {
+      const sibling = siblings[currentIndex + 1];
+      await activity.update({ order: sibling.order });
+      await sibling.update({ order: activity.order });
+    }
+
+    const updatedActivity = await Activity.findByPk(activity.id);
+    res.json(updatedActivity);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // PUT update activity
 router.put('/:id', async (req, res) => {
   try {
+    const departmentName = getDepartmentName(req.user);
+    const isAdmin = req.user.role === 'Admin';
+    const isOperations = departmentName.includes('operation');
+    const isFinance = departmentName.includes('finance');
+
+    if (!isAdmin && !isOperations && !isFinance) {
+      return res.status(403).json({ message: 'Unauthorized to update activity' });
+    }
+
+    if (isFinance) {
+      const nonActualFields = Object.keys(req.body).filter((key) => key !== 'actualCost');
+      if (nonActualFields.length > 0) {
+        return res.status(403).json({ message: 'Finance users can only update actualCost for activities' });
+      }
+    }
+
+    if (!isAdmin && !isFinance && req.body.actualCost !== undefined) {
+      return res.status(403).json({ message: 'Only Finance users or Admin can update actualCost' });
+    }
+
     const activity = await Activity.findByPk(req.params.id);
     if (!activity) return res.status(404).json({ message: 'Activity not found' });
 
@@ -257,6 +373,8 @@ router.put('/:id', async (req, res) => {
       priority: req.body.priority || activity.priority,
       assignedTo: req.body.assignedTo !== undefined ? req.body.assignedTo : activity.assignedTo,
       dueDate: req.body.dueDate !== undefined ? req.body.dueDate : activity.dueDate,
+      plannedStartDate: req.body.plannedStartDate !== undefined ? req.body.plannedStartDate : activity.plannedStartDate,
+      plannedEndDate: req.body.plannedEndDate !== undefined ? req.body.plannedEndDate : activity.plannedEndDate,
       progress: req.body.progress !== undefined ? req.body.progress : activity.progress,
       plannedCost,
       actualCost
@@ -287,6 +405,10 @@ router.put('/:id', async (req, res) => {
 // DELETE activity (cascades to sub-activities)
 router.delete('/:id', async (req, res) => {
   try {
+    if (!isOperationsUser(req.user)) {
+      return res.status(403).json({ message: 'Only Operations department users can delete activities' });
+    }
+
     const activity = await Activity.findByPk(req.params.id);
     if (!activity) return res.status(404).json({ message: 'Activity not found' });
 
@@ -306,6 +428,10 @@ router.delete('/:id', async (req, res) => {
 // POST - Update multiple activities (for bulk progress update)
 router.post('/bulk/update', async (req, res) => {
   try {
+    if (!isOperationsUser(req.user)) {
+      return res.status(403).json({ message: 'Only Operations department users can bulk update activities' });
+    }
+
     const { activities } = req.body;
     if (!Array.isArray(activities)) {
       return res.status(400).json({ message: 'Activities must be an array' });

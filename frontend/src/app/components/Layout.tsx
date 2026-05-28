@@ -116,7 +116,7 @@ export function Layout() {
                             ? `${user.firstName} ${user.lastName}`
                             : user.username}
                         </div>
-                        <div className="text-xs text-gray-500">{user.department}</div>
+                        <div className="text-xs text-gray-500">{user.department || user.departmentDetails?.name}</div>
                       </div>
                       <ChevronDown className="h-4 w-4 text-gray-500" />
                     </Button>
@@ -131,7 +131,7 @@ export function Layout() {
                       <div className="text-xs text-gray-500 mt-1">{user.email}</div>
                       <div className="mt-2">
                         <Badge variant="outline" className="text-xs">
-                          {user.department}
+                          {user.department || user.departmentDetails?.name}
                         </Badge>
                       </div>
                     </div>

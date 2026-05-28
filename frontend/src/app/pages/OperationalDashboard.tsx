@@ -4,6 +4,7 @@ import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "../components/ui/table";
 import { AlertCircle, FileText, CheckCircle, Clock, Calendar } from "lucide-react";
+import { formatDisplayDateOrDefault } from "../lib/date";
 
 export function OperationalDashboard() {
   const myTasks = [
@@ -147,6 +148,7 @@ export function OperationalDashboard() {
                   <Badge variant={getPriorityColor(task.priority)}>{task.priority}</Badge>
                 </TableCell>
                 <TableCell>{task.dueDate}</TableCell>
+                <TableCell>{formatDisplayDateOrDefault(task.dueDate)}</TableCell>
                 <TableCell>
                   <Badge variant="outline">{task.status}</Badge>
                 </TableCell>

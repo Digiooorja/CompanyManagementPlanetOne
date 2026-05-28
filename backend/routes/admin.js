@@ -12,7 +12,14 @@ router.get('/users', async (req, res) => {
       attributes: { exclude: ['password'] },
       include: [{ association: 'departmentDetails', attributes: ['id', 'name'] }]
     });
-    res.json(users);
+
+    const response = users.map((user) => {
+      const userJSON = user.toJSON();
+      userJSON.department = userJSON.departmentDetails?.name || null;
+      return userJSON;
+    });
+
+    res.json(response);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -26,7 +33,9 @@ router.get('/users/:id', async (req, res) => {
       include: [{ association: 'departmentDetails', attributes: ['id', 'name'] }]
     });
     if (!user) return res.status(404).json({ message: 'User not found' });
-    res.json(user);
+    const response = user.toJSON();
+    response.department = user.departmentDetails?.name || null;
+    res.json(response);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -41,6 +50,13 @@ router.post('/users', async (req, res) => {
       if (!selectedDepartment) {
         return res.status(400).json({ message: 'Invalid departmentId' });
       }
+    } else if (req.body.department) {
+      selectedDepartment = await Department.findOne({ where: { name: req.body.department } });
+      if (!selectedDepartment) {
+        return res.status(400).json({ message: 'Invalid department name' });
+      }
+    } else {
+      selectedDepartment = await Department.findOne({ where: { name: 'Operations' } });
     }
 
     const user = await User.create({
@@ -49,12 +65,13 @@ router.post('/users', async (req, res) => {
       password: req.body.password,
       role: req.body.role,
       active: req.body.active !== undefined ? req.body.active : true,
-      departmentId: selectedDepartment ? selectedDepartment.id : undefined,
-      department: selectedDepartment ? selectedDepartment.name : req.body.department
+      departmentId: selectedDepartment ? selectedDepartment.id : null
     });
 
     const response = user.toJSON();
     delete response.password;
+    response.department = selectedDepartment ? selectedDepartment.name : null;
+    response.departmentDetails = selectedDepartment ? { id: selectedDepartment.id, name: selectedDepartment.name } : null;
     res.status(201).json(response);
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -73,6 +90,11 @@ router.put('/users/:id', async (req, res) => {
       if (!selectedDepartment) {
         return res.status(400).json({ message: 'Invalid departmentId' });
       }
+    } else if (req.body.department !== undefined) {
+      selectedDepartment = await Department.findOne({ where: { name: req.body.department } });
+      if (!selectedDepartment) {
+        return res.status(400).json({ message: 'Invalid department name' });
+      }
     }
 
     await user.update({
@@ -81,12 +103,16 @@ router.put('/users/:id', async (req, res) => {
       password: req.body.password || user.password,
       role: req.body.role || user.role,
       active: req.body.active !== undefined ? req.body.active : user.active,
-      departmentId: selectedDepartment ? selectedDepartment.id : user.departmentId,
-      department: selectedDepartment ? selectedDepartment.name : req.body.department !== undefined ? req.body.department : user.department
+      departmentId: selectedDepartment ? selectedDepartment.id : user.departmentId
+    });
+
+    await user.reload({
+      include: [{ association: 'departmentDetails', attributes: ['id', 'name'] }]
     });
 
     const response = user.toJSON();
     delete response.password;
+    response.department = user.departmentDetails?.name || null;
     res.json(response);
   } catch (err) {
     res.status(400).json({ message: err.message });

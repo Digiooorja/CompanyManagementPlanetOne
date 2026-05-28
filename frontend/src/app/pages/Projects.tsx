@@ -11,12 +11,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "../components/ui/table";
 import { Search, Plus, Filter } from "lucide-react";
 import { Progress } from "../components/ui/progress";
-import { projectsApi } from "../../services/api";
+import { blocksApi, projectsApi } from "../../services/api";
+import { formatDisplayDateOrDefault } from "../lib/date";
 
 export function Projects() {
   const [filterBlock, setFilterBlock] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [projects, setProjects] = useState<any[]>([]);
+  const [blocks, setBlocks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -25,11 +27,11 @@ export function Projects() {
     name: '',
     description: '',
     status: 'In Progress',
-    block: '',
+    blockId: '',
     manager: '',
     budget: '',
-    startDate: '',
-    endDate: ''
+    plannedStartDate: '',
+    plannedEndDate: ''
   });
 
   const handleCreateProject = async () => {
@@ -42,15 +44,18 @@ export function Projects() {
       setCreating(true);
       setError(null);
 
+      const selectedBlock = blocks.find((block) => String(block.id) === newProject.blockId);
+
       await projectsApi.create({
         name: newProject.name,
         description: newProject.description,
         status: newProject.status,
-        block: newProject.block || undefined,
+        blockId: newProject.blockId ? Number(newProject.blockId) : undefined,
+        block: selectedBlock?.name,
         manager: newProject.manager || undefined,
         budget: newProject.budget ? Number(newProject.budget) : undefined,
-        startDate: newProject.startDate || undefined,
-        endDate: newProject.endDate || undefined,
+        startDate: newProject.plannedStartDate || undefined,
+        endDate: newProject.plannedEndDate || undefined,
       });
 
       setIsCreateOpen(false);
@@ -58,11 +63,11 @@ export function Projects() {
         name: '',
         description: '',
         status: 'In Progress',
-        block: '',
+        blockId: '',
         manager: '',
         budget: '',
-        startDate: '',
-        endDate: ''
+        plannedStartDate: '',
+        plannedEndDate: ''
       });
 
       const data = await projectsApi.getAll();
@@ -91,7 +96,18 @@ export function Projects() {
       }
     };
 
+    const fetchBlocks = async () => {
+      try {
+        const blockData = await blocksApi.getAll();
+        setBlocks(Array.isArray(blockData) ? blockData : []);
+      } catch (err) {
+        console.error('Error fetching blocks:', err);
+        setBlocks([]);
+      }
+    };
+
     fetchProjects();
+    fetchBlocks();
   }, []);
 
   const renderedProjects = projects;
@@ -140,11 +156,25 @@ export function Projects() {
               </div>
               <div>
                 <Label>Block</Label>
-                <Input
-                  value={newProject.block}
-                  onChange={(e) => setNewProject({ ...newProject, block: e.target.value })}
-                  placeholder="e.g. Block A"
-                />
+                <Select
+                  value={newProject.blockId}
+                  onValueChange={(value) => setNewProject({ ...newProject, blockId: value })}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select a block" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {blocks.length === 0 ? (
+                      <SelectItem value="">No blocks available</SelectItem>
+                    ) : (
+                      blocks.map((block) => (
+                        <SelectItem key={block.id} value={String(block.id)}>
+                          {block.name}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label>Status</Label>
@@ -163,19 +193,19 @@ export function Projects() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label>Start Date</Label>
+                  <Label>Planned Start Date</Label>
                   <Input
                     type="date"
-                    value={newProject.startDate}
-                    onChange={(e) => setNewProject({ ...newProject, startDate: e.target.value })}
+                    value={newProject.plannedStartDate}
+                    onChange={(e) => setNewProject({ ...newProject, plannedStartDate: e.target.value })}
                   />
                 </div>
                 <div>
-                  <Label>End Date</Label>
+                  <Label>Planned End Date</Label>
                   <Input
                     type="date"
-                    value={newProject.endDate}
-                    onChange={(e) => setNewProject({ ...newProject, endDate: e.target.value })}
+                    value={newProject.plannedEndDate}
+                    onChange={(e) => setNewProject({ ...newProject, plannedEndDate: e.target.value })}
                   />
                 </div>
               </div>
@@ -308,7 +338,7 @@ export function Projects() {
                   </Badge>
                 </TableCell>
                 <TableCell className="text-sm text-gray-600">
-                  {project.startDate} - {project.endDate}
+                  {formatDisplayDateOrDefault(project.startDate)} - {formatDisplayDateOrDefault(project.endDate)}
                 </TableCell>
                 <TableCell>
                   <div className="space-y-1">

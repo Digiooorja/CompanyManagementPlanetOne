@@ -88,6 +88,12 @@ const Activity = sequelize.define('Activity', {
     defaultValue: 0,
     comment: 'Actual cost for the activity'
   },
+  order: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    defaultValue: 0,
+    comment: 'Display order for activities in the same project/parent'
+  },
   createdAt: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW

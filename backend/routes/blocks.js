@@ -78,7 +78,13 @@ router.post('/', async (req, res) => {
     const block = await Block.create({
       name: req.body.name,
       description: req.body.description,
-      status: req.body.status
+      status: req.body.status,
+      licenceStart: req.body.licenceStart || null,
+      licenceExpiry: req.body.licenceExpiry || null,
+      operator: req.body.operator || null,
+      workingInterest: req.body.workingInterest || null,
+      area: req.body.area || null,
+      location: req.body.location || null,
     });
     res.status(201).json(block);
   } catch (err) {
@@ -95,7 +101,13 @@ router.put('/:id', async (req, res) => {
     await block.update({
       name: req.body.name || block.name,
       description: req.body.description || block.description,
-      status: req.body.status || block.status
+      status: req.body.status || block.status,
+      licenceStart: req.body.licenceStart || block.licenceStart,
+      licenceExpiry: req.body.licenceExpiry || block.licenceExpiry,
+      operator: req.body.operator || block.operator,
+      workingInterest: req.body.workingInterest || block.workingInterest,
+      area: req.body.area || block.area,
+      location: req.body.location || block.location,
     });
 
     res.json(block);

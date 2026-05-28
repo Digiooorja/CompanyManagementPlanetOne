@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, ChangeEvent, useRef } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -47,6 +47,7 @@ export function Documents() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const loadData = async () => {
@@ -629,12 +630,17 @@ export function Documents() {
           </TableHeader>
           <TableBody>
             {renderedDocuments.map((doc) => (
-              <TableRow key={doc.id}>
+              <TableRow
+                key={doc.id}
+                className="cursor-pointer hover:bg-slate-50"
+                onClick={() => navigate(`/documents/${doc.id}`)}
+              >
                 <TableCell className="flex items-center gap-2">
                   <FileText className="h-4 w-4" />
                   <Link
                     to={`/documents/${doc.id}`}
                     className="hover:underline"
+                    onClick={(e) => e.stopPropagation()}
                   >
                     {doc.name || doc.title}
                   </Link>
@@ -661,7 +667,7 @@ export function Documents() {
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-1">
-                    <Link to={`/documents/${doc.id}`}>
+                    <Link to={`/documents/${doc.id}`} onClick={(e) => e.stopPropagation()}>
                       <Button size="sm" variant="ghost">
                         View
                       </Button>
@@ -669,7 +675,10 @@ export function Documents() {
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => handlePreviewDocument(doc.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handlePreviewDocument(doc.id);
+                      }}
                       disabled={previewingId === doc.id}
                     >
                       Preview
@@ -677,7 +686,10 @@ export function Documents() {
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => handleDownloadDocument(doc.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDownloadDocument(doc.id);
+                      }}
                       disabled={downloadingId === doc.id}
                     >
                       <Download className="h-4 w-4" />

@@ -7,6 +7,7 @@ import { GitBranch, Clock, CheckCircle } from "lucide-react";
 
 import { useEffect, useState } from "react";
 import { workflowsApi } from "../../services/api";
+import { formatDisplayDateOrDefault } from "../lib/date";
 
 export function Workflows() {
   const [workflowItems, setWorkflowItems] = useState<any[]>([]);
@@ -148,7 +149,7 @@ export function Workflows() {
                   <TableCell className="text-sm text-gray-600">
                     {item.submittedBy}
                   </TableCell>
-                  <TableCell>{item.submitDate}</TableCell>
+                  <TableCell>{formatDisplayDateOrDefault(item.submitDate)}</TableCell>
                   <TableCell className="text-sm">{item.currentStep}</TableCell>
                   <TableCell>
                     <Badge variant={getStatusColor(item.status)}>
@@ -160,7 +161,7 @@ export function Workflows() {
                       {item.priority}
                     </Badge>
                   </TableCell>
-                  <TableCell>{item.dueDate}</TableCell>
+                  <TableCell>{formatDisplayDateOrDefault(item.dueDate)}</TableCell>
                   <TableCell>
                     <Link to={`/workflows/${item.id}`}>
                       <Button size="sm">

@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '../components/ui/table';
 import { Progress } from '../components/ui/progress';
-import { ArrowLeft, BarChart3, FileText, AlertTriangle, Download } from 'lucide-react';
+import { ArrowLeft, BarChart3, FileText, AlertTriangle, Download, ArrowUp, ArrowDown } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { ProjectGanttChart } from '../components/ProjectGanttChart';
 import { projectsApi, activitiesApi, documentsApi, risksApi } from '../../services/api';
@@ -108,7 +108,9 @@ function ProjectDetail() {
   const [error, setError] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [expandedActivities, setExpandedActivities] = useState<number[]>([]);
+  const [updatingOrderId, setUpdatingOrderId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<'gantt' | 'activities' | 'plan-actual' | 'budget' | 'documents' | 'risks'>('gantt');
+  const navigate = useNavigate();
 
   useEffect(() => {
     const loadData = async () => {
@@ -298,6 +300,21 @@ function ProjectDetail() {
     );
   };
 
+  const handleMoveActivity = async (activityId: number, direction: 'up' | 'down') => {
+    try {
+      setUpdatingOrderId(activityId);
+      await activitiesApi.updateOrder(activityId, direction);
+      // Reload activities to reflect the new order
+      const activitiesData = await activitiesApi.getByProjectId(Number(id));
+      setActivities(activitiesData || []);
+    } catch (err) {
+      console.error('Error updating activity order:', err);
+      setError(err instanceof Error ? err.message : 'Failed to update activity order');
+    } finally {
+      setUpdatingOrderId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="p-6">
@@ -441,7 +458,7 @@ function ProjectDetail() {
                     <TableHead>Actual Dates</TableHead>
                     <TableHead>Planned Cost</TableHead>
                     <TableHead>Actual Cost</TableHead>
-                    <TableHead>Actions</TableHead>
+                    <TableHead>Order</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -449,11 +466,22 @@ function ProjectDetail() {
                     const hasChildren = activities.some((item) => item.parentActivityId === activity.id);
                     const isChild = Boolean(activity.parentActivityId);
                     return (
-                      <TableRow key={activity.id}>
+                      <TableRow
+                        key={activity.id}
+                        className="cursor-pointer hover:bg-slate-50"
+                        onClick={() => navigate(`/activities/${activity.id}`)}
+                      >
                         <TableCell className="font-medium">
                           <div className="flex items-center gap-2" style={{ paddingLeft: isChild ? 24 : 0 }}>
                             {hasChildren ? (
-                              <Button variant="ghost" size="sm" onClick={() => toggleExpand(activity.id)}>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleExpand(activity.id);
+                                }}
+                              >
                                 {expandedActivities.includes(activity.id) ? '−' : '+'}
                               </Button>
                             ) : (
@@ -485,9 +513,32 @@ function ProjectDetail() {
                         <TableCell>{currencyFormat(activity.plannedCost)}</TableCell>
                         <TableCell>{currencyFormat(activity.actualCost)}</TableCell>
                         <TableCell>
-                          <Link to={`/activities/${activity.id}`}>
-                            <Button variant="ghost" size="sm">View</Button>
-                          </Link>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleMoveActivity(activity.id, 'up');
+                              }}
+                              disabled={updatingOrderId === activity.id || isChild}
+                              title="Move activity up"
+                            >
+                              <ArrowUp className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleMoveActivity(activity.id, 'down');
+                              }}
+                              disabled={updatingOrderId === activity.id || isChild}
+                              title="Move activity down"
+                            >
+                              <ArrowDown className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
@@ -598,7 +649,11 @@ function ProjectDetail() {
                   </TableHeader>
                   <TableBody>
                     {documents.map((doc) => (
-                      <TableRow key={doc.id}>
+                      <TableRow
+                        key={doc.id}
+                        className="cursor-pointer hover:bg-slate-50"
+                        onClick={() => navigate(`/documents/${doc.id}`)}
+                      >
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <FileText className="h-4 w-4" />
@@ -614,7 +669,10 @@ function ProjectDetail() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleDownloadDocument(doc.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDownloadDocument(doc.id);
+                            }}
                             disabled={downloadingId === doc.id}
                           >
                             <Download className="h-4 w-4" />

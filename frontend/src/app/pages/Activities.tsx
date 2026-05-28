@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -20,6 +21,7 @@ import {
 import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
 import { activitiesApi, projectsApi } from "../../services/api";
+import { formatDisplayDateOrDefault } from "../lib/date";
 
 // Activities are loaded from the API; no local defaults are used.
 
@@ -35,12 +37,18 @@ export function Activities() {
     title: "",
     projectId: null,
     assignedTo: "",
-    dueDate: "",
+    plannedStartDate: "",
+    plannedEndDate: "",
+    plannedCost: '',
     priority: "Medium",
     status: "Active",
     description: "",
   });
   const [projects, setProjects] = useState<any[]>([]);
+  const { user } = useAuth();
+  const departmentName = user?.department || user?.departmentDetails?.name || '';
+  const isOperationsUser = departmentName.toLowerCase().includes('operation');
+  const canCreateActivity = user?.role === 'Admin' || isOperationsUser;
 
   // Load activities and projects
   async function fetchActivities() {
@@ -125,7 +133,9 @@ export function Activities() {
     }
   };
 
-  const parentActivities = renderedActivities.filter(a => !a.parentActivityId);
+  const parentActivities = renderedActivities
+    .filter(a => !a.parentActivityId)
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   const todoActivities = parentActivities.filter((a) => a.status === "To Do");
   const inProgressActivities = parentActivities.filter((a) => a.status === "In Progress");
   const completedActivities = parentActivities.filter((a) => a.status === "Completed");
@@ -154,103 +164,130 @@ export function Activities() {
               <LayoutGrid className="h-4 w-4" />
             </Button>
           </div>
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                New Activity
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Create Activity</DialogTitle>
-                <DialogDescription>Add a new activity to the project</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-3 mt-2">
-                <div>
-                  <Label>Title</Label>
-                  <Input value={newActivity.title} onChange={(e) => setNewActivity({...newActivity, title: e.target.value})} />
-                </div>
-                <div>
-                  <Label>Project</Label>
-                  <select
-                    data-slot="select"
-                    className="w-full rounded-md border px-3 py-1"
-                    value={newActivity.projectId ?? ''}
-                    onChange={(e) => setNewActivity({ ...newActivity, projectId: e.target.value ? Number(e.target.value) : null })}
-                  >
-                    <option value="">-- Select project --</option>
-                    {projects.map((p) => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <Label>Assigned To</Label>
-                  <Input value={newActivity.assignedTo} onChange={(e) => setNewActivity({...newActivity, assignedTo: e.target.value})} />
-                </div>
-                <div>
-                  <Label>Due Date</Label>
-                  <Input type="date" value={newActivity.dueDate} onChange={(e) => setNewActivity({...newActivity, dueDate: e.target.value})} />
-                </div>
-                <div>
-                  <Label>Priority</Label>
-                  <Input value={newActivity.priority} onChange={(e) => setNewActivity({...newActivity, priority: e.target.value})} />
-                </div>
-                <div>
-                  <Label>Status</Label>
-                  <select
-                    className="w-full rounded-md border px-3 py-1"
-                    value={newActivity.status}
-                    onChange={(e) => setNewActivity({...newActivity, status: e.target.value})}
-                  >
-                    <option value="Active">Active</option>
-                    <option value="Inactive">Inactive</option>
-                    <option value="Completed">Completed</option>
-                  </select>
-                </div>
-                <div>
-                  <Label>Description</Label>
-                  <Textarea value={newActivity.description} onChange={(e) => setNewActivity({...newActivity, description: e.target.value})} />
-                </div>
-              </div>
-              <DialogFooter>
-                <DialogClose asChild>
-                  <Button variant="ghost">Cancel</Button>
-                </DialogClose>
-                <Button
-                  onClick={async () => {
-                    try {
-                      setCreating(true);
-                      await activitiesApi.create({
-                        name: newActivity.title,
-                        title: newActivity.title,
-                        projectId: newActivity.projectId,
-                        assignedTo: newActivity.assignedTo,
-                        dueDate: newActivity.dueDate,
-                        priority: newActivity.priority,
-                        description: newActivity.description,
-                        status: newActivity.status,
-                      });
-                      setIsCreateOpen(false);
-                      setNewActivity({ title: '', projectId: null, assignedTo: '', dueDate: '', priority: 'Medium', status: 'Active', description: '' });
-                      // Refresh activities
-                      await fetchActivities();
-                    } catch (err) {
-                      console.error('Create activity error', err);
-                      setError('Failed to create activity');
-                    } finally {
-                      setCreating(false);
-                      setLoading(false);
-                    }
-                  }}
-                  disabled={creating}
-                >
-                  {creating ? 'Creating...' : 'Create'}
+          {canCreateActivity ? (
+            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="h-4 w-4 mr-2" />
+                  New Activity
                 </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Create Activity</DialogTitle>
+                  <DialogDescription>Add a new activity to the project</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-3 mt-2">
+                  <div>
+                    <Label>Title</Label>
+                    <Input value={newActivity.title} onChange={(e) => setNewActivity({...newActivity, title: e.target.value})} />
+                  </div>
+                  <div>
+                    <Label>Project</Label>
+                    <select
+                      data-slot="select"
+                      className="w-full rounded-md border px-3 py-1"
+                      value={newActivity.projectId ?? ''}
+                      onChange={(e) => setNewActivity({ ...newActivity, projectId: e.target.value ? Number(e.target.value) : null })}
+                    >
+                      <option value="">-- Select project --</option>
+                      {projects.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <Label>Assigned To</Label>
+                    <Input value={newActivity.assignedTo} onChange={(e) => setNewActivity({...newActivity, assignedTo: e.target.value})} />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <div>
+                      <Label>Planned Start</Label>
+                      <Input type="date" value={newActivity.plannedStartDate} onChange={(e) => setNewActivity({...newActivity, plannedStartDate: e.target.value})} />
+                    </div>
+                    <div>
+                      <Label>Planned End</Label>
+                      <Input type="date" value={newActivity.plannedEndDate} onChange={(e) => setNewActivity({...newActivity, plannedEndDate: e.target.value})} />
+                    </div>
+                  </div>
+                  <div>
+                    <Label>Priority</Label>
+                    <select
+                      className="w-full rounded-md border px-3 py-1"
+                      value={newActivity.priority}
+                      onChange={(e) => setNewActivity({...newActivity, priority: e.target.value})}
+                    >
+                      <option value="Low">Low</option>
+                      <option value="Medium">Medium</option>
+                      <option value="High">High</option>
+                      <option value="Critical">Critical</option>
+                    </select>
+                  </div>
+                  <div>
+                    <Label>Planned Cost</Label>
+                    <Input type="number" step="0.01" value={newActivity.plannedCost} onChange={(e) => setNewActivity({...newActivity, plannedCost: e.target.value})} />
+                  </div>
+                  <div>
+                    <Label>Status</Label>
+                    <select
+                      className="w-full rounded-md border px-3 py-1"
+                      value={newActivity.status}
+                      onChange={(e) => setNewActivity({...newActivity, status: e.target.value})}
+                    >
+                      <option value="Active">Active</option>
+                      <option value="Inactive">Inactive</option>
+                      <option value="Completed">Completed</option>
+                    </select>
+                  </div>
+                  <div>
+                    <Label>Description</Label>
+                    <Textarea value={newActivity.description} onChange={(e) => setNewActivity({...newActivity, description: e.target.value})} />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <DialogClose asChild>
+                    <Button variant="ghost">Cancel</Button>
+                  </DialogClose>
+                  <Button
+                    onClick={async () => {
+                      try {
+                        setCreating(true);
+                        await activitiesApi.create({
+                          name: newActivity.title,
+                          title: newActivity.title,
+                          projectId: newActivity.projectId,
+                          assignedTo: newActivity.assignedTo,
+                          plannedStartDate: newActivity.plannedStartDate,
+                          plannedEndDate: newActivity.plannedEndDate,
+                          plannedCost: newActivity.plannedCost ? parseFloat(newActivity.plannedCost) : 0,
+                          priority: newActivity.priority,
+                          description: newActivity.description,
+                          status: newActivity.status,
+                        });
+                        setIsCreateOpen(false);
+                        setNewActivity({ title: '', projectId: null, assignedTo: '', plannedStartDate: '', plannedEndDate: '', priority: 'Medium', status: 'Active', description: '' });
+                        await fetchActivities();
+                      } catch (err) {
+                        console.error('Create activity error', err);
+                        setError('Failed to create activity');
+                      } finally {
+                        setCreating(false);
+                        setLoading(false);
+                      }
+                    }}
+                    disabled={creating}
+                  >
+                    {creating ? 'Creating...' : 'Create'}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          ) : (
+            <Button variant="secondary" disabled title="Only Operations department users can create activities">
+              <Plus className="h-4 w-4 mr-2" />
+              New Activity
+            </Button>
+          )}
         </div>
       </div>
 
@@ -342,7 +379,7 @@ export function Activities() {
                         <span className="text-sm">{activity.progress}%</span>
                       </div>
                     </TableCell>
-                    <TableCell>{activity.dueDate}</TableCell>
+                    <TableCell>{formatDisplayDateOrDefault(activity.plannedEndDate)}</TableCell>
                     <TableCell>
                       <Link to={`/activities/${activity.id}`}>
                         <Button size="sm" variant="ghost">
@@ -353,7 +390,9 @@ export function Activities() {
                   </TableRow>
 
                   {expandedActivities.has(activity.id) && activity.subActivities && activity.subActivities.length > 0 && (
-                    activity.subActivities.map((subActivity: any) => (
+                    (activity.subActivities as any[])
+                      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+                      .map((subActivity: any) => (
                       <TableRow key={`subactivity-${subActivity.id}`} className="bg-gray-50 hover:bg-gray-100 cursor-pointer">
                         <TableCell></TableCell>
                         <TableCell>
@@ -419,7 +458,7 @@ export function Activities() {
                       </Badge>
                     </div>
                     <div className="text-sm text-gray-600">
-                      Due: {activity.dueDate}
+                      Planned End: {formatDisplayDateOrDefault(activity.plannedEndDate)}
                     </div>
                     <div className="text-sm text-gray-600">
                       Assigned: {activity.assignedTo}
@@ -479,7 +518,7 @@ export function Activities() {
                       </p>
                     </div>
                     <div className="text-sm text-gray-600">
-                      Due: {activity.dueDate}
+                      Planned End: {formatDisplayDateOrDefault(activity.plannedEndDate)}
                     </div>
                     <div className="text-sm text-gray-600">
                       Assigned: {activity.assignedTo}
@@ -533,7 +572,7 @@ export function Activities() {
                       </Badge>
                     </div>
                     <div className="text-sm text-gray-600">
-                      Completed: {activity.dueDate}
+                      Completed: {formatDisplayDateOrDefault(activity.plannedEndDate)}
                     </div>
                     <div className="text-sm text-gray-600">
                       By: {activity.assignedTo}

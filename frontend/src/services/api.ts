@@ -73,6 +73,10 @@ export const activitiesApi = {
     method: 'POST', 
     body: JSON.stringify({ activities }) 
   }),
+  updateOrder: (id: number, direction: 'up' | 'down') => apiCall(`/activities/${id}/order`, { 
+    method: 'PUT', 
+    body: JSON.stringify({ direction }) 
+  }),
 };
 
 export const commentsApi = {
