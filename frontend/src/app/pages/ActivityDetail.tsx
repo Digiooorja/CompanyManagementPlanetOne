@@ -8,7 +8,7 @@ import { Textarea } from "../components/ui/textarea";
 import { Progress } from "../components/ui/progress";
 import { Separator } from "../components/ui/separator";
 import { Input } from "../components/ui/input";
-import { Select } from "../components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -19,7 +19,7 @@ import {
   DialogClose
 } from "../components/ui/dialog";
 import { ArrowLeft, Calendar, User, FileText, MessageSquare, Plus, Trash2, CheckCircle } from "lucide-react";
-import { activitiesApi, commentsApi, departmentsApi, documentsApi } from "../../services/api";
+import { activitiesApi, commentsApi, departmentsApi, documentsApi, usersApi } from "../../services/api";
 
 export function ActivityDetail() {
   const { id } = useParams();
@@ -28,6 +28,7 @@ export function ActivityDetail() {
   const [linkedDocuments, setLinkedDocuments] = useState<any[]>([]);
   const [comments, setComments] = useState<any[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
   const [commentDepartmentId, setCommentDepartmentId] = useState<number | string>('');
   const [newComment, setNewComment] = useState('');
   const [loading, setLoading] = useState(true);
@@ -70,15 +71,22 @@ export function ActivityDetail() {
   const canEditActualCost = isAdminUser || isFinanceUser;
   const canCreateActivity = isAdminUser || isOperationsUser;
 
+  const buildUserDisplayName = (user: any) => {
+    const displayName = [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim() || user?.username || 'Unknown User';
+    const departmentName = user?.department || user?.departmentDetails?.name || 'Unknown Department';
+    return `${departmentName} - ${displayName}`;
+  };
+
   const fetchActivityDetails = async () => {
     try {
       setLoading(true);
       if (id) {
-        const [activityData, commentData, departmentData, documentData] = await Promise.all([
+        const [activityData, commentData, departmentData, documentData, usersData] = await Promise.all([
           activitiesApi.getById(parseInt(id)),
           commentsApi.getByActivityId(parseInt(id)),
           departmentsApi.getAll(),
-          documentsApi.getByActivityId(parseInt(id))
+          documentsApi.getByActivityId(parseInt(id)),
+          usersApi.getAll()
         ]);
 
         const transformedActivity = {
@@ -96,6 +104,7 @@ export function ActivityDetail() {
 
         setComments(Array.isArray(commentData) ? commentData : []);
         setDepartments(Array.isArray(departmentData) ? departmentData : []);
+        setUsers(Array.isArray(usersData) ? usersData : []);
         setLinkedDocuments(
           Array.isArray(documentData)
             ? documentData.map((doc: any) => ({
@@ -215,9 +224,7 @@ export function ActivityDetail() {
   const handleUpdateProgress = async (subActivityId: number, newProgress: number) => {
     try {
       await activitiesApi.update(subActivityId, { progress: newProgress });
-      setSubActivities(subActivities.map(sa => 
-        sa.id === subActivityId ? { ...sa, progress: newProgress } : sa
-      ));
+      await fetchActivityDetails();
     } catch (err) {
       console.error('Error updating progress:', err);
     }
@@ -305,12 +312,19 @@ export function ActivityDetail() {
 
   const handleEditActivity = () => {
     if (!activity || (!canEditFields && !canEditActualCost)) return;
+
+    const matchedAssignedUser = users.find((user: any) => {
+      const displayName = buildUserDisplayName(user);
+      const rawName = [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim();
+      return activity.assignedTo === displayName || activity.assignedTo === user?.username || activity.assignedTo === rawName;
+    });
+
     setActivityForm({
       name: activity.name || '',
       description: activity.description || '',
       status: activity.status || 'Active',
       priority: activity.priority || 'Medium',
-      assignedTo: activity.assignedTo || '',
+      assignedTo: matchedAssignedUser ? buildUserDisplayName(matchedAssignedUser) : activity.assignedTo || '',
       plannedStartDate: activity.plannedStartDate || '',
       plannedEndDate: activity.plannedEndDate || '',
       actualStartDate: activity.actualStartDate || '',
@@ -489,10 +503,36 @@ export function ActivityDetail() {
           <h1 className="text-3xl">{displayActivity.name}</h1>
           <div className="flex flex-col gap-3 mt-2 text-sm text-gray-600">
             <div className="flex flex-wrap items-center gap-4">
+              <div className="text-sm text-gray-700">
+                {displayActivity.description || "No description available"}
+              </div>
+              <div className="text-sm text-gray-700">
+                Created: {displayActivity.createdAt ? new Date(displayActivity.createdAt).toLocaleDateString('en-GB', {
+                  day: 'numeric',
+                  month: 'short',
+                  year: 'numeric'
+                }) : "Unknown"}
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-4">
+              {displayActivity.plannedStartDate && (
+                  <div className="flex items-center gap-1">
+                    <Calendar className="h-4 w-4" />
+                    Planned Start: {new Date(displayActivity.plannedStartDate).toLocaleDateString('en-GB', {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric'
+                    })}
+                  </div>
+                )}
               {displayActivity.plannedEndDate && (
                   <div className="flex items-center gap-1">
                     <Calendar className="h-4 w-4" />
-                    Planned End: {displayActivity.plannedEndDate}
+                    Planned End: {new Date(displayActivity.plannedEndDate).toLocaleDateString('en-GB', {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric'
+                    })}
                   </div>
                 )}
               {displayActivity.assignedTo && (
@@ -556,15 +596,6 @@ export function ActivityDetail() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Description */}
-          <Card className="p-6">
-            <h3 className="text-lg mb-3">Description</h3>
-            <p className="text-gray-700">{displayActivity.description || "No description available"}</p>
-            <Separator className="my-4" />
-            <div className="text-sm text-gray-600 space-y-1">
-              <p>Created: {displayActivity.createdAt || "Unknown"}</p>
-            </div>
-          </Card>
 
           {/* Sub-Activities */}
           <Card className="p-6">
@@ -801,7 +832,11 @@ export function ActivityDetail() {
                       <div className="flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-medium text-sm">{comment.author?.username || comment.user || 'Unknown'}</span>
-                          <span className="text-xs text-gray-500">{comment.createdAt ? new Date(comment.createdAt).toLocaleString() : comment.date}</span>
+                          <span className="text-xs text-gray-500">{comment.createdAt ? new Date(comment.createdAt).toLocaleDateString('en-GB', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric'
+                          }) : comment.date}</span>
                           {comment.department?.name && (
                             <Badge variant="outline" className="text-xs">
                               {comment.department.name}
@@ -878,7 +913,11 @@ export function ActivityDetail() {
                 <>
                   <div>
                     <p className="text-gray-600">Planned End Date</p>
-                    <p className="mt-1">{displayActivity.plannedEndDate}</p>
+                    <p className="mt-1">{new Date(displayActivity.plannedEndDate).toLocaleDateString('en-GB', {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric'
+                    })}</p>
                   </div>
                   <Separator />
                 </>
@@ -947,10 +986,14 @@ export function ActivityDetail() {
                         value={activityForm.status}
                         onValueChange={(value) => setActivityForm({ ...activityForm, status: value })}
                       >
-                        <option value="Active">Active</option>
-                        <option value="In Progress">In Progress</option>
-                        <option value="Completed">Completed</option>
-                        <option value="On Hold">On Hold</option>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Active">Active</SelectItem>
+                          <SelectItem value="Inactive">Inactive</SelectItem>
+                          <SelectItem value="Completed">Completed</SelectItem>
+                        </SelectContent>
                       </Select>
                     </div>
                     <div className="grid gap-2">
@@ -960,33 +1003,41 @@ export function ActivityDetail() {
                         value={activityForm.priority}
                         onValueChange={(value) => setActivityForm({ ...activityForm, priority: value })}
                       >
-                        <option value="Low">Low</option>
-                        <option value="Medium">Medium</option>
-                        <option value="High">High</option>
-                        <option value="Critical">Critical</option>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select priority" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Low">Low</SelectItem>
+                          <SelectItem value="Medium">Medium</SelectItem>
+                          <SelectItem value="High">High</SelectItem>
+                          <SelectItem value="Critical">Critical</SelectItem>
+                        </SelectContent>
                       </Select>
                     </div>
                   </div>
                   <div className="grid gap-2 sm:grid-cols-2">
                     <div className="grid gap-2">
                       <label className="text-sm font-medium">Assigned To</label>
-                      <Input
+                      <Select
                         disabled={!canEditFields}
                         value={activityForm.assignedTo}
-                        onChange={(event) => setActivityForm({ ...activityForm, assignedTo: event.target.value })}
-                      />
+                        onValueChange={(value) => setActivityForm({ ...activityForm, assignedTo: value })}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select user" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {users.map((user: any) => {
+                            const displayName = buildUserDisplayName(user);
+                            return (
+                              <SelectItem key={user.id} value={displayName}>
+                                {displayName}
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
                     </div>
-                    <div className="grid gap-2">
-                      <label className="text-sm font-medium">Planned End</label>
-                        <Input
-                          disabled={!canEditFields}
-                          type="date"
-                          value={activityForm.plannedEndDate}
-                          onChange={(event) => setActivityForm({ ...activityForm, plannedEndDate: event.target.value })}
-                        />
-                    </div>
-                  </div>
-                  <div className="grid gap-2 sm:grid-cols-2">
                     <div className="grid gap-2">
                       <label className="text-sm font-medium">Planned Start</label>
                       <Input
@@ -996,6 +1047,8 @@ export function ActivityDetail() {
                         onChange={(event) => setActivityForm({ ...activityForm, plannedStartDate: event.target.value })}
                       />
                     </div>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
                     <div className="grid gap-2">
                       <label className="text-sm font-medium">Planned End</label>
                       <Input
@@ -1003,6 +1056,18 @@ export function ActivityDetail() {
                         type="date"
                         value={activityForm.plannedEndDate}
                         onChange={(event) => setActivityForm({ ...activityForm, plannedEndDate: event.target.value })}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium">Progress (%)</label>
+                      <Input
+                        disabled={!canEditFields}
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="1"
+                        value={String(activityForm.progress)}
+                        onChange={(event) => setActivityForm({ ...activityForm, progress: Number(event.target.value) })}
                       />
                     </div>
                   </div>
@@ -1045,20 +1110,6 @@ export function ActivityDetail() {
                         step="0.01"
                         value={activityForm.actualCost}
                         onChange={(event) => setActivityForm({ ...activityForm, actualCost: event.target.value })}
-                      />
-                    </div>
-                  </div>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <div className="grid gap-2">
-                      <label className="text-sm font-medium">Progress (%)</label>
-                      <Input
-                        disabled={!canEditFields}
-                        type="number"
-                        min="0"
-                        max="100"
-                        step="1"
-                        value={String(activityForm.progress)}
-                        onChange={(event) => setActivityForm({ ...activityForm, progress: Number(event.target.value) })}
                       />
                     </div>
                   </div>

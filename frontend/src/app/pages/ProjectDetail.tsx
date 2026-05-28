@@ -396,8 +396,18 @@ function ProjectDetail() {
         <Card className="p-4">
           <p className="text-sm text-muted-foreground">Duration</p>
           <p className="text-lg font-semibold mt-2">
-            {project.startDate ? new Date(project.startDate).toLocaleDateString() : '-'} -{' '}
-            {project.endDate ? new Date(project.endDate).toLocaleDateString() : '-'}
+            {project.startDate ? new Date(project.startDate).toLocaleDateString('en-GB', {
+              day: 'numeric',
+              month: 'short',
+              year: 'numeric'
+            })
+              : '-'} -{' '}
+            {project.endDate ? new Date(project.endDate).toLocaleDateString('en-GB', {
+              day: 'numeric',
+              month: 'short',
+              year: 'numeric'
+            })
+              : '-'}
           </p>
         </Card>
       </div>
@@ -501,14 +511,34 @@ function ProjectDetail() {
                           </div>
                         </TableCell>
                         <TableCell className="text-sm">
-                          {activity.plannedStartDate ? new Date(activity.plannedStartDate).toLocaleDateString() : '-'}
+                          {activity.plannedStartDate ? new Date(activity.plannedStartDate).toLocaleDateString('en-GB', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric'
+                          })
+                            : '-'}
                           <span className="mx-1">→</span>
-                          {activity.plannedEndDate ? new Date(activity.plannedEndDate).toLocaleDateString() : '-'}
+                          {activity.plannedEndDate ? new Date(activity.plannedEndDate).toLocaleDateString('en-GB', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric'
+                          })
+                            : '-'}
                         </TableCell>
                         <TableCell className="text-sm">
-                          {activity.actualStartDate ? new Date(activity.actualStartDate).toLocaleDateString() : '-'}
+                          {activity.actualStartDate ? new Date(activity.actualStartDate).toLocaleDateString('en-GB', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric'
+                          })
+                            : '-'}
                           <span className="mx-1">→</span>
-                          {activity.actualEndDate ? new Date(activity.actualEndDate).toLocaleDateString() : '-'}
+                          {activity.actualEndDate ? new Date(activity.actualEndDate).toLocaleDateString('en-GB', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric'
+                          })
+                            : '-'}
                         </TableCell>
                         <TableCell>{currencyFormat(activity.plannedCost)}</TableCell>
                         <TableCell>{currencyFormat(activity.actualCost)}</TableCell>
@@ -661,7 +691,11 @@ function ProjectDetail() {
                           </div>
                         </TableCell>
                         <TableCell>{doc.type}</TableCell>
-                        <TableCell>{new Date(doc.uploadDate).toLocaleDateString()}</TableCell>
+                        <TableCell>{new Date(doc.uploadDate).toLocaleDateString('en-GB', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric'
+                          })}</TableCell>
                         <TableCell>
                           <Badge variant={getStatusVariant(doc.status)}>{doc.status}</Badge>
                         </TableCell>

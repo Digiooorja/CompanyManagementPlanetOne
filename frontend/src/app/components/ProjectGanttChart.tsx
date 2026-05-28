@@ -203,10 +203,18 @@ export function ProjectGanttChart({ activities, projectStartDate, projectEndDate
 
         {/* Start / end dates */}
         <text x={leftColumnWidth + 10} y={28} fontSize="12" fill="#6c757d">
-          {startDate.toLocaleDateString()}
+          {startDate.toLocaleDateString('en-GB', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric'
+                          })}
         </text>
         <text x={chartWidth - 10} y={28} fontSize="12" fill="#6c757d" textAnchor="end">
-          {endDate.toLocaleDateString()}
+          {endDate.toLocaleDateString('en-GB', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric'
+                          })}
         </text>
 
         {/* Month labels */}

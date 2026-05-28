@@ -90,6 +90,10 @@ export const departmentsApi = {
   getAll: () => apiCall<any[]>('/departments'),
 };
 
+export const usersApi = {
+  getAll: () => apiCall<any[]>('/auth/users'),
+};
+
 // Blocks API
 export const blocksApi = {
   getAll: () => apiCall<any[]>('/blocks'),

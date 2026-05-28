@@ -49,6 +49,70 @@ async function updateParentActualCost(parentActivityId) {
   return totals.actualCost;
 }
 
+function getActivityDurationInDays(activity) {
+  const plannedStart = activity.plannedStartDate ? new Date(activity.plannedStartDate) : null;
+  const plannedEnd = activity.plannedEndDate ? new Date(activity.plannedEndDate) : null;
+  const actualStart = activity.actualStartDate ? new Date(activity.actualStartDate) : null;
+  const actualEnd = activity.actualEndDate ? new Date(activity.actualEndDate) : null;
+
+  const startDate = plannedStart || actualStart;
+  const endDate = plannedEnd || actualEnd;
+
+  if (startDate && endDate && !Number.isNaN(startDate.getTime()) && !Number.isNaN(endDate.getTime()) && endDate >= startDate) {
+    return Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000)));
+  }
+
+  return null;
+}
+
+async function updateParentProgress(parentActivityId, resetWhenEmpty = false) {
+  if (!parentActivityId) return null;
+
+  const parentActivity = await Activity.findByPk(parentActivityId);
+  if (!parentActivity) return null;
+
+  const subActivities = await Activity.findAll({
+    where: { parentActivityId: parentActivity.id },
+    attributes: ['progress', 'plannedStartDate', 'plannedEndDate', 'actualStartDate', 'actualEndDate']
+  });
+
+  if (subActivities.length > 0) {
+    let totalWeightedProgress = 0;
+    let totalWeight = 0;
+
+    subActivities.forEach((child) => {
+      const progress = Number.parseFloat(child.progress ?? 0);
+      const durationDays = getActivityDurationInDays(child);
+      const weight = durationDays && durationDays > 0 ? durationDays : 1;
+
+      totalWeightedProgress += progress * weight;
+      totalWeight += weight;
+    });
+
+    const weightedAverageProgress = totalWeight > 0
+      ? Math.round(totalWeightedProgress / totalWeight)
+      : Math.round(
+          subActivities.reduce((sum, child) => sum + Number.parseFloat(child.progress ?? 0), 0) / subActivities.length
+        );
+
+    await Activity.update(
+      { progress: weightedAverageProgress },
+      { where: { id: parentActivity.id } }
+    );
+  } else if (resetWhenEmpty) {
+    await Activity.update(
+      { progress: 0 },
+      { where: { id: parentActivity.id } }
+    );
+  }
+
+  if (parentActivity.parentActivityId) {
+    await updateParentProgress(parentActivity.parentActivityId, resetWhenEmpty);
+  }
+
+  return parentActivity.id;
+}
+
 async function updateActivityActualCostFromChildren(activityId) {
   const subActivities = await Activity.findAll({
     where: { parentActivityId: activityId },
@@ -244,6 +308,7 @@ router.post('/', async (req, res) => {
 
     if (parentActivity) {
       await updateParentActualCost(parentActivity.id);
+      await updateParentProgress(parentActivity.id);
     }
 
     res.status(201).json(activity);
@@ -382,9 +447,13 @@ router.put('/:id', async (req, res) => {
 
     if (oldParentActivityId && oldParentActivityId !== newParentActivityId) {
       await updateParentActualCost(oldParentActivityId);
+      await updateParentProgress(oldParentActivityId, true);
     }
     if (newParentActivityId) {
       await updateParentActualCost(newParentActivityId);
+      await updateParentProgress(newParentActivityId);
+    } else if (oldParentActivityId) {
+      await updateParentProgress(oldParentActivityId);
     }
 
     await updateActivityActualCostFromChildren(activity.id);
@@ -417,6 +486,7 @@ router.delete('/:id', async (req, res) => {
 
     if (parentActivityId) {
       await updateParentActualCost(parentActivityId);
+      await updateParentProgress(parentActivityId, true);
     }
 
     res.json({ message: 'Activity deleted successfully' });
@@ -441,10 +511,16 @@ router.post('/bulk/update', async (req, res) => {
       activities.map(async (actData) => {
         const activity = await Activity.findByPk(actData.id);
         if (activity) {
-          return activity.update({
+          const updatedActivity = await activity.update({
             status: actData.status || activity.status,
             progress: actData.progress !== undefined ? actData.progress : activity.progress
           });
+
+          if (updatedActivity.parentActivityId) {
+            await updateParentProgress(updatedActivity.parentActivityId);
+          }
+
+          return updatedActivity;
         }
       })
     );

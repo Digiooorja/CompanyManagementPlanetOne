@@ -248,7 +248,11 @@ export function DocumentDetail() {
   const documentStatus = document?.status || 'Unknown';
   const documentDescription = document?.content || document?.description || 'No description available';
   const documentVersion = document?.versionNumber != null ? String(document.versionNumber) : '1';
-  const documentUploadDate = document?.uploadDate ? new Date(document.uploadDate).toLocaleDateString() : 'Unknown';
+  const documentUploadDate = document?.uploadDate ? new Date(document.uploadDate).toLocaleDateString('en-GB', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric'
+                          }) : 'Unknown';
 
   const metadata = [
     { label: 'Document Type', value: documentType },
@@ -267,7 +271,11 @@ export function DocumentDetail() {
         id: Number(version.id),
         step: version.label || `Version ${version.versionNumber || index + 1}`,
         status: version.status || 'Completed',
-        date: version.uploadDate ? new Date(version.uploadDate).toLocaleDateString() : documentUploadDate,
+        date: version.uploadDate ? new Date(version.uploadDate).toLocaleDateString('en-GB', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric'
+                          }) : documentUploadDate,
         user: version.author || document?.author || 'Unknown',
         version: version.versionNumber != null ? String(version.versionNumber) : `${index + 1}`,
         mimeType: version.mimeType,
