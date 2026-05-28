@@ -211,10 +211,12 @@ export function ActivityDetail() {
 
   const handleUpdateSubActivityStatus = async (subActivityId: number, newStatus: string) => {
     try {
-      await activitiesApi.update(subActivityId, { status: newStatus });
-      setSubActivities(subActivities.map(sa => 
-        sa.id === subActivityId ? { ...sa, status: newStatus } : sa
-      ));
+      const updates: any = { status: newStatus };
+      if (newStatus === 'Completed') {
+        updates.progress = 100;
+      }
+      await activitiesApi.update(subActivityId, updates);
+      await fetchActivityDetails();
     } catch (err) {
       console.error('Error updating sub-activity:', err);
       setError('Failed to update sub-activity');
@@ -358,7 +360,11 @@ export function ActivityDetail() {
         updatedPayload.actualStartDate = activityForm.actualStartDate;
         updatedPayload.actualEndDate = activityForm.actualEndDate;
         updatedPayload.plannedCost = activityForm.plannedCost ? parseFloat(activityForm.plannedCost) : 0;
-        updatedPayload.progress = Number(activityForm.progress) || 0;
+        // Only allow manual progress when there are no sub-activities;
+        // otherwise it is auto-calculated from sub-activity completion.
+        if (subActivities.length === 0) {
+          updatedPayload.progress = Number(activityForm.progress) || 0;
+        }
       }
 
       if (canEditActualCost) {
@@ -582,10 +588,14 @@ export function ActivityDetail() {
             <span className="text-2xl">{displayActivity.progress}%</span>
           </div>
           <Progress value={displayActivity.progress} className="h-3" />
-          <div className="flex gap-2 mt-4">
-            <Button size="sm" variant="outline" onClick={handleUpdateActivityProgress} disabled={!canEditFields || activityActionLoading}>
-              Update Progress
-            </Button>
+          <div className="flex gap-2 mt-4 flex-wrap items-center">
+            {subActivities.length === 0 ? (
+              <Button size="sm" variant="outline" onClick={handleUpdateActivityProgress} disabled={!canEditFields || activityActionLoading}>
+                Update Progress
+              </Button>
+            ) : (
+              <p className="text-xs text-gray-500 italic">Progress is auto-calculated from sub-activities</p>
+            )}
             <Button size="sm" variant="outline" onClick={handleChangeActivityStatus} disabled={!canEditFields || activityActionLoading}>
               Change Status
             </Button>
@@ -1060,15 +1070,23 @@ export function ActivityDetail() {
                     </div>
                     <div className="grid gap-2">
                       <label className="text-sm font-medium">Progress (%)</label>
-                      <Input
-                        disabled={!canEditFields}
-                        type="number"
-                        min="0"
-                        max="100"
-                        step="1"
-                        value={String(activityForm.progress)}
-                        onChange={(event) => setActivityForm({ ...activityForm, progress: Number(event.target.value) })}
-                      />
+                      {subActivities.length > 0 ? (
+                        <div className="flex items-center gap-2 px-3 py-2 border rounded bg-gray-50">
+                          <span className="text-sm text-gray-500 italic">
+                            Auto-calculated from sub-activities ({activity?.progress ?? 0}%)
+                          </span>
+                        </div>
+                      ) : (
+                        <Input
+                          disabled={!canEditFields}
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="1"
+                          value={String(activityForm.progress)}
+                          onChange={(event) => setActivityForm({ ...activityForm, progress: Number(event.target.value) })}
+                        />
+                      )}
                     </div>
                   </div>
                   <div className="grid gap-2 sm:grid-cols-2">
