@@ -89,10 +89,13 @@ export function ActivityDetail() {
           usersApi.getAll()
         ]);
 
+
+        console.log(`[Frontend] Fetched activity ${id}, progress=${activityData.progress}%, subActivities=${activityData.subActivities?.length || 0}, project=${activityData.project?.name}`);
+
         const transformedActivity = {
           ...activityData,
           title: activityData.title || activityData.name,
-          project: typeof activityData.project === 'object' ? activityData.project?.name : activityData.project
+          project: activityData.project // Keep full project object with id and name
         };
         setActivity(transformedActivity);
 
@@ -225,15 +228,26 @@ export function ActivityDetail() {
 
   const handleUpdateProgress = async (subActivityId: number, newProgress: number) => {
     try {
-      await activitiesApi.update(subActivityId, { progress: newProgress });
+      setActivityActionLoading(true);
+      console.log(`[Frontend] Updating sub-activity ${subActivityId} progress to ${newProgress}%`);
+      const result = await activitiesApi.update(subActivityId, { progress: newProgress });
+      console.log(`[Frontend] Update successful, result:`, result);
       await fetchActivityDetails();
+      setError(null);
     } catch (err) {
       console.error('Error updating progress:', err);
+      setError(`Failed to update progress: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setActivityActionLoading(false);
     }
   };
 
   const handleUpdateActivityProgress = async () => {
     if (!activity) return;
+    if (subActivities.length > 0) {
+      setError('Progress is auto-calculated from sub-activities and cannot be set manually.');
+      return;
+    }
     const progressInput = window.prompt('Enter new progress value (0-100)', String(activity.progress ?? 0));
     if (progressInput === null) return;
     const progressValue = Number(progressInput);
@@ -333,7 +347,7 @@ export function ActivityDetail() {
       actualEndDate: activity.actualEndDate || '',
       plannedCost: activity.plannedCost != null ? String(activity.plannedCost) : '',
       actualCost: activity.actualCost != null ? String(activity.actualCost) : '',
-      progress: activity.progress != null ? activity.progress : 0
+      progress: subActivities.length === 0 && activity.progress != null ? activity.progress : 0
     });
     setIsEditDialogOpen(true);
   };
@@ -495,13 +509,34 @@ export function ActivityDetail() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Link to="/activities">
-          <Button variant="ghost" size="sm">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Activities
-          </Button>
+      <div className="flex items-center gap-2 text-sm">
+        <Link to="/projects" className="text-blue-600 hover:underline">
+          Projects
         </Link>
+        {activity?.project && (
+          <>
+            <span className="text-gray-400">/</span>
+            <Link to={`/projects/${activity.project.id}`} className="text-blue-600 hover:underline">
+              {typeof activity.project === 'object' ? activity.project.name : activity.project}
+            </Link>
+          </>
+        )}
+        {activity?.hierarchy && activity.hierarchy.length > 1 && (
+          activity.hierarchy.slice(0, -1).map((item: any) => (
+            <span key={`breadcrumb-${item.id}`} className="flex items-center gap-2">
+              <span className="text-gray-400">/</span>
+              <Link to={`/activities/${item.id}`} className="text-blue-600 hover:underline">
+                {item.name}
+              </Link>
+            </span>
+          ))
+        )}
+        {activity?.hierarchy && activity.hierarchy.length > 0 && (
+          <>
+            <span className="text-gray-400">/</span>
+            <span className="text-gray-700 font-medium">{activity.hierarchy[activity.hierarchy.length - 1].name}</span>
+          </>
+        )}
       </div>
 
       <div className="flex items-start justify-between">
@@ -770,17 +805,28 @@ export function ActivityDetail() {
                           <CheckCircle className="h-4 w-4 mr-1" />
                           Mark Complete
                         </Button>
-                        <select 
-                          className="text-sm px-2 py-1 border rounded"
-                          value={subActivity.progress}
-                          onChange={(e) => handleUpdateProgress(subActivity.id, parseInt(e.target.value))}
-                        >
-                          <option value="0">0%</option>
-                          <option value="25">25%</option>
-                          <option value="50">50%</option>
-                          <option value="75">75%</option>
-                          <option value="100">100%</option>
-                        </select>
+                        {!(subActivity.subActivities && subActivity.subActivities.length > 0) ? (
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="range"
+                              min={0}
+                              max={100}
+                              value={subActivity.progress}
+                              onChange={(e) => handleUpdateProgress(subActivity.id, parseInt(e.target.value, 10))}
+                              className="w-40"
+                            />
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              value={subActivity.progress}
+                              onChange={(e) => handleUpdateProgress(subActivity.id, Math.max(0, Math.min(100, Number(e.target.value || 0))))}
+                              className="w-16 text-sm px-2 py-1 border rounded"
+                            />
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-500 italic">Auto-calculated from sub-activities</span>
+                        )}
                       </div>
                     </div>
                   </div>

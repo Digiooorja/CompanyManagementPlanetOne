@@ -47,6 +47,10 @@ interface GanttActivity extends Activity {
   subactivities: Activity[];
 }
 
+interface ActivityRow extends Activity {
+  level: number;
+}
+
 interface DocumentItem {
   id: number;
   projectId: number;
@@ -153,16 +157,19 @@ function ProjectDetail() {
   }, [id]);
 
   const activityRows = useMemo(() => {
-    const parents = activities.filter((item) => !item.parentActivityId);
-    const rows: Activity[] = [];
-    parents.forEach((parent) => {
-      rows.push(parent);
-      if (expandedActivities.includes(parent.id)) {
-        const children = activities.filter((item) => item.parentActivityId === parent.id);
-        rows.push(...children);
-      }
-    });
-    return rows;
+    const buildRows = (parentId: number | null, level: number): ActivityRow[] => {
+      return activities
+        .filter((item) => item.parentActivityId === parentId)
+        .flatMap((item) => {
+          const row: ActivityRow = { ...item, level };
+          if (expandedActivities.includes(item.id)) {
+            return [row, ...buildRows(item.id, level + 1)];
+          }
+          return [row];
+        });
+    };
+
+    return buildRows(null, 0);
   }, [activities, expandedActivities]);
 
   const handleDownloadDocument = async (documentId: number) => {
@@ -474,7 +481,6 @@ function ProjectDetail() {
                 <TableBody>
                   {activityRows.map((activity) => {
                     const hasChildren = activities.some((item) => item.parentActivityId === activity.id);
-                    const isChild = Boolean(activity.parentActivityId);
                     return (
                       <TableRow
                         key={activity.id}
@@ -482,7 +488,8 @@ function ProjectDetail() {
                         onClick={() => navigate(`/activities/${activity.id}`)}
                       >
                         <TableCell className="font-medium">
-                          <div className="flex items-center gap-2" style={{ paddingLeft: isChild ? 24 : 0 }}>
+                          <div className="flex items-center gap-2" style={{ paddingLeft: activity.level * 24 }}>
+                            <span>{activity.name}</span>
                             {hasChildren ? (
                               <Button
                                 variant="ghost"
@@ -494,10 +501,7 @@ function ProjectDetail() {
                               >
                                 {expandedActivities.includes(activity.id) ? '−' : '+'}
                               </Button>
-                            ) : (
-                              isChild ? <span className="inline-block w-6" /> : null
-                            )}
-                            {activity.name}
+                            ) : null}
                           </div>
                         </TableCell>
                         <TableCell>
@@ -551,7 +555,7 @@ function ProjectDetail() {
                                 e.stopPropagation();
                                 handleMoveActivity(activity.id, 'up');
                               }}
-                              disabled={updatingOrderId === activity.id || isChild}
+                              disabled={updatingOrderId === activity.id || activity.level > 0}
                               title="Move activity up"
                             >
                               <ArrowUp className="h-4 w-4" />
@@ -563,7 +567,7 @@ function ProjectDetail() {
                                 e.stopPropagation();
                                 handleMoveActivity(activity.id, 'down');
                               }}
-                              disabled={updatingOrderId === activity.id || isChild}
+                              disabled={updatingOrderId === activity.id || activity.level > 0}
                               title="Move activity down"
                             >
                               <ArrowDown className="h-4 w-4" />

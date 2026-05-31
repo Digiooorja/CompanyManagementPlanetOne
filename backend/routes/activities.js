@@ -71,9 +71,11 @@ async function updateParentProgress(parentActivityId, resetWhenEmpty = false) {
   const parentActivity = await Activity.findByPk(parentActivityId);
   if (!parentActivity) return null;
 
+  console.log(`[updateParentProgress] Called for parent ${parentActivityId} (${parentActivity.name}), resetWhenEmpty=${resetWhenEmpty}`);
+
   const subActivities = await Activity.findAll({
     where: { parentActivityId: parentActivity.id },
-    attributes: ['progress', 'plannedStartDate', 'plannedEndDate', 'actualStartDate', 'actualEndDate']
+    attributes: ['id', 'progress', 'plannedStartDate', 'plannedEndDate', 'actualStartDate', 'actualEndDate']
   });
 
   if (subActivities.length > 0) {
@@ -95,11 +97,14 @@ async function updateParentProgress(parentActivityId, resetWhenEmpty = false) {
           subActivities.reduce((sum, child) => sum + Number.parseFloat(child.progress ?? 0), 0) / subActivities.length
         );
 
+    console.log(`[updateParentProgress] Parent ${parentActivityId} (${parentActivity.name}): oldProgress=${parentActivity.progress}%, children=${subActivities.map(s => `${s.id}:${s.progress}%`).join(', ')}, newProgress=${weightedAverageProgress}%`);
+    
     await Activity.update(
       { progress: weightedAverageProgress },
       { where: { id: parentActivity.id } }
     );
   } else if (resetWhenEmpty) {
+    console.log(`[updateParentProgress] Parent ${parentActivityId} (${parentActivity.name}): no children, resetting to 0%`);
     await Activity.update(
       { progress: 0 },
       { where: { id: parentActivity.id } }
@@ -201,6 +206,16 @@ router.get('/', async (req, res) => {
 });
 
 // GET activity by ID with sub-activities
+async function getActivityHierarchy(activityId) {
+  const activity = await Activity.findByPk(activityId, {
+    attributes: ['id', 'name', 'parentActivityId']
+  });
+  if (!activity) return [];
+  if (!activity.parentActivityId) return [{ id: activity.id, name: activity.name }];
+  const parentHierarchy = await getActivityHierarchy(activity.parentActivityId);
+  return [...parentHierarchy, { id: activity.id, name: activity.name }];
+}
+
 router.get('/:id', async (req, res) => {
   try {
     const activity = await Activity.findByPk(req.params.id, {
@@ -208,7 +223,13 @@ router.get('/:id', async (req, res) => {
         {
           association: 'subActivities',
           attributes: ['id', 'name', 'description', 'status', 'priority', 'assignedTo', 'dueDate', 'progress', 'parentActivityId', 'plannedCost', 'actualCost', 'order'],
-          order: [['order', 'ASC']]
+          order: [['order', 'ASC']],
+          include: [
+            {
+              association: 'subActivities',
+              attributes: ['id']
+            }
+          ]
         },
         {
           association: 'project',
@@ -230,7 +251,12 @@ router.get('/:id', async (req, res) => {
       ]
     });
     if (!activity) return res.status(404).json({ message: 'Activity not found' });
-    res.json(activity);
+    
+    const hierarchy = await getActivityHierarchy(activity.id);
+    const responseData = activity.toJSON();
+    responseData.hierarchy = hierarchy;
+    
+    res.json(responseData);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -328,6 +354,9 @@ router.put('/:id/order', async (req, res) => {
     if (!activity) {
       return res.status(404).json({ message: 'Activity not found' });
     }
+
+    const childCount = await Activity.count({ where: { parentActivityId: activity.id } });
+    console.log(`[PUT Activity] Updating activity ${activity.id} (${activity.name}), parentId=${activity.parentActivityId}, newProgress=${req.body.progress}, hasChildren=${childCount}`);
 
     const { direction } = req.body; // 'up' or 'down'
     if (!['up', 'down'].includes(direction)) {
@@ -429,7 +458,15 @@ router.put('/:id', async (req, res) => {
       }
     }
 
-    await activity.update({
+    const childCount = await Activity.count({ where: { parentActivityId: activity.id } });
+    console.log(`[PUT Activity] Updating activity ${activity.id} (${activity.name}), childCount=${childCount}, oldParent=${oldParentActivityId}, newParent=${newParentActivityId}, reqBodyProgress=${req.body.progress}`);
+
+    // If activity has children and user tries to update progress manually, ignore it
+    const progressToSet = (childCount > 0 && req.body.progress !== undefined)
+      ? activity.progress  // Keep existing progress, will be recalculated from children
+      : (req.body.progress !== undefined ? req.body.progress : activity.progress);
+
+    const updated = await activity.update({
       name: req.body.name || activity.name,
       description: req.body.description || activity.description,
       status: req.body.status || activity.status,
@@ -440,15 +477,30 @@ router.put('/:id', async (req, res) => {
       dueDate: req.body.dueDate !== undefined ? req.body.dueDate : activity.dueDate,
       plannedStartDate: req.body.plannedStartDate !== undefined ? req.body.plannedStartDate : activity.plannedStartDate,
       plannedEndDate: req.body.plannedEndDate !== undefined ? req.body.plannedEndDate : activity.plannedEndDate,
-      progress: req.body.progress !== undefined ? req.body.progress : activity.progress,
+      progress: progressToSet,
       plannedCost,
       actualCost
     });
+
+    console.log(`[PUT Activity] Activity ${activity.id} updated. progressToSet=${progressToSet}, afterUpdateProgress=${updated.progress}, parentActivityId=${updated.parentActivityId}`);
 
     // Recalculate this activity's own progress from its sub-activities (if any).
     // This ensures that any manually supplied progress value is overridden by the
     // weighted-average calculation whenever children exist.
     await updateParentProgress(activity.id);
+    console.log(`[PUT Activity] updateParentProgress(self ${activity.id}) complete`);
+
+    // If this is a sub-activity and progress was updated, ALWAYS propagate to parent
+    // This is critical for the hierarchy to update correctly
+    const parentId = req.body.parentActivityId !== undefined ? req.body.parentActivityId : oldParentActivityId;
+    if (req.body.progress !== undefined) {
+      if (parentId) {
+        console.log(`[Activities] Sub-activity ${activity.id} progress updated (${req.body.progress}%), updating parent ${parentId}`);
+        await updateParentProgress(parentId);
+      } else {
+        console.log(`[Activities] Sub-activity ${activity.id} progress updated (${req.body.progress}%), but no parent found to recalc`);
+      }
+    }
 
     if (oldParentActivityId && oldParentActivityId !== newParentActivityId) {
       await updateParentActualCost(oldParentActivityId);
