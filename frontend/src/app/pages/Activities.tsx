@@ -45,10 +45,10 @@ export function Activities() {
     description: "",
   });
   const [projects, setProjects] = useState<any[]>([]);
-  const { user } = useAuth();
+  const { user, canEdit } = useAuth();
   const departmentName = user?.department || user?.departmentDetails?.name || '';
   const isOperationsUser = departmentName.toLowerCase().includes('operation');
-  const canCreateActivity = user?.role === 'Admin' || isOperationsUser;
+  const canCreateActivity = canEdit && (user?.role === 'Admin' || isOperationsUser);
 
   // Load activities and projects
   async function fetchActivities() {

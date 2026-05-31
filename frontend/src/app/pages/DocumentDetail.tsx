@@ -15,7 +15,7 @@ import { useAuth } from "../contexts/AuthContext";
 
 export function DocumentDetail() {
   const { id } = useParams();
-  const { user } = useAuth();
+  const { user, canEdit } = useAuth();
   const [document, setDocument] = useState<any | null>(null);
   const [selectedVersionId, setSelectedVersionId] = useState<number | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -385,10 +385,10 @@ export function DocumentDetail() {
           <Share2 className="h-4 w-4 mr-2" />
           Preview
         </Button>
-        <Button variant="outline" onClick={handleUploadNewVersion} disabled={uploadingVersion}>
+        <Button variant="outline" onClick={handleUploadNewVersion} disabled={uploadingVersion || !canEdit}>
           Upload New Version
         </Button>
-        <Button variant="destructive">
+        <Button variant="destructive" disabled={!canEdit}>
           <Trash2 className="h-4 w-4 mr-2" />
           Delete
         </Button>
@@ -509,7 +509,7 @@ export function DocumentDetail() {
             <div className="space-y-2">
               <Dialog open={editOpen} onOpenChange={setEditOpen}>
                 <DialogTrigger asChild>
-                  <Button variant="outline" className="w-full">
+                  <Button variant="outline" className="w-full" disabled={!canEdit}>
                     Edit Details
                   </Button>
                 </DialogTrigger>
@@ -601,7 +601,7 @@ export function DocumentDetail() {
                     <DialogClose asChild>
                       <Button variant="ghost">Cancel</Button>
                     </DialogClose>
-                    <Button onClick={handleSaveDocumentDetails} disabled={editSaving}>
+                    <Button onClick={handleSaveDocumentDetails} disabled={editSaving || !canEdit}>
                       {editSaving ? 'Saving...' : 'Save Changes'}
                     </Button>
                   </DialogFooter>

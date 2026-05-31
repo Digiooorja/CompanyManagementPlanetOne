@@ -124,6 +124,13 @@ export const financeApi = {
   create: (data: any) => apiCall('/finance', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: number, data: any) => apiCall(`/finance/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: number) => apiCall(`/finance/${id}`, { method: 'DELETE' }),
+  nextAfe: (projectId?: number | string, activityId?: number | string) => {
+    const qs: string[] = [];
+    if (projectId !== undefined && projectId !== null && projectId !== '') qs.push(`projectId=${projectId}`);
+    if (activityId !== undefined && activityId !== null && activityId !== '') qs.push(`activityId=${activityId}`);
+    const q = qs.length ? `?${qs.join('&')}` : '';
+    return apiCall<{ afeNumber: string; next: number }>(`/finance/next-afe${q}`);
+  }
 };
 
 // Notifications API

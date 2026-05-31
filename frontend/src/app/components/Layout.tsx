@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
 import { 
   LayoutDashboard, 
@@ -31,8 +31,15 @@ import {
 export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, logout, isGuest } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  // Listen for global requests to close the sidebar (e.g., from pages opening dialogs)
+  useEffect(() => {
+    const handler = () => setSidebarOpen(false);
+    window.addEventListener('closeSidebar', handler as EventListener);
+    return () => window.removeEventListener('closeSidebar', handler as EventListener);
+  }, []);
 
   const navigation = [
     { name: "Dashboard", href: "/", icon: LayoutDashboard },
@@ -44,7 +51,7 @@ export function Layout() {
     { name: "Registers", href: "/registers", icon: BookOpen },
     { name: "Finance", href: "/finance", icon: DollarSign },
     { name: "Reports", href: "/reports", icon: BarChart3 },
-    { name: "Admin", href: "/admin", icon: Settings },
+    ...(isGuest ? [] : [{ name: "Admin", href: "/admin", icon: Settings }]),
   ];
 
   const isActive = (href: string) => {
@@ -56,7 +63,7 @@ export function Layout() {
 
   const handleLogout = () => {
     logout();
-    navigate("/login");
+    navigate("/");
   };
 
   return (
@@ -93,59 +100,69 @@ export function Layout() {
           </div>
 
           <div className="flex items-center gap-2">
-            <Link to="/notifications">
-              <Button variant="ghost" size="sm" className="relative">
-                <Bell className="h-5 w-5" />
-                <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-red-500">
-                  3
-                </Badge>
-              </Button>
-            </Link>
+            {!isGuest && (
+              <Link to="/notifications">
+                <Button variant="ghost" size="sm" className="relative">
+                  <Bell className="h-5 w-5" />
+                  <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-red-500">
+                    3
+                  </Badge>
+                </Button>
+              </Link>
+            )}
 
             {user && (
               <>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="flex items-center gap-2">
-                      <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-semibold">
-                        {(user.firstName?.[0] || user.username?.[0] || 'U').toUpperCase()}
-                      </div>
-                      <div className="hidden lg:block text-left">
-                        <div className="text-sm font-medium">
-                          {user.firstName && user.lastName
-                            ? `${user.firstName} ${user.lastName}`
-                            : user.username}
+                {isGuest ? (
+                  <Button variant="secondary" size="sm" onClick={() => navigate('/login')}>
+                    Login
+                  </Button>
+                ) : (
+                  <>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="flex items-center gap-2">
+                          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-semibold">
+                            {(user.firstName?.[0] || user.username?.[0] || 'U').toUpperCase()}
+                          </div>
+                          <div className="hidden lg:block text-left">
+                            <div className="text-sm font-medium">
+                              {user.firstName && user.lastName
+                                ? `${user.firstName} ${user.lastName}`
+                                : user.username}
+                            </div>
+                            <div className="text-xs text-gray-500">{user.department || user.departmentDetails?.name}</div>
+                          </div>
+                          <ChevronDown className="h-4 w-4 text-gray-500" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-56">
+                        <div className="px-4 py-3 border-b">
+                          <div className="text-sm font-semibold">
+                            {user.firstName && user.lastName
+                              ? `${user.firstName} ${user.lastName}`
+                              : user.username}
+                          </div>
+                          <div className="text-xs text-gray-500 mt-1">{user.email}</div>
+                          <div className="mt-2">
+                            <Badge variant="outline" className="text-xs">
+                              {user.department || user.departmentDetails?.name}
+                            </Badge>
+                          </div>
                         </div>
-                        <div className="text-xs text-gray-500">{user.department || user.departmentDetails?.name}</div>
-                      </div>
-                      <ChevronDown className="h-4 w-4 text-gray-500" />
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    <Button
+                      onClick={handleLogout}
+                      variant="outline"
+                      size="sm"
+                      className="text-red-600 hover:text-red-700 hover:border-red-300"
+                    >
+                      <LogOut className="h-4 w-4 mr-1" />
+                      <span className="hidden sm:inline">Logout</span>
                     </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-56">
-                    <div className="px-4 py-3 border-b">
-                      <div className="text-sm font-semibold">
-                        {user.firstName && user.lastName
-                          ? `${user.firstName} ${user.lastName}`
-                          : user.username}
-                      </div>
-                      <div className="text-xs text-gray-500 mt-1">{user.email}</div>
-                      <div className="mt-2">
-                        <Badge variant="outline" className="text-xs">
-                          {user.department || user.departmentDetails?.name}
-                        </Badge>
-                      </div>
-                    </div>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <Button
-                  onClick={handleLogout}
-                  variant="outline"
-                  size="sm"
-                  className="text-red-600 hover:text-red-700 hover:border-red-300"
-                >
-                  <LogOut className="h-4 w-4 mr-1" />
-                  <span className="hidden sm:inline">Logout</span>
-                </Button>
+                  </>
+                )}
               </>
             )}
           </div>

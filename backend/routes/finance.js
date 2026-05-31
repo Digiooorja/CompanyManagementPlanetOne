@@ -1,10 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const { authMiddleware } = require('../middleware/auth');
+const { optionalAuthMiddleware } = require('../middleware/auth');
 const Finance = require('../models/Finance');
 const Activity = require('../models/Activity');
+const Project = require('../models/Project');
 
-router.use(authMiddleware);
+router.use(optionalAuthMiddleware);
 
 function isFinanceOrAccounts(user) {
   const department = String(user?.department || '').toLowerCase();
@@ -145,3 +146,40 @@ router.delete('/:id', async (req, res) => {
 });
 
 module.exports = router;
+
+// GET next AFE number (projectId and/or activityId optional)
+router.get('/next-afe', async (req, res) => {
+  try {
+    const { projectId, activityId } = req.query;
+    let activity = null;
+    let project = null;
+    let count = 0;
+
+    if (activityId) {
+      activity = await Activity.findByPk(activityId);
+      if (activity) project = await Project.findByPk(activity.projectId);
+      count = await Finance.count({ where: { recordType: 'AFE', activityId: Number(activityId) } });
+    } else if (projectId) {
+      const acts = await Activity.findAll({ where: { projectId: Number(projectId) }, attributes: ['id'] });
+      const actIds = acts.map((a) => a.id);
+      if (actIds.length > 0) {
+        count = await Finance.count({ where: { recordType: 'AFE', activityId: actIds } });
+      } else {
+        count = 0;
+      }
+      project = await Project.findByPk(projectId);
+    } else {
+      count = await Finance.count({ where: { recordType: 'AFE' } });
+    }
+
+    const projectCode = project ? String(project.name).replace(/\s+/g, '').toUpperCase().slice(0,5) : `P${projectId || '00'}`;
+    const activityCode = activity ? String(activity.name).replace(/\s+/g, '').toUpperCase().slice(0,5) : (activityId ? `A${activityId}` : 'NA');
+    const nextSeq = Number(count || 0) + 1;
+    const seqStr = String(nextSeq).padStart(3, '0');
+    const afeNumber = `${projectCode}-${activityCode}-${seqStr}`;
+
+    res.json({ afeNumber, next: nextSeq });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});

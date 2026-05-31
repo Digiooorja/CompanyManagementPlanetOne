@@ -6,8 +6,10 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs"
 import { Separator } from "../components/ui/separator";
 import { Bell, AlertCircle, CheckCircle, Info, Clock, FileText, DollarSign, Trash2 } from "lucide-react";
 import { notificationsApi } from "../../services/api";
+import { useAuth } from "../contexts/AuthContext";
 
 export function Notifications() {
+  const { canEdit } = useAuth();
   const [filter, setFilter] = useState("all");
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -172,8 +174,8 @@ export function Notifications() {
           <p className="text-gray-500 mt-1">Stay updated on important events</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline">Mark all as read</Button>
-          <Button variant="outline">
+          <Button variant="outline" disabled={!canEdit}>Mark all as read</Button>
+          <Button variant="outline" disabled={!canEdit}>
             <Trash2 className="h-4 w-4 mr-2" />
             Clear all
           </Button>
@@ -261,11 +263,11 @@ export function Notifications() {
                             </div>
                             <div className="flex items-center gap-1">
                               {!notification.read && (
-                                <Button size="sm" variant="ghost">
+                                <Button size="sm" variant="ghost" disabled={!canEdit}>
                                   Mark as read
                                 </Button>
                               )}
-                              <Button size="sm" variant="ghost">
+                              <Button size="sm" variant="ghost" disabled={!canEdit}>
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             </div>

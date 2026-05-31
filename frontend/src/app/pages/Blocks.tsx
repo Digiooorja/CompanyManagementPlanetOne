@@ -11,8 +11,10 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from ".
 import { Search, Plus } from "lucide-react";
 import { blocksApi } from "../../services/api";
 import { formatDisplayDateOrDefault } from "../lib/date";
+import { useAuth } from "../contexts/AuthContext";
 
 export function Blocks() {
+  const { canEdit } = useAuth();
   const [blocks, setBlocks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -124,7 +126,7 @@ export function Blocks() {
         </div>
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button disabled={!canEdit}>
               <Plus className="h-4 w-4 mr-2" />
               Add Block
             </Button>

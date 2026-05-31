@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Activity = require('../models/Activity');
 const { Op } = require('sequelize');
-const { authMiddleware } = require('../middleware/auth');
+const { optionalAuthMiddleware } = require('../middleware/auth');
 
 function getDepartmentName(user) {
   return String(user?.department || user?.departmentDetails?.name || '').toLowerCase();
@@ -18,7 +18,8 @@ function isFinanceUser(user) {
   return user?.role === 'Admin' || department.includes('finance');
 }
 
-router.use(authMiddleware);
+// Apply optional auth to all routes (allows guests to read)
+router.use(optionalAuthMiddleware);
 
 async function sumSubActivityCosts(parentActivityId, excludeActivityId = null) {
   const where = { parentActivityId };

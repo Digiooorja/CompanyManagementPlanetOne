@@ -13,12 +13,14 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogD
 import { DollarSign, TrendingUp, TrendingDown, FileText, AlertCircle, CheckCircle } from 'lucide-react';
 import { LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
-import { financeApi, activitiesApi } from '../../services/api';
+import { financeApi, activitiesApi, projectsApi, departmentsApi } from '../../services/api';
 
 export function Finance() {
-  const { user } = useAuth();
+  const { user, canEdit: isAuthenticatedUser } = useAuth();
   const [financeItems, setFinanceItems] = useState<any[]>([]);
   const [activities, setActivities] = useState<any[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [departments, setDepartments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAfeOpen, setIsAfeOpen] = useState(false);
@@ -31,6 +33,7 @@ export function Finance() {
     amount: '',
     category: '',
     type: 'Expense',
+    projectId: '',
     activityId: '',
     approvalDepartment: '',
     afeNumber: '',
@@ -39,21 +42,26 @@ export function Finance() {
 
   const departmentName = user?.department || user?.departmentDetails?.name || '';
   const canEdit = useMemo(() => {
+    if (!isAuthenticatedUser) return false;
     const department = String(departmentName).toLowerCase();
     return user?.role === 'Admin' || department.includes('finance') || department.includes('account');
-  }, [departmentName, user]);
+  }, [departmentName, user, isAuthenticatedUser]);
 
   useEffect(() => {
     const loadData = async () => {
       try {
         setLoading(true);
         setError(null);
-        const [financeData, activitiesData] = await Promise.all([
+        const [financeData, activitiesData, projectsData, departmentsData] = await Promise.all([
           financeApi.getAll(),
           activitiesApi.getAll(),
+          projectsApi.getAll(),
+          departmentsApi.getAll(),
         ]);
         setFinanceItems(Array.isArray(financeData) ? financeData : []);
         setActivities(Array.isArray(activitiesData) ? activitiesData : []);
+        setProjects(Array.isArray(projectsData) ? projectsData : []);
+        setDepartments(Array.isArray(departmentsData) ? departmentsData : []);
       } catch (err) {
         console.error('Error loading finance data:', err);
         setError('Unable to load finance data');
@@ -81,6 +89,19 @@ export function Finance() {
     return options;
   }, [activities]);
 
+  // Filtered activity options by selected project in the AFE form
+  const filteredActivityOptions = useMemo(() => {
+    if (!newAfe.projectId) return activityOptions;
+    const pid = Number(newAfe.projectId);
+    return activityOptions.filter((opt) => {
+      const act = activities.find((a) => Number(a.id) === Number(opt.id));
+      if (!act) return true;
+      return (act.project && Number(act.project.id) === pid) || Number(act.projectId) === pid;
+    });
+  }, [activityOptions, activities, newAfe.projectId]);
+
+  
+
   const activityMap = useMemo(() => {
     const map = new Map<number, any>();
     activities.forEach((activity) => {
@@ -101,6 +122,30 @@ export function Finance() {
     () => financeItems.filter((item) => item.recordType === 'AFE'),
     [financeItems]
   );
+
+  // Request next AFE number from backend when project/activity changes
+  useEffect(() => {
+    let mounted = true;
+    const fetchNext = async () => {
+      try {
+        const resp = await financeApi.nextAfe(newAfe.projectId, newAfe.activityId && newAfe.activityId !== 'none' ? newAfe.activityId : undefined);
+        if (!mounted) return;
+        if (resp && resp.afeNumber) {
+          setNewAfe((c) => ({ ...c, afeNumber: resp.afeNumber }));
+        }
+      } catch (err) {
+        // fallback: keep existing afeNumber
+        console.error('Error fetching next AFE:', err);
+      }
+    };
+
+    if (newAfe.projectId || (newAfe.activityId && newAfe.activityId !== 'none')) {
+      fetchNext();
+    }
+
+    return () => { mounted = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [newAfe.projectId, newAfe.activityId]);
 
   const summary = useMemo(() => {
     const totalBudget = financeItems
@@ -238,6 +283,7 @@ export function Finance() {
         amount: '',
         category: '',
         type: 'Expense',
+        projectId: '',
         activityId: '',
         approvalDepartment: '',
         afeNumber: '',
@@ -270,12 +316,12 @@ export function Finance() {
           <p className="text-gray-500 mt-1">Financial management, invoices, and AFE approvals</p>
         </div>
         
-        <Button type="button" onClick={(e: MouseEvent<HTMLButtonElement>) => {
-          e.preventDefault();
-          e.stopPropagation();
+        <Button type="button" onClick={() => {
+          // ensure sidebar is closed on small screens so dialog is interactable
+          // try { window.dispatchEvent(new CustomEvent('closeSidebar')); } catch {}
           setError(null);
-          setIsAfeOpen( () => true);
-          {console.log('Open AFE Dialog')}
+          setIsAfeOpen(true);
+          console.log('Open AFE Dialog');
         }} disabled={!canEdit}>
           <FileText className="h-4 w-4 mr-2" />
           New AFE
@@ -502,6 +548,25 @@ export function Finance() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
+                <Label htmlFor="afe-project">Project</Label>
+                <Select
+                  value={newAfe.projectId}
+                  onValueChange={(value) => setNewAfe((current) => ({ ...current, projectId: value, activityId: '' }))}
+                >
+                  <SelectTrigger id="afe-project">
+                    <SelectValue placeholder="Choose project (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {projects.map((project) => (
+                      <SelectItem key={project.id} value={String(project.id)}>
+                        {project.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
                 <Label htmlFor="afe-activity">Linked Activity</Label>
                 <Select
                   value={newAfe.activityId}
@@ -512,7 +577,7 @@ export function Finance() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">None</SelectItem>
-                    {activityOptions.map((activity) => (
+                    {filteredActivityOptions.map((activity) => (
                       <SelectItem key={activity.id} value={String(activity.id)}>
                         {activity.name}
                       </SelectItem>
@@ -520,22 +585,35 @@ export function Finance() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="afe-department">Approval Department</Label>
-                <Input
-                  id="afe-department"
+                <Select
                   value={newAfe.approvalDepartment}
-                  onChange={(e) => setNewAfe((current) => ({ ...current, approvalDepartment: e.target.value }))}
-                  placeholder="Finance, Accounts, etc."
-                />
+                  onValueChange={(value) => setNewAfe((current) => ({ ...current, approvalDepartment: value }))}
+                >
+                  <SelectTrigger id="afe-department">
+                    <SelectValue placeholder="Choose department" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {departments.map((d) => (
+                      <SelectItem key={d.id} value={d.name}>
+                        {d.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
+              <div></div>
             </div>
             <div>
               <Label htmlFor="afe-number">AFE Number</Label>
               <Input
                 id="afe-number"
                 value={newAfe.afeNumber}
-                onChange={(e) => setNewAfe((current) => ({ ...current, afeNumber: e.target.value }))}
+                readOnly
               />
             </div>
           </div>

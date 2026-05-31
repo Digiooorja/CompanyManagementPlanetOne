@@ -19,6 +19,8 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   isAuthenticated: boolean;
+  isGuest: boolean;
+  canEdit: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (data: any) => Promise<void>;
@@ -28,18 +30,30 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Guest user object for view-only access
+const GUEST_USER: User = {
+  id: 0,
+  username: 'guest',
+  email: 'guest@example.com',
+  firstName: 'Guest',
+  lastName: 'User',
+  role: 'Guest'
+};
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load user from localStorage on mount
+  // Load user from localStorage on mount, or set guest user
   useEffect(() => {
     const savedToken = localStorage.getItem('token');
     if (savedToken) {
       setToken(savedToken);
       fetchCurrentUser(savedToken);
     } else {
+      // Set guest user for view-only access
+      setUser(GUEST_USER);
       setIsLoading(false);
     }
   }, []);
@@ -57,11 +71,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       } else {
         localStorage.removeItem('token');
         setToken(null);
+        setUser(GUEST_USER);
       }
     } catch (error) {
       console.error('Failed to fetch user:', error);
       localStorage.removeItem('token');
       setToken(null);
+      setUser(GUEST_USER);
     } finally {
       setIsLoading(false);
     }
@@ -141,6 +157,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     user,
     token,
     isAuthenticated: !!token,
+    isGuest: !token && user?.role === 'Guest',
+    canEdit: !!token,
     isLoading,
     login,
     register,

@@ -13,8 +13,10 @@ import { Search, Plus, Filter } from "lucide-react";
 import { Progress } from "../components/ui/progress";
 import { blocksApi, projectsApi } from "../../services/api";
 import { formatDisplayDateOrDefault } from "../lib/date";
+import { useAuth } from "../contexts/AuthContext";
 
 export function Projects() {
+  const { canEdit } = useAuth();
   const [filterBlock, setFilterBlock] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [projects, setProjects] = useState<any[]>([]);
@@ -136,7 +138,7 @@ export function Projects() {
         </div>
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button disabled={!canEdit}>
               <Plus className="h-4 w-4 mr-2" />
               New Project
             </Button>

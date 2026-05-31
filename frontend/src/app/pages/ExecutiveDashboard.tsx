@@ -16,8 +16,10 @@ import {
   FileText
 } from "lucide-react";
 import { blocksApi } from "../../services/api";
+import { useAuth } from "../contexts/AuthContext";
 
 export function ExecutiveDashboard() {
+  const { isGuest } = useAuth();
   const [blocks, setBlocks] = useState<any[]>([]);
   const [loadingBlocks, setLoadingBlocks] = useState(true);
   const [blockError, setBlockError] = useState<string | null>(null);
@@ -99,9 +101,11 @@ export function ExecutiveDashboard() {
           <h1 className="text-3xl">Executive Dashboard</h1>
           <p className="text-gray-500 mt-1">Executive overview and key metrics</p>
         </div>
-        <Link to="/operational">
-          <Button variant="outline">Switch to Operational View</Button>
-        </Link>
+        {!isGuest && (
+          <Link to="/operational">
+            <Button variant="outline">Switch to Operational View</Button>
+          </Link>
+        )}
       </div>
 
       {/* Countdown Cards */}

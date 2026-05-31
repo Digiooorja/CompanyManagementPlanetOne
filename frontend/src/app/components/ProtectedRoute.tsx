@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 
 export const ProtectedRoute = () => {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isLoading, user } = useAuth();
 
   if (isLoading) {
     return (
@@ -13,7 +13,8 @@ export const ProtectedRoute = () => {
     );
   }
 
-  if (!isAuthenticated) {
+  // Allow both authenticated and guest users to access the app
+  if (!user) {
     return <Navigate to="/login" replace />;
   }
 

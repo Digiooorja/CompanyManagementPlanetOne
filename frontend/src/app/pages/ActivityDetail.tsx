@@ -62,14 +62,14 @@ export function ActivityDetail() {
   });
   const navigate = useNavigate();
   const [activityActionLoading, setActivityActionLoading] = useState(false);
-  const { user } = useAuth();
+  const { user, canEdit } = useAuth();
   const departmentName = user?.department || user?.departmentDetails?.name || '';
   const isOperationsUser = departmentName.toLowerCase().includes('operation');
   const isFinanceUser = departmentName.toLowerCase().includes('finance');
   const isAdminUser = user?.role === 'Admin';
-  const canEditFields = isAdminUser || isOperationsUser;
-  const canEditActualCost = isAdminUser || isFinanceUser;
-  const canCreateActivity = isAdminUser || isOperationsUser;
+  const canEditFields = canEdit && (isAdminUser || isOperationsUser);
+  const canEditActualCost = canEdit && (isAdminUser || isFinanceUser);
+  const canCreateActivity = canEdit && (isAdminUser || isOperationsUser);
 
   const buildUserDisplayName = (user: any) => {
     const displayName = [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim() || user?.username || 'Unknown User';
