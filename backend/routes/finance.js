@@ -12,6 +12,16 @@ function isFinanceOrAccounts(user) {
   return user?.role === 'Admin' || department.includes('finance') || department.includes('account');
 }
 
+function canApproveFinance(user, approvalDepartment) {
+  if (user?.role === 'Admin') return true;
+  if (isFinanceOrAccounts(user)) return true;
+  if (!approvalDepartment) return false;
+
+  const userDept = String(user.department || '').toLowerCase();
+  const requiredDept = String(approvalDepartment || '').toLowerCase();
+  return requiredDept.includes(userDept) || userDept.includes(requiredDept);
+}
+
 function canApprovePaid(user, approvalDepartment) {
   if (user?.role === 'Admin') return true;
   if (!approvalDepartment) return isFinanceOrAccounts(user);
@@ -25,6 +35,43 @@ router.get('/', async (req, res) => {
   try {
     const items = await Finance.findAll();
     res.json(items);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// GET next AFE number (projectId and/or activityId optional)
+router.get('/next-afe', async (req, res) => {
+  try {
+    const { projectId, activityId } = req.query;
+    let activity = null;
+    let project = null;
+    let count = 0;
+
+    if (activityId) {
+      activity = await Activity.findByPk(activityId);
+      if (activity) project = await Project.findByPk(activity.projectId);
+      count = await Finance.count({ where: { recordType: 'AFE', activityId: Number(activityId) } });
+    } else if (projectId) {
+      const acts = await Activity.findAll({ where: { projectId: Number(projectId) }, attributes: ['id'] });
+      const actIds = acts.map((a) => a.id);
+      if (actIds.length > 0) {
+        count = await Finance.count({ where: { recordType: 'AFE', activityId: actIds } });
+      } else {
+        count = 0;
+      }
+      project = await Project.findByPk(projectId);
+    } else {
+      count = await Finance.count({ where: { recordType: 'AFE' } });
+    }
+
+    const projectCode = project ? String(project.name).replace(/\s+/g, '').toUpperCase().slice(0,5) : `P${projectId || '00'}`;
+    const activityCode = activity ? String(activity.name).replace(/\s+/g, '').toUpperCase().slice(0,5) : (activityId ? `A${activityId}` : 'NA');
+    const nextSeq = Number(count || 0) + 1;
+    const seqStr = String(nextSeq).padStart(3, '0');
+    const afeNumber = `${projectCode}-${activityCode}-${seqStr}`;
+
+    res.json({ afeNumber, next: nextSeq });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -78,15 +125,15 @@ router.post('/', async (req, res) => {
 // PUT update finance item
 router.put('/:id', async (req, res) => {
   try {
-    if (!isFinanceOrAccounts(req.user)) {
-      return res.status(403).json({ message: 'Finance or Accounts access required' });
-    }
-
     const item = await Finance.findByPk(req.params.id);
     if (!item) return res.status(404).json({ message: 'Finance item not found' });
 
     const requestedStatus = req.body.status || item.status;
     const approvalDepartment = req.body.approvalDepartment || item.approvalDepartment;
+
+    if (requestedStatus !== item.status && !canApproveFinance(req.user, approvalDepartment)) {
+      return res.status(403).json({ message: 'Approval from the assigned department or Finance/Accounts access is required' });
+    }
 
     if (requestedStatus === 'Paid' && item.status !== 'Paid') {
       if (!req.body.transactionDetails && !item.transactionDetails) {
@@ -145,8 +192,6 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-module.exports = router;
-
 // GET next AFE number (projectId and/or activityId optional)
 router.get('/next-afe', async (req, res) => {
   try {
@@ -183,3 +228,5 @@ router.get('/next-afe', async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
+
+module.exports = router;

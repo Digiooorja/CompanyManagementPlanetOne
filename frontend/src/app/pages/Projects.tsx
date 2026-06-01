@@ -20,6 +20,7 @@ export function Projects() {
   const [filterBlock, setFilterBlock] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [projects, setProjects] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const [blocks, setBlocks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -112,7 +113,29 @@ export function Projects() {
     fetchBlocks();
   }, []);
 
-  const renderedProjects = projects;
+  useEffect(() => {
+    const handler = (e: any) => setSearchQuery(e?.detail?.query || "");
+    window.addEventListener('globalSearch', handler as EventListener);
+    return () => window.removeEventListener('globalSearch', handler as EventListener);
+  }, []);
+
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const renderedProjects = projects.filter((project) => {
+    if (filterBlock !== 'all' && String(project.blockId) !== String(filterBlock)) {
+      return false;
+    }
+    if (filterStatus !== 'all' && filterStatus) {
+      if (String(project.status).toLowerCase() !== String(filterStatus).toLowerCase()) {
+        return false;
+      }
+    }
+    if (!normalizedSearch) return true;
+    const text = [project.name, project.block, project.manager, project.description]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+    return text.includes(normalizedSearch);
+  });
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -271,6 +294,8 @@ export function Projects() {
               type="search"
               placeholder="Search projects..."
               className="pl-10"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
           <Select value={filterBlock} onValueChange={setFilterBlock}>

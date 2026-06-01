@@ -1,10 +1,13 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "../components/ui/table";
-import { AlertCircle, FileText, CheckCircle, Clock, Calendar } from "lucide-react";
+import { AlertCircle, FileText, CheckCircle, Clock, Calendar, Search } from "lucide-react";
 import { formatDisplayDateOrDefault } from "../lib/date";
+import { workflowsApi, documentsApi, activitiesApi, projectsApi } from "../../services/api";
+import { useAuth } from "../contexts/AuthContext";
 
 export function OperationalDashboard() {
   const myTasks = [
@@ -50,29 +53,119 @@ export function OperationalDashboard() {
     { date: "2026-05-15", event: "Environmental Compliance Check", type: "Activity" },
   ];
 
-  const workflowInbox = [
-    {
-      id: 1,
-      title: "AFE Amendment - Block A",
-      type: "Approval Required",
-      submittedBy: "Sarah Johnson",
-      date: "2026-04-30",
-    },
-    {
-      id: 2,
-      title: "Drilling Contract Review",
-      type: "Review Required",
-      submittedBy: "Mike Chen",
-      date: "2026-04-29",
-    },
-    {
-      id: 3,
-      title: "HSE Incident Report",
-      type: "Acknowledgment Required",
-      submittedBy: "Emma Davis",
-      date: "2026-04-28",
-    },
-  ];
+  const [workflowInbox, setWorkflowInbox] = useState<any[]>([]);
+  const [workflowInboxLoading, setWorkflowInboxLoading] = useState(true);
+  const [workflowInboxError, setWorkflowInboxError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [activities, setActivities] = useState<any[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
+
+  const { user } = useAuth();
+  const departmentName = user?.departmentDetails?.name || user?.department || '';
+
+  useEffect(() => {
+    const loadInbox = async () => {
+      setWorkflowInboxLoading(true);
+      setWorkflowInboxError(null);
+      try {
+        const inboxItems = await workflowsApi.getInbox(departmentName || undefined);
+        setWorkflowInbox(Array.isArray(inboxItems) ? inboxItems : []);
+      } catch (err) {
+        console.error('Error loading workflow inbox:', err);
+        setWorkflowInboxError('Unable to load workflow inbox');
+        setWorkflowInbox([]);
+      } finally {
+        setWorkflowInboxLoading(false);
+      }
+    };
+
+    loadInbox();
+  }, [departmentName]);
+
+  useEffect(() => {
+    const fetchSearchData = async () => {
+      try {
+        const [docs, acts, projs] = await Promise.all([
+          documentsApi.getAll(),
+          activitiesApi.getAll(),
+          projectsApi.getAll(),
+        ]);
+        setDocuments(Array.isArray(docs) ? docs : []);
+        setActivities(Array.isArray(acts) ? acts : []);
+        setProjects(Array.isArray(projs) ? projs : []);
+      } catch (err) {
+        console.error('Error loading dashboard search data:', err);
+        setDocuments([]);
+        setActivities([]);
+        setProjects([]);
+      }
+    };
+
+    fetchSearchData();
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: any) => setSearchQuery(e?.detail?.query || "");
+    window.addEventListener('globalSearch', handler as EventListener);
+    return () => window.removeEventListener('globalSearch', handler as EventListener);
+  }, []);
+
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+
+  const searchResults = normalizedSearch
+    ? [
+        ...documents.map((doc) => ({
+          page: 'Documents',
+          title: doc.title || doc.name || 'Untitled document',
+          subtitle: `${doc.documentType || doc.type || 'Document'} • ${doc.status || 'Unknown status'}`,
+          link: `/documents/${doc.id}`,
+        })),
+        ...activities.map((activity) => ({
+          page: 'Activities',
+          title: activity.title || activity.name || 'Untitled activity',
+          subtitle: `${activity.project || activity.project?.name || 'No project'} • ${activity.status || 'Unknown status'}`,
+          link: `/activities/${activity.id}`,
+        })),
+        ...projects.map((project) => ({
+          page: 'Projects',
+          title: project.name || project.title || 'Untitled project',
+          subtitle: `${project.block || project.blockName || 'No block'} • ${project.status || 'Unknown status'}`,
+          link: `/projects/${project.id}`,
+        })),
+      ]
+        .filter((item) =>
+          [item.title, item.subtitle, item.page]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase()
+            .includes(normalizedSearch)
+        )
+    : [];
+
+  const filteredMyTasks = normalizedSearch
+    ? myTasks.filter((task) => [task.title, task.project, task.priority, task.status]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .includes(normalizedSearch))
+    : myTasks;
+
+  const filteredUpcomingDeadlines = normalizedSearch
+    ? upcomingDeadlines.filter((deadline) => [deadline.event, deadline.type, deadline.date]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .includes(normalizedSearch))
+    : upcomingDeadlines;
+
+  const filteredWorkflowInbox = normalizedSearch
+    ? workflowInbox.filter((item) => [item.title, item.type, item.submittedBy, item.submitDate, item.date]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .includes(normalizedSearch))
+    : workflowInbox;
 
   const quickStats = [
     { label: "Open Risks", value: 12, trend: "up", color: "text-orange-600" },
@@ -105,6 +198,39 @@ export function OperationalDashboard() {
           <Button variant="outline">Switch to Executive View</Button>
         </Link>
       </div>
+
+      {normalizedSearch && (
+        <Card className="p-4">
+          <div className="flex items-center gap-2 mb-4">
+            <Search className="h-4 w-4 text-gray-500" />
+            <div>
+              <h2 className="text-xl">Search Results</h2>
+              <p className="text-sm text-gray-500">Showing documents, activities, and projects matching “{searchQuery}”.</p>
+            </div>
+          </div>
+          {searchResults.length === 0 ? (
+            <p className="text-gray-600">No results found for “{searchQuery}”.</p>
+          ) : (
+            <div className="space-y-3">
+              {searchResults.slice(0, 10).map((result, index) => (
+                <Link
+                  key={`${result.page}-${index}`}
+                  to={result.link}
+                  className="block rounded-lg border border-gray-200 p-4 hover:border-blue-300 hover:bg-blue-50 transition"
+                >
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="font-medium">{result.title}</p>
+                      <p className="text-sm text-gray-500">{result.subtitle}</p>
+                    </div>
+                    <Badge variant="outline">{result.page}</Badge>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* Quick Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -140,7 +266,7 @@ export function OperationalDashboard() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {myTasks.map((task) => (
+            {filteredMyTasks.map((task) => (
               <TableRow key={task.id}>
                 <TableCell>{task.title}</TableCell>
                 <TableCell className="text-sm text-gray-600">{task.project}</TableCell>
@@ -171,7 +297,7 @@ export function OperationalDashboard() {
             Upcoming Deadlines
           </h2>
           <div className="space-y-3">
-            {upcomingDeadlines.map((deadline, index) => (
+            {filteredUpcomingDeadlines.map((deadline, index) => (
               <div
                 key={index}
                 className="flex items-center gap-4 p-3 rounded-lg bg-gray-50"
@@ -203,28 +329,36 @@ export function OperationalDashboard() {
             <FileText className="h-5 w-5" />
             Workflow Inbox
           </h2>
-          <div className="space-y-3">
-            {workflowInbox.map((item) => (
-              <div
-                key={item.id}
-                className="flex items-start justify-between p-3 rounded-lg bg-gray-50"
-              >
-                <div className="flex-1">
-                  <p className="text-sm">{item.title}</p>
-                  <div className="flex items-center gap-2 mt-2">
-                    <Badge variant="outline">{item.type}</Badge>
-                    <span className="text-xs text-gray-500">
-                      by {item.submittedBy}
-                    </span>
+          {workflowInboxLoading ? (
+            <p className="text-sm text-gray-500">Loading workflow inbox...</p>
+          ) : workflowInboxError ? (
+            <p className="text-sm text-red-600">{workflowInboxError}</p>
+          ) : filteredWorkflowInbox.length === 0 ? (
+            <p className="text-sm text-gray-500">No workflow inbox items available.</p>
+          ) : (
+            <div className="space-y-3">
+              {filteredWorkflowInbox.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-start justify-between p-3 rounded-lg bg-gray-50"
+                >
+                  <div className="flex-1">
+                    <p className="text-sm">{item.title}</p>
+                    <div className="flex items-center gap-2 mt-2">
+                      <Badge variant="outline">{item.type}</Badge>
+                      <span className="text-xs text-gray-500">
+                        by {item.submittedBy}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">{item.submitDate || item.date || ''}</p>
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">{item.date}</p>
+                  <Link to={`/workflows/${item.id}`}>
+                    <Button size="sm">Action</Button>
+                  </Link>
                 </div>
-                <Link to={`/workflows/${item.id}`}>
-                  <Button size="sm">Action</Button>
-                </Link>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </Card>
       </div>
     </div>

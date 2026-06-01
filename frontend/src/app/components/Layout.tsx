@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
 import { 
   LayoutDashboard, 
@@ -33,6 +33,7 @@ export function Layout() {
   const navigate = useNavigate();
   const { user, logout, isGuest } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const searchDebounceRef = useRef<number | null>(null);
 
   // Listen for global requests to close the sidebar (e.g., from pages opening dialogs)
   useEffect(() => {
@@ -84,7 +85,7 @@ export function Layout() {
               <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center">
                 <Box className="h-5 w-5 text-white" />
               </div>
-              <span className="font-semibold text-lg">OptiField</span>
+              <span className="font-semibold text-lg">PlanetOne Oil & Gas</span>
             </div>
           </div>
 
@@ -95,6 +96,17 @@ export function Layout() {
                 type="search"
                 placeholder="Search projects, documents, activities..."
                 className="pl-10 bg-gray-50"
+                onChange={(e) => {
+                  const q = (e.target as HTMLInputElement).value || "";
+                  if (searchDebounceRef.current) {
+                    window.clearTimeout(searchDebounceRef.current);
+                  }
+                  // debounce broadcast
+                  // @ts-ignore
+                  searchDebounceRef.current = window.setTimeout(() => {
+                    window.dispatchEvent(new CustomEvent('globalSearch', { detail: { query: q } }));
+                  }, 250);
+                }}
               />
             </div>
           </div>

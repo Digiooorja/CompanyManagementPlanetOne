@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -120,6 +121,23 @@ export function Reports() {
     },
   ];
 
+  const [searchQuery, setSearchQuery] = useState("");
+
+  useEffect(() => {
+    const handler = (e: any) => setSearchQuery(e?.detail?.query || "");
+    window.addEventListener('globalSearch', handler as EventListener);
+    return () => window.removeEventListener('globalSearch', handler as EventListener);
+  }, []);
+
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const filteredReports = normalizedSearch
+    ? reports.filter((r) => [r.name, r.description, r.category, r.block]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .includes(normalizedSearch))
+    : reports;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -160,6 +178,8 @@ export function Reports() {
               type="search"
               placeholder="Search reports..."
               className="pl-10"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
           <Select defaultValue="all">
@@ -189,8 +209,8 @@ export function Reports() {
       </Card>
 
       {/* Reports List */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {reports.map((report) => (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {filteredReports.map((report) => (
           <Card key={report.id} className="p-6">
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-start gap-3">

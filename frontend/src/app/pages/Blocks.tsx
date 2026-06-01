@@ -16,6 +16,7 @@ import { useAuth } from "../contexts/AuthContext";
 export function Blocks() {
   const { canEdit } = useAuth();
   const [blocks, setBlocks] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -95,6 +96,21 @@ export function Blocks() {
 
     fetchBlocks();
   }, []);
+
+  useEffect(() => {
+    const handler = (e: any) => setSearchQuery(e?.detail?.query || "");
+    window.addEventListener('globalSearch', handler as EventListener);
+    return () => window.removeEventListener('globalSearch', handler as EventListener);
+  }, []);
+
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const filteredBlocks = normalizedSearch
+    ? blocks.filter((b) => [b.name, b.operator, b.area, b.location]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .includes(normalizedSearch))
+    : blocks;
 
   const getDaysUntilExpiry = (expiryDate: string) => {
     const today = new Date("2026-05-01");
@@ -234,6 +250,8 @@ export function Blocks() {
               type="search"
               placeholder="Search blocks..."
               className="pl-10"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
           <Button variant="outline">Filter</Button>
@@ -267,14 +285,14 @@ export function Blocks() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {blocks.length === 0 ? (
+            {filteredBlocks.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={9} className="text-center text-gray-500 py-8">
                   No blocks found in the database.
                 </TableCell>
               </TableRow>
             ) : (
-              blocks.map((block) => {
+              filteredBlocks.map((block) => {
                 const daysLeft = getDaysUntilExpiry(block.licenceExpiry);
                 return (
                   <TableRow key={block.id}>

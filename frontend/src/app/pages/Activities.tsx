@@ -45,6 +45,7 @@ export function Activities() {
     description: "",
   });
   const [projects, setProjects] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const { user, canEdit } = useAuth();
   const departmentName = user?.department || user?.departmentDetails?.name || '';
   const isOperationsUser = departmentName.toLowerCase().includes('operation');
@@ -93,7 +94,25 @@ export function Activities() {
     fetchProjects();
   }, []);
 
-  const renderedActivities = activities;
+  useEffect(() => {
+    const handler = (e: any) => setSearchQuery(e?.detail?.query || "");
+    window.addEventListener('globalSearch', handler as EventListener);
+    return () => window.removeEventListener('globalSearch', handler as EventListener);
+  }, []);
+
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const filteredActivities = normalizedSearch
+    ? activities.filter((a) => {
+        const text = [a.title, a.project, a.assignedTo, a.description]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        // also check sub-activities
+        const subText = (a.subActivities || [])
+          .map((s: any) => (s.title || s.name || '')).join(' ').toLowerCase();
+        return text.includes(normalizedSearch) || subText.includes(normalizedSearch);
+      })
+    : activities;
 
   const toggleActivityExpand = (id: number) => {
     const newExpanded = new Set(expandedActivities);
@@ -133,7 +152,7 @@ export function Activities() {
     }
   };
 
-  const parentActivities = renderedActivities
+  const parentActivities = filteredActivities
     .filter(a => !a.parentActivityId)
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   const todoActivities = parentActivities.filter((a) => a.status === "To Do");
@@ -299,6 +318,8 @@ export function Activities() {
             type="search"
             placeholder="Search activities..."
             className="pl-10"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
       </Card>

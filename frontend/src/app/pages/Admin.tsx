@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -116,6 +117,23 @@ export function Admin() {
     { module: "Admin", view: false, create: false, edit: false, delete: false },
   ];
 
+  const [searchQuery, setSearchQuery] = useState("");
+
+  useEffect(() => {
+    const handler = (e: any) => setSearchQuery(e?.detail?.query || "");
+    window.addEventListener('globalSearch', handler as EventListener);
+    return () => window.removeEventListener('globalSearch', handler as EventListener);
+  }, []);
+
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const filteredUsers = normalizedSearch
+    ? users.filter((u) => [u.name, u.email, u.role, u.department]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .includes(normalizedSearch))
+    : users;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -195,6 +213,8 @@ export function Admin() {
                   type="search"
                   placeholder="Search users..."
                   className="pl-10"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
               <Button>
@@ -219,7 +239,7 @@ export function Admin() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {users.map((user) => (
+                {filteredUsers.map((user) => (
                   <TableRow key={user.id}>
                     <TableCell>{user.name}</TableCell>
                     <TableCell className="text-sm text-gray-600">

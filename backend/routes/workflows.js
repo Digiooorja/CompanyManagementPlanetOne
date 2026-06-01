@@ -1,6 +1,87 @@
 const express = require('express');
 const router = express.Router();
+const { Op, fn, col, where } = require('sequelize');
 const Workflow = require('../models/Workflow');
+const Finance = require('../models/Finance');
+
+// GET workflow inbox items for operational overview
+router.get('/inbox', async (req, res) => {
+  try {
+    const department = req.query.department ? String(req.query.department).trim().toLowerCase() : null;
+    const statusFilter = {
+      status: {
+        [Op.in]: ['Awaiting Action', 'Approval Required', 'Review Required', 'Pending']
+      }
+    };
+
+    const whereClause = department
+      ? {
+          [Op.and]: [
+            statusFilter,
+            {
+              [Op.or]: [
+                where(fn('lower', col('type')), { [Op.like]: `%${department}%` }),
+                where(fn('lower', col('currentStep')), { [Op.like]: `%${department}%` }),
+                where(fn('lower', col('title')), { [Op.like]: `%${department}%` })
+              ]
+            }
+          ]
+        }
+      : statusFilter;
+
+    const inboxItems = await Workflow.findAll({
+      where: whereClause,
+      order: [['createdAt', 'DESC']],
+      limit: 10
+    });
+    // If a department filter is provided, also include Finance AFE items assigned to that department
+    if (department) {
+      try {
+        const afeStatuses = ['Pending', 'Under Review', 'Awaiting Action', 'Approval Required'];
+        const financeAfe = await Finance.findAll({
+          where: {
+            recordType: 'AFE',
+            approvalDepartment: { [Op.like]: `%${department}%` },
+            status: { [Op.in]: afeStatuses }
+          },
+          order: [['createdAt', 'DESC']],
+          limit: 10
+        });
+
+        // Map finance items into a common inbox shape and merge
+        const financeMapped = financeAfe.map((f) => ({
+          id: `finance-${f.id}`,
+          title: f.item || `AFE #${f.afeNumber || f.id}`,
+          type: 'AFE Approval',
+          submittedBy: f.submittedBy || null,
+          submitDate: f.date || f.createdAt,
+          source: 'finance',
+          original: f
+        }));
+
+        const workflowMapped = inboxItems.map((w) => ({
+          id: `workflow-${w.id}`,
+          title: w.title,
+          type: w.type,
+          submittedBy: w.submittedBy,
+          submitDate: w.submitDate || w.createdAt,
+          source: 'workflow',
+          original: w
+        }));
+
+        // Merge and sort by submitDate desc
+        const merged = [...financeMapped, ...workflowMapped].sort((a, b) => new Date(b.submitDate) - new Date(a.submitDate));
+        return res.json(merged.slice(0, 10));
+      } catch (err) {
+        console.error('Error loading finance AFE for inbox:', err);
+      }
+    }
+
+    res.json(inboxItems);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
 
 // GET all workflows
 router.get('/', async (req, res) => {

@@ -1,4 +1,5 @@
 import { Link, useParams } from "react-router-dom";
+import { useState, useEffect } from "react";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -85,6 +86,23 @@ export function RegisterDetail() {
     },
   ];
 
+  const [searchQuery, setSearchQuery] = useState("");
+
+  useEffect(() => {
+    const handler = (e: any) => setSearchQuery(e?.detail?.query || "");
+    window.addEventListener('globalSearch', handler as EventListener);
+    return () => window.removeEventListener('globalSearch', handler as EventListener);
+  }, []);
+
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const filteredEntries = normalizedSearch
+    ? entries.filter((en) => [en.riskId, en.title, en.category, en.owner]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .includes(normalizedSearch))
+    : entries;
+
   const getSeverityColor = (severity: string) => {
     switch (severity) {
       case "Critical":
@@ -170,6 +188,8 @@ export function RegisterDetail() {
               type="search"
               placeholder="Search entries..."
               className="pl-10"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
           <Button variant="outline">
@@ -201,7 +221,7 @@ export function RegisterDetail() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {entries.map((entry) => (
+            {filteredEntries.map((entry) => (
               <TableRow key={entry.id}>
                 <TableCell className="font-mono text-sm">
                   {entry.riskId}

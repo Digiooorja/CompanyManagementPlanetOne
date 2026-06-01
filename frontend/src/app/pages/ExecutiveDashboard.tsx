@@ -5,24 +5,29 @@ import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { formatDisplayDateOrDefault } from "../lib/date";
 import { Progress } from "../components/ui/progress";
-import { 
-  Calendar, 
-  AlertCircle, 
-  TrendingUp, 
-  TrendingDown, 
-  CheckCircle, 
+import {
+  Search,
+  Calendar,
+  AlertCircle,
+  TrendingUp,
+  TrendingDown,
+  CheckCircle,
   Clock,
   DollarSign,
-  FileText
+  FileText,
 } from "lucide-react";
-import { blocksApi } from "../../services/api";
+import { blocksApi, documentsApi, activitiesApi, projectsApi } from "../../services/api";
 import { useAuth } from "../contexts/AuthContext";
 
 export function ExecutiveDashboard() {
   const { isGuest } = useAuth();
   const [blocks, setBlocks] = useState<any[]>([]);
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [activities, setActivities] = useState<any[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
   const [loadingBlocks, setLoadingBlocks] = useState(true);
   const [blockError, setBlockError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const countdownCards = [
     {
@@ -63,8 +68,33 @@ export function ExecutiveDashboard() {
     }
   };
 
+  const fetchSearchData = async () => {
+    try {
+      const [docs, acts, projs] = await Promise.all([
+        documentsApi.getAll(),
+        activitiesApi.getAll(),
+        projectsApi.getAll(),
+      ]);
+      setDocuments(Array.isArray(docs) ? docs : []);
+      setActivities(Array.isArray(acts) ? acts : []);
+      setProjects(Array.isArray(projs) ? projs : []);
+    } catch (err) {
+      console.error('Error loading dashboard search data:', err);
+      setDocuments([]);
+      setActivities([]);
+      setProjects([]);
+    }
+  };
+
   useEffect(() => {
     fetchBlocks();
+    fetchSearchData();
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: any) => setSearchQuery(e?.detail?.query || "");
+    window.addEventListener('globalSearch', handler as EventListener);
+    return () => window.removeEventListener('globalSearch', handler as EventListener);
   }, []);
 
   const alerts = [
@@ -94,6 +124,73 @@ export function ExecutiveDashboard() {
     { id: 3, type: "Document", name: "Environmental Impact Assessment", amount: null },
   ];
 
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+
+  const searchResults = normalizedSearch
+    ? [
+        ...documents.map((doc) => ({
+          page: 'Documents',
+          title: doc.title || doc.name || 'Untitled document',
+          subtitle: `${doc.documentType || doc.type || 'Document'} • ${doc.status || 'Unknown status'}`,
+          link: `/documents/${doc.id}`,
+          group: 'Documents',
+        })),
+        ...activities.map((activity) => ({
+          page: 'Activities',
+          title: activity.title || activity.name || 'Untitled activity',
+          subtitle: `${activity.project || activity.project?.name || 'No project'} • ${activity.status || 'Unknown status'}`,
+          link: `/activities/${activity.id}`,
+          group: 'Activities',
+        })),
+        ...projects.map((project) => ({
+          page: 'Projects',
+          title: project.name || project.title || 'Untitled project',
+          subtitle: `${project.block || project.blockName || 'No block'} • ${project.status || 'Unknown status'}`,
+          link: `/projects/${project.id}`,
+          group: 'Projects',
+        })),
+      ]
+        .filter((item) =>
+          [item.title, item.subtitle, item.page]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase()
+            .includes(normalizedSearch)
+        )
+    : [];
+
+  const filteredCountdownCards = normalizedSearch
+    ? countdownCards.filter((card) => [card.title, card.block, card.date]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .includes(normalizedSearch))
+    : countdownCards;
+
+  const filteredBlocks = normalizedSearch
+    ? blocks.filter((block) => [block.name, block.operator, block.location, block.area, block.description]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .includes(normalizedSearch))
+    : blocks;
+
+  const filteredAlerts = normalizedSearch
+    ? alerts.filter((alert) => [alert.message, alert.time, alert.type]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .includes(normalizedSearch))
+    : alerts;
+
+  const filteredPendingApprovals = normalizedSearch
+    ? pendingApprovals.filter((approval) => [approval.type, approval.name, approval.amount?.toString()]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .includes(normalizedSearch))
+    : pendingApprovals;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -108,9 +205,43 @@ export function ExecutiveDashboard() {
         )}
       </div>
 
+      {normalizedSearch && (
+        <Card className="p-4">
+          <div className="flex items-center gap-2 mb-4">
+            <Search className="h-4 w-4 text-gray-500" />
+            <div>
+              <h2 className="text-xl">Search Results</h2>
+              <p className="text-sm text-gray-500">Showing documents, activities, and projects matching “{searchQuery}”.</p>
+            </div>
+          </div>
+
+          {searchResults.length === 0 ? (
+            <p className="text-gray-600">No results found for “{searchQuery}”.</p>
+          ) : (
+            <div className="space-y-3">
+              {searchResults.slice(0, 10).map((result, index) => (
+                <Link
+                  key={`${result.page}-${index}`}
+                  to={result.link}
+                  className="block rounded-lg border border-gray-200 p-4 hover:border-blue-300 hover:bg-blue-50 transition"
+                >
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="font-medium">{result.title}</p>
+                      <p className="text-sm text-gray-500">{result.subtitle}</p>
+                    </div>
+                    <Badge variant="outline">{result.page}</Badge>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
+
       {/* Countdown Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {countdownCards.map((card, index) => (
+        {filteredCountdownCards.map((card, index) => (
           <Card key={index} className="p-6">
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-center gap-2">
@@ -158,7 +289,7 @@ export function ExecutiveDashboard() {
           </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {blocks.map((block) => (
+            {filteredBlocks.map((block) => (
               <Card key={block.id} className="p-6">
                 <div className="flex items-center justify-between mb-4">
                   <div>
@@ -210,7 +341,7 @@ export function ExecutiveDashboard() {
             Recent Alerts
           </h3>
           <div className="space-y-3">
-            {alerts.map((alert) => (
+            {filteredAlerts.map((alert) => (
               <div
                 key={alert.id}
                 className="flex items-start gap-3 p-3 rounded-lg bg-gray-50"
@@ -240,7 +371,7 @@ export function ExecutiveDashboard() {
             Pending Approvals
           </h3>
           <div className="space-y-3">
-            {pendingApprovals.map((approval) => (
+            {filteredPendingApprovals.map((approval) => (
               <div
                 key={approval.id}
                 className="flex items-center justify-between p-3 rounded-lg bg-gray-50"

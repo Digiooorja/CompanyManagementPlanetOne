@@ -171,6 +171,7 @@ export const risksApi = {
 // Workflows API
 export const workflowsApi = {
   getAll: () => apiCall<any[]>('/workflows'),
+  getInbox: (department?: string) => apiCall<any[]>(`/workflows/inbox${department ? `?department=${encodeURIComponent(department)}` : ''}`),
   getById: (id: number) => apiCall<any>(`/workflows/${id}`),
   create: (data: any) => apiCall('/workflows', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: number, data: any) => apiCall(`/workflows/${id}`, { method: 'PUT', body: JSON.stringify(data) }),

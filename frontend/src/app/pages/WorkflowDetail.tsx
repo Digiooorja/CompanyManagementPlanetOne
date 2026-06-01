@@ -6,7 +6,7 @@ import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
 import { Separator } from "../components/ui/separator";
 import { ArrowLeft, CheckCircle, XCircle, MessageSquare, Clock } from "lucide-react";
-import { workflowsApi } from "../../services/api";
+import { workflowsApi, financeApi } from "../../services/api";
 import { formatDisplayDateOrDefault } from "../lib/date";
 
 export function WorkflowDetail() {
@@ -78,6 +78,35 @@ export function WorkflowDetail() {
     try {
       setLoading(true);
       setError(null);
+
+      // Handle finance AFE items (ids like "finance-123")
+      if (String(id).startsWith('finance-')) {
+        const parts = String(id).split('-');
+        const fid = Number(parts[1]);
+        const f = await financeApi.getById(fid);
+        // Map finance item to workflow-like shape used in this page
+        const mapped = {
+          id: `finance-${f.id}`,
+          financeId: f.id,
+          title: f.item || `AFE #${f.afeNumber || f.id}`,
+          type: f.type || 'AFE Approval',
+          submittedBy: f.submittedBy || f.createdBy || '',
+          submitDate: f.date || f.createdAt,
+          currentStep: f.currentStep || `Awaiting ${f.approvalDepartment || 'Approval'}`,
+          status: f.status || 'Pending',
+          priority: f.priority || 'Medium',
+          dueDate: f.dueDate || null,
+          description: f.description || f.category || '',
+          amount: Number(f.amount) || 0,
+          approvalDepartment: f.approvalDepartment || '',
+          afeNumber: f.afeNumber || '',
+          steps: Array.isArray(f.steps) ? f.steps : [],
+          original: f,
+        };
+        setWorkflow(mapped);
+        return;
+      }
+
       const data = await workflowsApi.getById(Number(id));
       setWorkflow(data);
     } catch (err) {
@@ -93,8 +122,37 @@ export function WorkflowDetail() {
     loadWorkflow();
   }, [id]);
 
-  const workflowSteps = Array.isArray(workflow?.steps) && workflow.steps.length > 0
-    ? workflow.steps
+  const deriveFinanceSteps = (workflowItem: any) => {
+    if (!workflowItem) return [];
+    const steps = workflowItem.steps && workflowItem.steps.length > 0 ? workflowItem.steps : [];
+    if (steps.length > 0) return steps;
+
+    return [
+      {
+        step: 'Submitted',
+        status: 'Completed',
+        date: workflowItem.submitDate || workflowItem.original?.createdAt || null,
+        user: workflowItem.submittedBy || workflowItem.original?.submittedBy || 'Unknown',
+        action: 'Submitted for approval',
+        comment: null,
+      },
+      {
+        step: workflowItem.currentStep || 'Approval',
+        status: workflowItem.status === 'Approved' ? 'Completed' : workflowItem.status === 'Rejected' ? 'Rejected' : 'Pending',
+        date: workflowItem.status === 'Approved' || workflowItem.status === 'Rejected' ? workflowItem.original?.updatedAt || null : null,
+        user: workflowItem.original?.approvedBy || 'Approver',
+        action: workflowItem.status === 'Approved' ? 'Approved' : workflowItem.status === 'Rejected' ? 'Rejected' : null,
+        comment: workflowItem.original?.actionComment || null,
+      }
+    ];
+  };
+
+  const workflowSteps = Array.isArray(workflow?.steps)
+    ? workflow.steps.length > 0
+      ? workflow.steps
+      : workflow?.financeId
+        ? deriveFinanceSteps(workflow)
+        : defaultWorkflow.steps
     : defaultWorkflow.steps;
 
   const handleWorkflowAction = async (newStatus: 'Approved' | 'Rejected') => {
@@ -103,6 +161,17 @@ export function WorkflowDetail() {
     setError(null);
 
     try {
+      // If this is a finance AFE mapped item, update via financeApi
+      if ((workflow as any).financeId) {
+        const fid = (workflow as any).financeId;
+        const updated = await financeApi.update(fid, { status: newStatus });
+        // reflect changes in UI
+        const updatedAny: any = updated;
+        setWorkflow((prev: any) => ({ ...(prev || {}), status: updatedAny.status, original: updatedAny }));
+        setActionComment("");
+        return;
+      }
+
       const updated = await workflowsApi.update(workflow.id, {
         status: newStatus,
       });
@@ -143,7 +212,7 @@ export function WorkflowDetail() {
             <Badge variant="destructive">{currentWorkflow.priority}</Badge>
             <Badge variant="destructive">{currentWorkflow.status}</Badge>
           </div>
-          {currentWorkflow.status === "Awaiting Action" && (
+          {['Awaiting Action', 'Pending', 'Approval Required', 'Under Review'].includes(currentWorkflow.status) && (
             <div className="flex flex-wrap gap-2">
               <Button
                 className="flex items-center gap-2"
@@ -175,8 +244,12 @@ export function WorkflowDetail() {
           <div>
             <p className="text-sm text-gray-600">Amount</p>
             <p className="text-xl mt-1">
-              ${(currentWorkflow.amount / 1000000).toFixed(1)}M
+              ${((currentWorkflow.amount ?? 0) / 1000000).toFixed(1)}M
             </p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-600">AFE Number</p>
+            <p className="text-xl mt-1">{currentWorkflow.afeNumber || 'N/A'}</p>
           </div>
           <div>
             <p className="text-sm text-gray-600">Current Step</p>
