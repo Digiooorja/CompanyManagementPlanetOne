@@ -304,9 +304,11 @@ export function Projects() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Blocks</SelectItem>
-              <SelectItem value="block-a">Block A</SelectItem>
-              <SelectItem value="block-b">Block B</SelectItem>
-              <SelectItem value="block-c">Block C</SelectItem>
+              {blocks.map((block) => (
+                <SelectItem key={block.id} value={String(block.id)}>
+                  {block.name}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Select value={filterStatus} onValueChange={setFilterStatus}>
@@ -315,9 +317,12 @@ export function Projects() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
               <SelectItem value="planning">Planning</SelectItem>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="in progress">In Progress</SelectItem>
+              <SelectItem value="on hold">On Hold</SelectItem>
               <SelectItem value="completed">Completed</SelectItem>
+              <SelectItem value="cancelled">Cancelled</SelectItem>
             </SelectContent>
           </Select>
         </div>
