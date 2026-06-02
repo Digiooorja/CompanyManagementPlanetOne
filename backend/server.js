@@ -123,6 +123,47 @@ const commentsRoutes = require('./routes/comments');
 const adminRoutes = require('./routes/admin');
 const authRoutes = require('./routes/auth');
 
+const { authMiddleware, optionalAuthMiddleware, adminMiddleware, managerMiddleware } = require('./middleware/auth');
+
+// Centralized security rules for operational and collaborative modules
+const managerProtectedRoutes = [
+  '/api/blocks',
+  '/api/projects',
+  '/api/activities',
+  '/api/registers',
+  '/api/risks',
+  '/api/workflows'
+];
+
+const authProtectedRoutes = [
+  '/api/documents',
+  '/api/comments'
+];
+
+// Enforce manager permissions for database mutations
+managerProtectedRoutes.forEach((route) => {
+  app.use(route, (req, res, next) => {
+    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
+      authMiddleware(req, res, () => {
+        managerMiddleware(req, res, next);
+      });
+    } else {
+      optionalAuthMiddleware(req, res, next);
+    }
+  });
+});
+
+// Enforce authentication for content upload/comment mutations
+authProtectedRoutes.forEach((route) => {
+  app.use(route, (req, res, next) => {
+    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
+      authMiddleware(req, res, next);
+    } else {
+      optionalAuthMiddleware(req, res, next);
+    }
+  });
+});
+
 app.use('/api/activities', activitiesRoutes);
 app.use('/api/blocks', blocksRoutes);
 app.use('/api/documents', documentsRoutes);
@@ -135,7 +176,7 @@ app.use('/api/reports', reportsRoutes);
 app.use('/api/risks', risksRoutes);
 app.use('/api/departments', departmentsRoutes);
 app.use('/api/comments', commentsRoutes);
-app.use('/api/admin', adminRoutes);
+app.use('/api/admin', authMiddleware, adminMiddleware, adminRoutes);
 app.use('/api/auth', authRoutes);
 
 const startServer = async () => {

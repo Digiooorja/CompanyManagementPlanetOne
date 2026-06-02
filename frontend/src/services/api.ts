@@ -94,6 +94,16 @@ export const usersApi = {
   getAll: () => apiCall<any[]>('/auth/users'),
 };
 
+// Admin API for user management and system metrics
+export const adminApi = {
+  getUsers: () => apiCall<any[]>('/admin/users'),
+  getUserById: (id: number) => apiCall<any>(`/admin/users/${id}`),
+  createUser: (data: any) => apiCall<any>('/admin/users', { method: 'POST', body: JSON.stringify(data) }),
+  updateUser: (id: number, data: any) => apiCall<any>(`/admin/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteUser: (id: number) => apiCall<any>(`/admin/users/${id}`, { method: 'DELETE' }),
+  getDashboard: () => apiCall<any>('/admin/dashboard')
+};
+
 // Blocks API
 export const blocksApi = {
   getAll: () => apiCall<any[]>('/blocks'),

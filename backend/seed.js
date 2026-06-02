@@ -6,54 +6,167 @@ const Document = require("./models/Document");
 const Risk = require("./models/Risk");
 const Block = require("./models/Block");
 const Workflow = require("./models/Workflow");
+const Department = require("./models/Department");
+const Finance = require("./models/Finance");
+const Notification = require("./models/Notification");
+const Register = require("./models/Register");
+const Report = require("./models/Report");
+const Comment = require("./models/Comment");
+const bcrypt = require("bcryptjs");
+
+// Define associations for accurate database constraint generation during force sync
+Activity.belongsTo(Project, {
+  foreignKey: 'projectId',
+  as: 'project'
+});
+
+Finance.belongsTo(Activity, {
+  foreignKey: 'activityId',
+  as: 'activity'
+});
+
+Activity.hasMany(Finance, {
+  foreignKey: 'activityId',
+  as: 'financeItems'
+});
+
+Project.hasMany(Activity, {
+  foreignKey: 'projectId',
+  as: 'activities'
+});
+
+Project.belongsTo(Block, {
+  foreignKey: 'blockId',
+  as: 'blockDetails'
+});
+
+Block.hasMany(Project, {
+  foreignKey: 'blockId',
+  as: 'projects'
+});
+
+User.belongsTo(Department, {
+  foreignKey: 'departmentId',
+  as: 'departmentDetails'
+});
+
+Department.hasMany(User, {
+  foreignKey: 'departmentId',
+  as: 'users'
+});
+
+Comment.belongsTo(Activity, {
+  foreignKey: 'activityId',
+  as: 'activity'
+});
+
+Activity.hasMany(Comment, {
+  foreignKey: 'activityId',
+  as: 'comments'
+});
+
+Comment.belongsTo(User, {
+  foreignKey: 'userId',
+  as: 'author'
+});
+
+User.hasMany(Comment, {
+  foreignKey: 'userId',
+  as: 'comments'
+});
+
+Comment.belongsTo(Department, {
+  foreignKey: 'departmentId',
+  as: 'department'
+});
+
+Department.hasMany(Comment, {
+  foreignKey: 'departmentId',
+  as: 'comments'
+});
 
 async function seedDatabase() {
   try {
+    // Disable foreign key checks for clean force sync
+    await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
     // Sync database
     await sequelize.sync({ force: true });
+    // Re-enable foreign key checks
+    await sequelize.query('SET FOREIGN_KEY_CHECKS = 1');
     console.log("Database synced!");
 
+    // 0. Create Departments
+    const departments = await Department.bulkCreate([
+      { id: 1, name: "Operations", description: "Core exploration and drilling operations" },
+      { id: 2, name: "Finance", description: "Financial tracking and budget approvals" },
+      { id: 3, name: "HSE", description: "Health, Safety, and Environment management" },
+      { id: 4, name: "Engineering", description: "Infrastructure and pipeline design" },
+      { id: 5, name: "Management", description: "Executive administration and governance" }
+    ]);
+    console.log("Departments created successfully!");
+
     // 1. Create Users
+    const defaultPasswordHash = await bcrypt.hash("Password123!", 10);
     const users = await User.bulkCreate([
       {
         id: 1,
         username: "sarah_johnson",
         email: "sarah.johnson@company.com",
-        password: "hashed_password_1",
-        fullName: "Sarah Johnson",
-        role: "Manager"
+        password: defaultPasswordHash,
+        firstName: "Sarah",
+        lastName: "Johnson",
+        role: "Manager",
+        departmentId: 1 // Operations
       },
       {
         id: 2,
         username: "mike_chen",
         email: "mike.chen@company.com",
-        password: "hashed_password_2",
-        fullName: "Mike Chen",
-        role: "Manager"
+        password: defaultPasswordHash,
+        firstName: "Mike",
+        lastName: "Chen",
+        role: "Manager",
+        departmentId: 4 // Engineering
       },
       {
         id: 3,
         username: "emma_davis",
         email: "emma.davis@company.com",
-        password: "hashed_password_3",
-        fullName: "Emma Davis",
-        role: "User"
+        password: defaultPasswordHash,
+        firstName: "Emma",
+        lastName: "Davis",
+        role: "User",
+        departmentId: 2 // Finance
       },
       {
         id: 4,
         username: "john_wilson",
         email: "john.wilson@company.com",
-        password: "hashed_password_4",
-        fullName: "John Wilson",
-        role: "User"
+        password: defaultPasswordHash,
+        firstName: "John",
+        lastName: "Wilson",
+        role: "User",
+        departmentId: 3 // HSE
       },
       {
         id: 5,
         username: "lisa_anderson",
         email: "lisa.anderson@company.com",
-        password: "hashed_password_5",
-        fullName: "Lisa Anderson",
-        role: "User"
+        password: defaultPasswordHash,
+        firstName: "Lisa",
+        lastName: "Anderson",
+        role: "User",
+        departmentId: 1 // Operations
+      },
+      {
+        id: 6,
+        username: "adarsh_pandey",
+        email: "adarshpandey1927@gmail.com",
+        password: defaultPasswordHash,
+        firstName: "Adarsh",
+        lastName: "Pandey",
+        role: "Admin",
+        departmentId: 5 // Management
       }
     ]);
     console.log("Users created successfully!");
@@ -441,7 +554,7 @@ async function seedDatabase() {
         content: "Technical specifications for well A-1 drilling operations",
         author: "Sarah Johnson",
         projectId: 1,
-        documentType: "Technical Specification",
+        documentType: "Technical",
         uploadDate: "2026-02-15",
         status: "Approved"
       },
@@ -451,7 +564,7 @@ async function seedDatabase() {
         content: "DWTCP Deep Water project charter and objectives",
         author: "Sarah Johnson",
         projectId: 1,
-        documentType: "Charter",
+        documentType: "Report",
         uploadDate: "2026-02-01",
         status: "Approved"
       },
@@ -461,7 +574,7 @@ async function seedDatabase() {
         content: "Initial risk assessment and mitigation strategies",
         author: "Lisa Anderson",
         projectId: 1,
-        documentType: "Risk Assessment",
+        documentType: "HSE",
         uploadDate: "2026-02-20",
         status: "Approved"
       },
@@ -471,9 +584,9 @@ async function seedDatabase() {
         content: "Final report on seismic survey operations",
         author: "Emma Davis",
         projectId: 2,
-        documentType: "Technical Report",
+        documentType: "Report",
         uploadDate: "2025-03-25",
-        status: "Completed"
+        status: "Approved"
       },
       {
         id: 5,
@@ -481,9 +594,9 @@ async function seedDatabase() {
         content: "Detailed project plan for onshore drilling operations",
         author: "Emma Davis",
         projectId: 3,
-        documentType: "Project Plan",
+        documentType: "Report",
         uploadDate: "2026-06-15",
-        status: "Draft"
+        status: "Review"
       },
       {
         id: 6,
@@ -491,7 +604,7 @@ async function seedDatabase() {
         content: "Subsea pipeline design and specifications",
         author: "John Wilson",
         projectId: 4,
-        documentType: "Technical Specification",
+        documentType: "Technical",
         uploadDate: "2025-07-01",
         status: "Approved"
       },
@@ -501,7 +614,7 @@ async function seedDatabase() {
         content: "Step-by-step installation procedures for pipeline",
         author: "John Wilson",
         projectId: 4,
-        documentType: "Procedure Manual",
+        documentType: "Technical",
         uploadDate: "2025-09-15",
         status: "Approved"
       },
@@ -511,9 +624,9 @@ async function seedDatabase() {
         content: "Comprehensive assessment of existing facilities",
         author: "Lisa Anderson",
         projectId: 5,
-        documentType: "Assessment Report",
+        documentType: "Report",
         uploadDate: "2025-10-31",
-        status: "Completed"
+        status: "Approved"
       },
       {
         id: 9,
@@ -521,7 +634,7 @@ async function seedDatabase() {
         content: "Technical specifications for procurement equipment",
         author: "Mike Chen",
         projectId: 5,
-        documentType: "Technical Specification",
+        documentType: "Technical",
         uploadDate: "2025-10-15",
         status: "Approved"
       },
@@ -531,7 +644,7 @@ async function seedDatabase() {
         content: "Project budget breakdown and financial summary",
         author: "Sarah Johnson",
         projectId: 1,
-        documentType: "Financial Report",
+        documentType: "Finance",
         uploadDate: "2026-03-01",
         status: "Approved"
       }
@@ -557,7 +670,7 @@ async function seedDatabase() {
         description: "Potential shortage of specialized drilling equipment",
         severity: "High",
         probability: "Low",
-        status: "Mitigating",
+        status: "Mitigated",
         owner: "Mike Chen"
       },
       {
@@ -597,7 +710,7 @@ async function seedDatabase() {
         description: "Complex subsea conditions may impact pipeline installation",
         severity: "High",
         probability: "High",
-        status: "Mitigating",
+        status: "Mitigated",
         owner: "John Wilson"
       },
       {
@@ -627,7 +740,7 @@ async function seedDatabase() {
         description: "New equipment integration with existing systems",
         severity: "Medium",
         probability: "Medium",
-        status: "Mitigating",
+        status: "Mitigated",
         owner: "Emma Davis"
       },
       {
@@ -635,7 +748,7 @@ async function seedDatabase() {
         projectId: 1,
         title: "Safety Incidents",
         description: "Potential for safety incidents in high-risk drilling operations",
-        severity: "Critical",
+        severity: "High",
         probability: "Low",
         status: "Active",
         owner: "Sarah Johnson"

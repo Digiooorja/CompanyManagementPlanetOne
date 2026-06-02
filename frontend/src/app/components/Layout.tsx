@@ -31,7 +31,7 @@ import {
 export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout, isGuest } = useAuth();
+  const { user, logout, isGuest, isAdmin } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const searchDebounceRef = useRef<number | null>(null);
 
@@ -52,7 +52,7 @@ export function Layout() {
     { name: "Registers", href: "/registers", icon: BookOpen },
     { name: "Finance", href: "/finance", icon: DollarSign },
     { name: "Reports", href: "/reports", icon: BarChart3 },
-    ...(isGuest ? [] : [{ name: "Admin", href: "/admin", icon: Settings }]),
+    ...(isAdmin ? [{ name: "Admin", href: "/admin", icon: Settings }] : []),
   ];
 
   const isActive = (href: string) => {

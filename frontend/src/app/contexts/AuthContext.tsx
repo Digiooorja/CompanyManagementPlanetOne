@@ -20,6 +20,9 @@ interface AuthContextType {
   token: string | null;
   isAuthenticated: boolean;
   isGuest: boolean;
+  isAdmin: boolean;
+  isManager: boolean;
+  isStandardUser: boolean;
   canEdit: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
@@ -148,17 +151,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const logout = () => {
-    setUser(null);
+    setUser(GUEST_USER);
     setToken(null);
     localStorage.removeItem('token');
   };
+
+  const isGuest = !token && user?.role === 'Guest';
+  const isAdmin = user?.role === 'Admin';
+  const isManager = ['Admin', 'Manager'].includes(user?.role || '');
+  const isStandardUser = user?.role === 'User';
+  const canEdit = !isGuest && isManager;
 
   const value = {
     user,
     token,
     isAuthenticated: !!token,
-    isGuest: !token && user?.role === 'Guest',
-    canEdit: !!token,
+    isGuest,
+    isAdmin,
+    isManager,
+    isStandardUser,
+    canEdit,
     isLoading,
     login,
     register,

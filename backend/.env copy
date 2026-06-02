@@ -1,3 +1,8 @@
 DATABASE_URL=postgresql://postgres:Yash1234@localhost:5432/PlanetOneDashboard
 PORT=5000
 JWT_SECRET=your_super_secret_jwt_key_change_in_production_9876543210
+
+AWS_ACCESS_KEY_ID = 'AKIAXYKJTNDQYR6T33PK'
+AWS_SECRET_ACCESS_KEY = 'S+amDYtMqBCj/fcttvij4CaNIWZR/qZdgKMtX0w0'
+AWS_STORAGE_BUCKET_NAME = 'planetone-dashboard'
+AWS_S3_REGION_NAME = 'ap-south-1'

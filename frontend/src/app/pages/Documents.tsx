@@ -169,9 +169,9 @@ export function Documents() {
     };
 
     if (roots.length > 0) {
-      roots.forEach((activity) => addActivity(activity, false));
+      roots.forEach((activity) => addActivity(activity, 0));
     } else {
-      activities.forEach((activity) => addActivity(activity, false));
+      activities.forEach((activity) => addActivity(activity, 0));
     }
 
     return result;
