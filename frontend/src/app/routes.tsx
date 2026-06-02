@@ -16,6 +16,7 @@ import { WorkflowDetail } from "./pages/WorkflowDetail";
 import { Registers } from "./pages/Registers";
 import { RegisterDetail } from "./pages/RegisterDetail";
 import { Finance } from "./pages/Finance";
+import { AfeDetail } from "./pages/AfeDetail";
 import { Reports } from "./pages/Reports";
 import { Admin } from "./pages/Admin";
 import { Notifications } from "./pages/Notifications";
@@ -54,6 +55,7 @@ export const router = createBrowserRouter([
           { path: "registers", Component: Registers },
           { path: "registers/:id", Component: RegisterDetail },
           { path: "finance", Component: Finance },
+          { path: "finance/:id", Component: AfeDetail },
           { path: "reports", Component: Reports },
           { path: "admin", Component: Admin },
           { path: "notifications", Component: Notifications },

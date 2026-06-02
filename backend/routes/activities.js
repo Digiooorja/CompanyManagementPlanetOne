@@ -72,7 +72,6 @@ async function updateParentProgress(parentActivityId, resetWhenEmpty = false) {
   const parentActivity = await Activity.findByPk(parentActivityId);
   if (!parentActivity) return null;
 
-  console.log(`[updateParentProgress] Called for parent ${parentActivityId} (${parentActivity.name}), resetWhenEmpty=${resetWhenEmpty}`);
 
   const subActivities = await Activity.findAll({
     where: { parentActivityId: parentActivity.id },
@@ -98,14 +97,11 @@ async function updateParentProgress(parentActivityId, resetWhenEmpty = false) {
           subActivities.reduce((sum, child) => sum + Number.parseFloat(child.progress ?? 0), 0) / subActivities.length
         );
 
-    console.log(`[updateParentProgress] Parent ${parentActivityId} (${parentActivity.name}): oldProgress=${parentActivity.progress}%, children=${subActivities.map(s => `${s.id}:${s.progress}%`).join(', ')}, newProgress=${weightedAverageProgress}%`);
-    
     await Activity.update(
       { progress: weightedAverageProgress },
       { where: { id: parentActivity.id } }
     );
   } else if (resetWhenEmpty) {
-    console.log(`[updateParentProgress] Parent ${parentActivityId} (${parentActivity.name}): no children, resetting to 0%`);
     await Activity.update(
       { progress: 0 },
       { where: { id: parentActivity.id } }
@@ -489,7 +485,6 @@ router.put('/:id', async (req, res) => {
     // This ensures that any manually supplied progress value is overridden by the
     // weighted-average calculation whenever children exist.
     await updateParentProgress(activity.id);
-    console.log(`[PUT Activity] updateParentProgress(self ${activity.id}) complete`);
 
     // If this is a sub-activity and progress was updated, ALWAYS propagate to parent
     // This is critical for the hierarchy to update correctly

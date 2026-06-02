@@ -244,12 +244,8 @@ export function WorkflowDetail() {
           <div>
             <p className="text-sm text-gray-600">Amount</p>
             <p className="text-xl mt-1">
-              ${((currentWorkflow.amount ?? 0) / 1000000).toFixed(1)}M
+              ${(currentWorkflow.amount / 1000000).toFixed(1)}M
             </p>
-          </div>
-          <div>
-            <p className="text-sm text-gray-600">AFE Number</p>
-            <p className="text-xl mt-1">{currentWorkflow.afeNumber || 'N/A'}</p>
           </div>
           <div>
             <p className="text-sm text-gray-600">Current Step</p>

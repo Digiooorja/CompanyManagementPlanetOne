@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, type MouseEvent } from 'react';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
+import { Link } from 'react-router-dom';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '../components/ui/table';
 import { Progress } from '../components/ui/progress';
@@ -10,10 +11,10 @@ import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription, DialogClose } from '../components/ui/dialog';
-import { DollarSign, TrendingUp, TrendingDown, FileText, AlertCircle, CheckCircle } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, FileText, AlertCircle, CheckCircle, Download } from 'lucide-react';
 import { LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
-import { financeApi, activitiesApi, projectsApi, departmentsApi } from '../../services/api';
+import { financeApi, activitiesApi, projectsApi, departmentsApi, documentsApi } from '../../services/api';
 
 export function Finance() {
   const { user, canEdit: isAuthenticatedUser } = useAuth();
@@ -39,6 +40,8 @@ export function Finance() {
     afeNumber: '',
     status: 'Pending'
   });
+  const [downloadingAfeDocsId, setDownloadingAfeDocsId] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const departmentName = user?.department || user?.departmentDetails?.name || '';
   const canEdit = useMemo(() => {
@@ -123,6 +126,27 @@ export function Finance() {
     [financeItems]
   );
 
+  const filteredAfeItems = useMemo(() => {
+    if (!searchQuery.trim()) return afeItems;
+    const q = searchQuery.toLowerCase();
+    return afeItems.filter(afe =>
+      (afe.afeNumber && String(afe.afeNumber).toLowerCase().includes(q)) ||
+      (afe.item && String(afe.item).toLowerCase().includes(q)) ||
+      (afe.category && String(afe.category).toLowerCase().includes(q)) ||
+      (afe.approvalDepartment && String(afe.approvalDepartment).toLowerCase().includes(q))
+    );
+  }, [afeItems, searchQuery]);
+
+  const filteredInvoiceItems = useMemo(() => {
+    if (!searchQuery.trim()) return invoiceItems;
+    const q = searchQuery.toLowerCase();
+    return invoiceItems.filter(invoice =>
+      (invoice.invoiceNumber && String(invoice.invoiceNumber).toLowerCase().includes(q)) ||
+      (invoice.item && String(invoice.item).toLowerCase().includes(q)) ||
+      (invoice.approvalDepartment && String(invoice.approvalDepartment).toLowerCase().includes(q))
+    );
+  }, [invoiceItems, searchQuery]);
+
   // Request next AFE number from backend when project/activity changes
   useEffect(() => {
     let mounted = true;
@@ -146,6 +170,16 @@ export function Finance() {
     return () => { mounted = false; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [newAfe.projectId, newAfe.activityId]);
+
+  useEffect(() => {
+    const handleGlobalSearch = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      setSearchQuery(customEvent.detail?.query || '');
+    };
+
+    window.addEventListener('globalSearch', handleGlobalSearch);
+    return () => window.removeEventListener('globalSearch', handleGlobalSearch);
+  }, []);
 
   const summary = useMemo(() => {
     const totalBudget = financeItems
@@ -298,15 +332,39 @@ export function Finance() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <Card className="p-8">
-          <p className="text-center text-gray-500">Loading finance data...</p>
-        </Card>
-      </div>
-    );
-  }
+  const handleDownloadAfeDocs = async (afe: any) => {
+    setDownloadingAfeDocsId(afe.id);
+    try {
+      const allDocs = await documentsApi.getAll();
+      const afeDocs = (Array.isArray(allDocs) ? allDocs : [])
+        .filter((doc: any) => {
+          const docAfeNumber = String(doc.afeNumber || doc.relatedAfe || '').toLowerCase();
+          const afeNumber = String(afe.afeNumber || `AFE-${afe.id}`).toLowerCase();
+          return docAfeNumber === afeNumber || doc.afeId === afe.id;
+        });
+
+      if (afeDocs.length === 0) {
+        setError('No documents found for this AFE');
+        return;
+      }
+
+      // If single document, download directly
+      if (afeDocs.length === 1) {
+        const presigned = await documentsApi.getPresignedUrl(afeDocs[0].id, 'download');
+        window.open(presigned.url, '_blank');
+      } else {
+        // For multiple docs, open a view where user can see them
+        // For now, just download the first one
+        const presigned = await documentsApi.getPresignedUrl(afeDocs[0].id, 'download');
+        window.open(presigned.url, '_blank');
+      }
+    } catch (err) {
+      console.error('Error downloading AFE documents:', err);
+      setError('Failed to download AFE documents');
+    } finally {
+      setDownloadingAfeDocsId(null);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -317,8 +375,6 @@ export function Finance() {
         </div>
         
         <Button type="button" onClick={() => {
-          // ensure sidebar is closed on small screens so dialog is interactable
-          // try { window.dispatchEvent(new CustomEvent('closeSidebar')); } catch {}
           setError(null);
           setIsAfeOpen(true);
           console.log('Open AFE Dialog');
@@ -396,8 +452,8 @@ export function Finance() {
                 <p className="text-sm text-gray-500">Approve by the assigned department before invoices can be cleared.</p>
               </div>
             </div>
-            {afeItems.length === 0 ? (
-              <div className="py-12 text-center text-gray-500">No AFE requests found.</div>
+            {filteredAfeItems.length === 0 ? (
+              <div className="py-12 text-center text-gray-500">{searchQuery ? 'No AFE requests match your search.' : 'No AFE requests found.'}</div>
             ) : (
               <div className="overflow-x-auto">
                 <Table>
@@ -408,19 +464,36 @@ export function Finance() {
                       <TableHead>Amount</TableHead>
                       <TableHead>Activity</TableHead>
                       <TableHead>Approval Dept</TableHead>
+                      <TableHead>AFE Docs</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {afeItems.map((afe) => (
-                      <TableRow key={afe.id}>
-                        <TableCell>{afe.afeNumber || `AFE-${afe.id}`}</TableCell>
+                    {filteredAfeItems.map((afe) => (
+                      <TableRow key={afe.id} className="hover:bg-gray-50">
+                        <TableCell className="font-semibold text-blue-600">{afe.afeNumber || `AFE-${afe.id}`}</TableCell>
                         <TableCell>{afe.item}</TableCell>
                         <TableCell>${Number(afe.amount || 0).toLocaleString()}</TableCell>
                         <TableCell>{activityMap.get(afe.activityId)?.name || (afe.activityId ? `Activity ${afe.activityId}` : '-')}</TableCell>
                         <TableCell>{afe.approvalDepartment || 'Finance'}</TableCell>
                         <TableCell>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDownloadAfeDocs(afe)}
+                            disabled={downloadingAfeDocsId === afe.id}
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                        <TableCell>
                           <Badge variant={getStatusColor(afe.status)}>{afe.status}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Link to={`/finance/${afe.id}`}>
+                            <Button variant="ghost" size="sm">View</Button>
+                          </Link>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -442,21 +515,24 @@ export function Finance() {
                 Editing is enabled for Finance and Accounts users.
               </div>
             </div>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Invoice No.</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead>Activity</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Approval Dept</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {invoiceItems.map((invoice) => (
+            {filteredInvoiceItems.length === 0 ? (
+              <div className="py-12 text-center text-gray-500">{searchQuery ? 'No invoices match your search.' : 'No invoices found.'}</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Invoice No.</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Activity</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Approval Dept</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredInvoiceItems.map((invoice) => (
                     <TableRow key={invoice.id}>
                       <TableCell>{invoice.invoiceNumber || `INV-${invoice.id}`}</TableCell>
                       <TableCell>{invoice.item}</TableCell>
@@ -501,7 +577,8 @@ export function Finance() {
                   ))}
                 </TableBody>
               </Table>
-            </div>
+              </div>
+            )}
           </Card>
         </TabsContent>
 

@@ -19,7 +19,7 @@ import {
   DialogTrigger,
   DialogClose,
 } from "../components/ui/dialog";
-import { documentsApi, blocksApi, activitiesApi, projectsApi } from "../../services/api";
+import { documentsApi, blocksApi, activitiesApi, projectsApi, departmentsApi } from "../../services/api";
 
 export function Documents() {
   const [filterBlock, setFilterBlock] = useState("all");
@@ -29,6 +29,7 @@ export function Documents() {
   const [blocks, setBlocks] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
   const [activities, setActivities] = useState<any[]>([]);
+  const [departments, setDepartments] = useState<any[]>([]);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
@@ -42,7 +43,8 @@ export function Documents() {
     status: "Review",
     blockId: "",
     projectId: "",
-    activityIds: [] as string[]
+    activityIds: [] as string[],
+    departmentId: ""
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -60,15 +62,17 @@ export function Documents() {
       try {
         setLoading(true);
         setError(null);
-        const [documentData, blockData, projectData] = await Promise.all([
+        const [documentData, blockData, projectData, departmentData] = await Promise.all([
           documentsApi.getAll(),
           blocksApi.getAll(),
           // get all projects and use block filtering client-side
-          projectsApi.getAll ? projectsApi.getAll() : []
+          projectsApi.getAll ? projectsApi.getAll() : [],
+          departmentsApi.getAll()
         ]);
         setDocuments(Array.isArray(documentData) ? documentData : []);
         setBlocks(Array.isArray(blockData) ? blockData : []);
         setProjects(Array.isArray(projectData) ? projectData : []);
+        setDepartments(Array.isArray(departmentData) ? departmentData : []);
       } catch (err) {
         console.error('Error loading documents page data:', err);
         setDocuments([]);
@@ -125,6 +129,54 @@ export function Documents() {
     await fetchActivitiesForProject(projectId);
   };
 
+  const activityOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const parentMap = new Map<string, any[]>();
+    const roots: any[] = [];
+
+    activities.forEach((activity) => {
+      const id = String(activity.id);
+      const parentId = activity.parentActivityId ? String(activity.parentActivityId) : null;
+      if (parentId) {
+        const list = parentMap.get(parentId) || [];
+        list.push(activity);
+        parentMap.set(parentId, list);
+      } else {
+        roots.push(activity);
+      }
+    });
+
+    const buildLabel = (activity: any, indentLevel = 0) => {
+      const label = activity.name || activity.title || `Activity ${activity.id}`;
+      if (indentLevel === 0) {
+        return label;
+      }
+      const indentation = '\u00A0\u00A0'.repeat(indentLevel);
+      return `${indentation}↳ ${label}`;
+    };
+
+    const result: Array<{ id: string; label: string }> = [];
+
+    const addActivity = (activity: any, indentLevel = 0) => {
+      const id = String(activity.id);
+      if (seen.has(id)) return;
+      seen.add(id);
+      result.push({ id, label: buildLabel(activity, indentLevel) });
+      const children = parentMap.get(id) || activity.subActivities || [];
+      if (Array.isArray(children)) {
+        children.forEach((child) => addActivity(child, indentLevel + 1));
+      }
+    };
+
+    if (roots.length > 0) {
+      roots.forEach((activity) => addActivity(activity, false));
+    } else {
+      activities.forEach((activity) => addActivity(activity, false));
+    }
+
+    return result;
+  }, [activities]);
+
   const handleActivitySelection = (event: ChangeEvent<HTMLSelectElement>) => {
     const selectedValues = Array.from(event.target.selectedOptions, (option) => option.value);
     setUploadForm((current) => ({
@@ -141,11 +193,6 @@ export function Documents() {
   const handleUploadDocument = async () => {
     if (!file) {
       setError('Please select a file to upload');
-      return;
-    }
-
-    if (!uploadForm.projectId && uploadForm.activityIds.length === 0) {
-      setError('Please choose at least a project or tagged activity');
       return;
     }
 
@@ -168,6 +215,9 @@ export function Documents() {
       if (uploadForm.activityIds.length > 0) {
         formData.append('activityIds', JSON.stringify(uploadForm.activityIds));
       }
+      if (uploadForm.departmentId) {
+        formData.append('departmentId', uploadForm.departmentId);
+      }
 
       await documentsApi.upload(formData);
 
@@ -182,7 +232,8 @@ export function Documents() {
         status: 'Review',
         blockId: '',
         projectId: '',
-        activityIds: []
+        activityIds: [],
+        departmentId: ''
       });
     } catch (err) {
       console.error('Error uploading document:', err);
@@ -372,7 +423,7 @@ export function Documents() {
             <DialogHeader>
               <DialogTitle>Upload Document</DialogTitle>
               <DialogDescription>
-                Upload a file and link it to a block, project, and activity.
+                Upload a file and optionally tag it to a block, project, activity, or department.
               </DialogDescription>
             </DialogHeader>
 
@@ -396,6 +447,22 @@ export function Documents() {
                 />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <Label htmlFor="document-department">Department</Label>
+                  <select
+                    id="document-department"
+                    className="mt-1 block w-full rounded-md border bg-input-background px-3 py-2 text-sm text-foreground shadow-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                    value={uploadForm.departmentId}
+                    onChange={(event) => handleUploadChange('departmentId', event.target.value)}
+                  >
+                    <option value="">Select department</option>
+                    {departments.map((department) => (
+                      <option key={department.id} value={String(department.id)}>
+                        {department.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <div>
                   <Label htmlFor="document-block">Block</Label>
                   <select
@@ -432,24 +499,24 @@ export function Documents() {
                       ))}
                   </select>
                 </div>
-                <div>
-                  <Label htmlFor="document-activities">Tagged Activities</Label>
-                  <select
-                    id="document-activities"
-                    multiple
-                    className="mt-1 block w-full rounded-md border bg-input-background px-3 py-2 text-sm text-foreground shadow-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                    value={uploadForm.activityIds}
-                    onChange={handleActivitySelection}
-                    disabled={!uploadForm.projectId}
-                  >
-                    {activities.map((activity) => (
-                      <option key={activity.id} value={String(activity.id)}>
-                        {activity.name || activity.title || `Activity ${activity.id}`}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-gray-500 mt-1">Hold Ctrl/Cmd to select multiple activities.</p>
-                </div>
+              </div>
+              <div>
+                <Label htmlFor="document-activities">Tagged Activities</Label>
+                <select
+                  id="document-activities"
+                  multiple
+                  className="mt-1 block w-full rounded-md border bg-input-background px-3 py-2 text-sm text-foreground shadow-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                  value={uploadForm.activityIds}
+                  onChange={handleActivitySelection}
+                  disabled={!uploadForm.projectId}
+                >
+                  {activityOptions.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">Hold Ctrl/Cmd to select multiple activities.</p>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
