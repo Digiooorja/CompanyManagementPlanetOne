@@ -62,6 +62,14 @@ const Finance = sequelize.define('Finance', {
     type: DataTypes.DATE,
     allowNull: true
   },
+  approvedBy: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  actionComment: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
   date: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW

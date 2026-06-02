@@ -157,6 +157,8 @@ router.put('/:id', async (req, res) => {
       afeNumber: req.body.afeNumber || item.afeNumber,
       transactionDetails: req.body.transactionDetails || item.transactionDetails,
       transactionDate: req.body.transactionDate || item.transactionDate,
+      approvedBy: req.body.approvedBy !== undefined ? req.body.approvedBy : item.approvedBy,
+      actionComment: req.body.actionComment !== undefined ? req.body.actionComment : item.actionComment,
       date: req.body.date || item.date
     });
 
