@@ -108,16 +108,36 @@ export function ActivityDetail() {
         setComments(Array.isArray(commentData) ? commentData : []);
         setDepartments(Array.isArray(departmentData) ? departmentData : []);
         setUsers(Array.isArray(usersData) ? usersData : []);
-        setLinkedDocuments(
-          Array.isArray(documentData)
-            ? documentData.map((doc: any) => ({
-                ...doc,
-                name: doc.title || doc.name,
-                type: doc.documentType || doc.type,
-                uploadDate: doc.uploadDate ? new Date(doc.uploadDate).toISOString().split('T')[0] : ''
-              }))
-            : []
+
+        const collectActivityIds = (items: any[] = []): number[] =>
+          items.flatMap((item) => [Number(item.id), ...collectActivityIds(item.subActivities || [])]);
+
+        const activityIds = Array.from(
+          new Set([Number(id), ...(activityData.subActivities ? collectActivityIds(activityData.subActivities) : [])])
         );
+
+        const allDocumentData = [
+          ...(Array.isArray(documentData) ? documentData : []),
+          ...(await Promise.all(
+            activityIds.map((activityId) => documentsApi.getByActivityId(activityId))
+          )).flat()
+        ];
+
+        const uniqueDocuments = Array.from(
+          new Map(
+            allDocumentData.map((doc: any) => [doc.id, doc])
+          ).values()
+        );
+
+        setLinkedDocuments(
+          uniqueDocuments.map((doc: any) => ({
+            ...doc,
+            name: doc.title || doc.name,
+            type: doc.documentType || doc.type,
+            uploadDate: doc.uploadDate ? new Date(doc.uploadDate).toISOString().split('T')[0] : ''
+          }))
+        );
+
         if (Array.isArray(departmentData) && departmentData.length > 0) {
           setCommentDepartmentId(departmentData[0].id);
         }
@@ -293,6 +313,22 @@ export function ActivityDetail() {
       uploadDate: new Date().toISOString().split('T')[0]
     };
     setLinkedDocuments([newDoc, ...linkedDocuments]);
+  };
+
+  const getDocumentSourceLabel = (doc: any) => {
+    if (Array.isArray(doc.activityTags) && doc.activityTags.length > 0) {
+      return `Activity: ${doc.activityTags.join(', ')}`;
+    }
+    if (doc.activityId) {
+      return `Activity: ${doc.activityId}`;
+    }
+    if (doc.project) {
+      return `Project: ${doc.project}`;
+    }
+    if (doc.projectId) {
+      return `Project ID: ${doc.projectId}`;
+    }
+    return 'Linked document';
   };
 
   const handlePostComment = async () => {
@@ -853,6 +889,9 @@ export function ActivityDetail() {
                       <p className="text-sm">{doc.name}</p>
                       <p className="text-xs text-gray-500">
                         {doc.type} • {doc.uploadDate}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {getDocumentSourceLabel(doc)}
                       </p>
                     </div>
                   </div>

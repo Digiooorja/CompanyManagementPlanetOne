@@ -6,7 +6,7 @@ import { Button } from "../components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "../components/ui/table";
 import { ArrowLeft, MapPin, Calendar, Users, FileText } from "lucide-react";
-import { blocksApi, projectsApi, documentsApi, registersApi } from "../../services/api";
+import { blocksApi, projectsApi, activitiesApi, documentsApi, registersApi } from "../../services/api";
 import { formatDisplayDateOrDefault } from "../lib/date";
 
 export function BlockDetail() {
@@ -34,17 +34,27 @@ export function BlockDetail() {
         const blockProjects = await projectsApi.getByBlockId(Number(id));
         setProjects(blockProjects);
 
-        // Load documents for all projects under this block
+        // Load documents for all projects under this block, including docs tagged to activities
         try {
           const projectIds = Array.isArray(blockProjects) ? blockProjects.map((p: any) => p.id).filter(Boolean) : [];
           let allDocs: any[] = [];
+
           if (projectIds.length > 0) {
             const docsPerProject = await Promise.all(
               projectIds.map((pid: number) => documentsApi.getByProjectId(pid))
             );
-            allDocs = docsPerProject.flat();
+            const activityLists = await Promise.all(
+              projectIds.map((pid: number) => activitiesApi.getByProjectId(pid))
+            );
+            const activityIds = activityLists.flat().map((activity: any) => Number(activity.id)).filter((id: number) => !Number.isNaN(id));
+            const docsPerActivity = activityIds.length > 0
+              ? (await Promise.all(activityIds.map((activityId: number) => documentsApi.getByActivityId(activityId)))).flat()
+              : [];
+
+            allDocs = [...docsPerProject.flat(), ...docsPerActivity];
           }
-          setDocuments(allDocs);
+
+          setDocuments(Array.from(new Map(allDocs.map((doc: any) => [doc.id, doc])).values()));
         } catch (docErr) {
           console.warn('Failed to load block documents:', docErr);
           setDocuments([]);
@@ -71,6 +81,22 @@ export function BlockDetail() {
 
   const [documents, setDocuments] = useState<any[]>([]);
   const [registers, setRegisters] = useState<any[]>([]);
+
+  const getDocumentSourceLabel = (doc: any) => {
+    if (Array.isArray(doc.activityTags) && doc.activityTags.length > 0) {
+      return `Activity: ${doc.activityTags.join(', ')}`;
+    }
+    if (doc.activityId) {
+      return `Activity: ${doc.activityId}`;
+    }
+    if (doc.project) {
+      return `Project: ${doc.project}`;
+    }
+    if (doc.projectId) {
+      return `Project ID: ${doc.projectId}`;
+    }
+    return 'Unknown source';
+  };
 
   if (loading) {
     return (
@@ -237,6 +263,7 @@ export function BlockDetail() {
                     <TableCell>
                       <Badge variant="outline">{doc.documentType || doc.type}</Badge>
                     </TableCell>
+                    <TableCell>{getDocumentSourceLabel(doc)}</TableCell>
                     <TableCell>{formatDisplayDateOrDefault(doc.uploadDate)}</TableCell>
                     <TableCell>{doc.size ? `${doc.size} bytes` : 'Unknown'}</TableCell>
                     <TableCell>

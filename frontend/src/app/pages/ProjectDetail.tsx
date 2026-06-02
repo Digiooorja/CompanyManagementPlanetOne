@@ -108,6 +108,22 @@ function ProjectDetail() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [risks, setRisks] = useState<Risk[]>([]);
+
+  const getDocumentSourceLabel = (doc: any) => {
+    if (Array.isArray(doc.activityTags) && doc.activityTags.length > 0) {
+      return `Activity: ${doc.activityTags.join(', ')}`;
+    }
+    if (doc.activityId) {
+      return `Activity: ${doc.activityId}`;
+    }
+    if (doc.project) {
+      return `Project: ${doc.project}`;
+    }
+    if (doc.projectId) {
+      return `Project ID: ${doc.projectId}`;
+    }
+    return 'Unknown source';
+  };
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
@@ -142,9 +158,20 @@ function ProjectDetail() {
           risksApi.getByProjectId(numericId),
         ]);
 
+        const activityIds = Array.isArray(activitiesData)
+          ? activitiesData.map((activity) => Number(activity.id)).filter((id) => !Number.isNaN(id))
+          : [];
+
+        const activityDocs = activityIds.length > 0
+          ? (await Promise.all(activityIds.map((activityId) => documentsApi.getByActivityId(activityId)))).flat()
+          : [];
+
+        const allDocuments = [...(Array.isArray(documentsData) ? documentsData : []), ...activityDocs];
+        const uniqueDocuments = Array.from(new Map(allDocuments.map((doc: any) => [doc.id, doc])).values());
+
         setProject(projectData);
         setActivities(activitiesData || []);
-        setDocuments(documentsData || []);
+        setDocuments(uniqueDocuments);
         setRisks(risksData || []);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load project details');
@@ -676,6 +703,7 @@ function ProjectDetail() {
                     <TableRow>
                       <TableHead>Document</TableHead>
                       <TableHead>Type</TableHead>
+                      <TableHead>Source</TableHead>
                       <TableHead>Upload Date</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Action</TableHead>
@@ -695,6 +723,7 @@ function ProjectDetail() {
                           </div>
                         </TableCell>
                         <TableCell>{doc.type}</TableCell>
+                        <TableCell>{getDocumentSourceLabel(doc)}</TableCell>
                         <TableCell>{new Date(doc.uploadDate).toLocaleDateString('en-GB', {
                             day: 'numeric',
                             month: 'short',
