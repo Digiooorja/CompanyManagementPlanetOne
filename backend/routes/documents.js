@@ -75,6 +75,60 @@ router.get('/', async (req, res) => {
       });
     }
 
+    // Pre-populate missing projectId from activity records if available
+    const documentsWithMissingProject = documentData.filter(doc => !doc.projectId && doc.activityId);
+    if (documentsWithMissingProject.length > 0) {
+      const actIds = documentsWithMissingProject.map(doc => doc.activityId);
+      const activityRecordsForProject = await Activity.findAll({ where: { id: actIds } });
+      const activityProjectMap = activityRecordsForProject.reduce((map, act) => {
+        map[act.id] = act.projectId;
+        return map;
+      }, {});
+      documentData = documentData.map(doc => {
+        if (!doc.projectId && doc.activityId && activityProjectMap[doc.activityId]) {
+          return {
+            ...doc,
+            projectId: activityProjectMap[doc.activityId]
+          };
+        }
+        return doc;
+      });
+    }
+
+    // Enrich with projects and blocks
+    const allProjectIds = Array.from(new Set(documentData.map(doc => doc.projectId).filter(Boolean)));
+    const projectRecords = await Project.findAll({ where: { id: allProjectIds } });
+    const projectMap = projectRecords.reduce((map, p) => {
+      map[p.id] = p;
+      return map;
+    }, {});
+
+    const allBlockIds = Array.from(new Set(projectRecords.map(p => p.blockId).filter(Boolean)));
+    const blockRecords = await Block.findAll({ where: { id: allBlockIds } });
+    const blockMap = blockRecords.reduce((map, b) => {
+      map[b.id] = b.name;
+      return map;
+    }, {});
+
+    documentData = documentData.map((doc) => {
+      let projectName = 'General';
+      let blockName = 'General';
+      if (doc.projectId && projectMap[doc.projectId]) {
+        projectName = projectMap[doc.projectId].name;
+        const blockId = projectMap[doc.projectId].blockId;
+        if (blockId && blockMap[blockId]) {
+          blockName = blockMap[blockId];
+        }
+      }
+      return {
+        ...doc,
+        projectName,
+        project: projectName,
+        blockName,
+        block: blockName
+      };
+    });
+
     res.json(documentData);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -88,6 +142,29 @@ router.get('/:id', async (req, res) => {
     if (!document) return res.status(404).json({ message: 'Document not found' });
 
     const documentData = document.toJSON();
+
+    if (documentData.activityId && !documentData.projectId) {
+      const activity = await Activity.findByPk(documentData.activityId);
+      if (activity && activity.projectId) {
+        documentData.projectId = activity.projectId;
+      }
+    }
+
+    if (documentData.projectId) {
+      const project = await Project.findByPk(documentData.projectId);
+      if (project) {
+        documentData.projectName = project.name;
+        documentData.project = project.name;
+        if (project.blockId) {
+          const block = await Block.findByPk(project.blockId);
+          if (block) {
+            documentData.blockName = block.name;
+            documentData.block = block.name;
+          }
+        }
+      }
+    }
+
     const taggedActivityIds = Array.isArray(documentData.activityIds)
       ? documentData.activityIds
       : [];

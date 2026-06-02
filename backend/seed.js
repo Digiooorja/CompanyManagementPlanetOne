@@ -167,6 +167,16 @@ async function seedDatabase() {
         lastName: "Pandey",
         role: "Admin",
         departmentId: 5 // Management
+      },
+      {
+        id: 7,
+        username: "guest_visitor",
+        email: "visitor@company.com",
+        password: defaultPasswordHash,
+        firstName: "Guest",
+        lastName: "Visitor",
+        role: "Guest",
+        departmentId: 1 // Operations
       }
     ]);
     console.log("Users created successfully!");

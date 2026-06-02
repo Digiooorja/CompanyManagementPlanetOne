@@ -20,6 +20,7 @@ import {
   DialogClose,
 } from "../components/ui/dialog";
 import { documentsApi, blocksApi, activitiesApi, projectsApi, departmentsApi } from "../../services/api";
+import { formatDisplayDateOrDefault } from "../lib/date";
 
 export function Documents() {
   const [filterBlock, setFilterBlock] = useState("all");
@@ -325,6 +326,7 @@ export function Documents() {
       Finance: 0,
       HSE: 0,
       Legal: 0,
+      Report: 0,
     };
 
     documents.forEach((doc) => {
@@ -337,6 +339,8 @@ export function Documents() {
         counts.HSE += 1;
       } else if (rawType.includes('legal')) {
         counts.Legal += 1;
+      } else if (rawType.includes('report')) {
+        counts.Report += 1;
       }
     });
 
@@ -645,40 +649,74 @@ export function Documents() {
       ) : (
         <>
       {/* Document Folders */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="p-4 cursor-pointer hover:bg-gray-50 transition-colors">
+      <div className="flex overflow-x-auto gap-4 pb-4 no-scrollbar">
+        <Card
+          className={`flex-none w-[220px] p-4 cursor-pointer hover:bg-gray-50 transition-all border ${
+            filterType === 'Technical' ? 'bg-blue-50/50 ring-2 ring-blue-500 border-transparent shadow-sm' : 'border-gray-200'
+          }`}
+          onClick={() => setFilterType(filterType === 'Technical' ? 'all' : 'Technical')}
+        >
           <div className="flex items-center gap-3">
             <FolderOpen className="h-8 w-8 text-blue-600" />
             <div>
-              <p className="font-medium">Technical</p>
+              <p className="font-medium text-gray-900">Technical</p>
               <p className="text-sm text-gray-500">{documentCategoryCounts.Technical} files</p>
             </div>
           </div>
         </Card>
-        <Card className="p-4 cursor-pointer hover:bg-gray-50 transition-colors">
+        <Card
+          className={`flex-none w-[220px] p-4 cursor-pointer hover:bg-gray-50 transition-all border ${
+            filterType === 'Finance' ? 'bg-green-50/50 ring-2 ring-green-500 border-transparent shadow-sm' : 'border-gray-200'
+          }`}
+          onClick={() => setFilterType(filterType === 'Finance' ? 'all' : 'Finance')}
+        >
           <div className="flex items-center gap-3">
             <FolderOpen className="h-8 w-8 text-green-600" />
             <div>
-              <p className="font-medium">Finance</p>
+              <p className="font-medium text-gray-900">Finance</p>
               <p className="text-sm text-gray-500">{documentCategoryCounts.Finance} files</p>
             </div>
           </div>
         </Card>
-        <Card className="p-4 cursor-pointer hover:bg-gray-50 transition-colors">
+        <Card
+          className={`flex-none w-[220px] p-4 cursor-pointer hover:bg-gray-50 transition-all border ${
+            filterType === 'HSE' ? 'bg-orange-50/50 ring-2 ring-orange-500 border-transparent shadow-sm' : 'border-gray-200'
+          }`}
+          onClick={() => setFilterType(filterType === 'HSE' ? 'all' : 'HSE')}
+        >
           <div className="flex items-center gap-3">
             <FolderOpen className="h-8 w-8 text-orange-600" />
             <div>
-              <p className="font-medium">HSE</p>
+              <p className="font-medium text-gray-900">HSE</p>
               <p className="text-sm text-gray-500">{documentCategoryCounts.HSE} files</p>
             </div>
           </div>
         </Card>
-        <Card className="p-4 cursor-pointer hover:bg-gray-50 transition-colors">
+        <Card
+          className={`flex-none w-[220px] p-4 cursor-pointer hover:bg-gray-50 transition-all border ${
+            filterType === 'Legal' ? 'bg-purple-50/50 ring-2 ring-purple-500 border-transparent shadow-sm' : 'border-gray-200'
+          }`}
+          onClick={() => setFilterType(filterType === 'Legal' ? 'all' : 'Legal')}
+        >
           <div className="flex items-center gap-3">
             <FolderOpen className="h-8 w-8 text-purple-600" />
             <div>
-              <p className="font-medium">Legal</p>
+              <p className="font-medium text-gray-900">Legal</p>
               <p className="text-sm text-gray-500">{documentCategoryCounts.Legal} files</p>
+            </div>
+          </div>
+        </Card>
+        <Card
+          className={`flex-none w-[220px] p-4 cursor-pointer hover:bg-gray-50 transition-all border ${
+            filterType === 'Report' ? 'bg-rose-50/50 ring-2 ring-rose-500 border-transparent shadow-sm' : 'border-gray-200'
+          }`}
+          onClick={() => setFilterType(filterType === 'Report' ? 'all' : 'Report')}
+        >
+          <div className="flex items-center gap-3">
+            <FolderOpen className="h-8 w-8 text-rose-600" />
+            <div>
+              <p className="font-medium text-gray-900">Report</p>
+              <p className="text-sm text-gray-500">{documentCategoryCounts.Report} files</p>
             </div>
           </div>
         </Card>
@@ -728,7 +766,7 @@ export function Documents() {
                 <TableCell className="text-sm text-gray-600">
                   {getDocumentActivities(doc)}
                 </TableCell>
-                <TableCell>{doc.uploadDate}</TableCell>
+                <TableCell>{formatDisplayDateOrDefault(doc.uploadDate)}</TableCell>
                 <TableCell className="text-sm text-gray-600">
                   {doc.uploadedBy || getActiveUserName()}
                 </TableCell>

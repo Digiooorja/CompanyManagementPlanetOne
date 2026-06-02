@@ -13,11 +13,14 @@ import {
   DialogFooter,
   DialogClose
 } from "../components/ui/dialog";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
 import { 
   Search, 
   Plus, 
   UserPlus, 
   Shield, 
+  ShieldAlert,
   CheckCircle, 
   XCircle, 
   Trash2, 
@@ -28,6 +31,8 @@ import {
 import { adminApi, departmentsApi } from "../../services/api";
 
 export function Admin() {
+  const { user, isAdmin } = useAuth();
+  const navigate = useNavigate();
   const [users, setUsers] = useState<any[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
   const [metrics, setMetrics] = useState({
@@ -96,8 +101,10 @@ export function Admin() {
   };
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (isAdmin) {
+      loadData();
+    }
+  }, [isAdmin]);
 
   // Listen for navigation-level global search requests
   useEffect(() => {
@@ -214,6 +221,47 @@ export function Admin() {
           .includes(normalizedSearch);
       })
     : users;
+
+  if (!isAdmin) {
+    return (
+      <div className="flex items-center justify-center min-h-[70vh] px-4 py-12">
+        <Card className="w-full max-w-lg p-8 border border-red-100 bg-white/70 backdrop-blur-md shadow-xl rounded-2xl relative overflow-hidden transition-all duration-300 hover:shadow-2xl">
+          {/* Subtle background red glow */}
+          <div className="absolute -top-24 -right-24 w-48 h-48 bg-red-100 rounded-full blur-3xl opacity-60 pointer-events-none" />
+          <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-rose-100 rounded-full blur-3xl opacity-60 pointer-events-none" />
+
+          <div className="flex flex-col items-center text-center space-y-6">
+            <div className="w-16 h-16 bg-red-50 border border-red-100 text-red-500 rounded-2xl flex items-center justify-center shadow-inner animate-pulse">
+              <ShieldAlert className="h-8 w-8" />
+            </div>
+            
+            <div className="space-y-2">
+              <h2 className="text-2xl font-bold tracking-tight text-slate-900">
+                Administrative Clearance Required
+              </h2>
+              <Badge variant="destructive" className="px-3 py-1 text-xs font-semibold rounded-full uppercase tracking-wider">
+                Access Restricted
+              </Badge>
+            </div>
+
+            <p className="text-sm text-slate-500 max-w-sm leading-relaxed">
+              Your account is currently identified as <strong className="text-slate-800">{user?.firstName} {user?.lastName} ({user?.role || 'Guest'})</strong>. 
+              Only certified system administrators are permitted to enter the security governance and user provisioning portal.
+            </p>
+
+            <div className="w-full pt-4">
+              <Button 
+                onClick={() => navigate("/operational")} 
+                className="w-full py-2.5 font-medium rounded-xl text-white bg-slate-900 hover:bg-slate-800 shadow-md transition-all duration-300 transform active:scale-[0.98]"
+              >
+                Return to Safety Dashboard
+              </Button>
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   if (isLoading && users.length === 0) {
     return (

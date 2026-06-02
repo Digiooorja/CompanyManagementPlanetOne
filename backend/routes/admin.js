@@ -5,6 +5,11 @@ const User = require('../models/User');
 const Department = require('../models/Department');
 const Project = require('../models/Project');
 const Activity = require('../models/Activity');
+const { authMiddleware, adminMiddleware } = require('../middleware/auth');
+
+// Apply strict administration and role verification gates globally
+router.use(authMiddleware);
+router.use(adminMiddleware);
 
 // GET all users
 router.get('/users', async (req, res) => {
