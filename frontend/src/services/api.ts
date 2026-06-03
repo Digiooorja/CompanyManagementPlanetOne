@@ -1,3 +1,5 @@
+import { authStorage } from '../utils/authStorage';
+
 const API_BASE_URL = '/api';
 
 // Helper function for making API requests
@@ -6,7 +8,7 @@ async function apiCall<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
-  const token = localStorage.getItem('token');
+  const token = authStorage.getToken();
   const defaultOptions: RequestInit = {
     headers: {
       'Content-Type': 'application/json',
@@ -29,7 +31,7 @@ async function apiCall<T>(
 
 async function apiUpload<T>(endpoint: string, formData: FormData): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
-  const token = localStorage.getItem('token');
+  const token = authStorage.getToken();
 
   const response = await fetch(url, {
     method: 'POST',

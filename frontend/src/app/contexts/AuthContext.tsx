@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { authStorage } from '../../utils/authStorage';
 
 interface User {
   id: number;
@@ -48,9 +49,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load user from localStorage on mount, or set guest user
+  // Load user from session storage on mount, or set guest user
   useEffect(() => {
-    const savedToken = localStorage.getItem('token');
+    const savedToken = authStorage.getToken();
     if (savedToken) {
       setToken(savedToken);
       fetchCurrentUser(savedToken);
@@ -71,14 +72,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (response.ok) {
         const userData = await response.json();
         setUser(userData);
+        // Bind the current tab to this user's ID
+        authStorage.setActiveUserId(userData.id);
       } else {
-        localStorage.removeItem('token');
+        authStorage.clearSession();
         setToken(null);
         setUser(GUEST_USER);
       }
     } catch (error) {
       console.error('Failed to fetch user:', error);
-      localStorage.removeItem('token');
+      authStorage.clearSession();
       setToken(null);
       setUser(GUEST_USER);
     } finally {
@@ -110,7 +113,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const data = await response.json();
       setToken(data.token);
       setUser(data.user);
-      localStorage.setItem('token', data.token);
+      authStorage.saveSession(data.user.id, data.token, data.user);
     } catch (error) {
       throw error;
     } finally {
@@ -142,7 +145,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const result = await response.json();
       setToken(result.token);
       setUser(result.user);
-      localStorage.setItem('token', result.token);
+      authStorage.saveSession(result.user.id, result.token, result.user);
     } catch (error) {
       throw error;
     } finally {
@@ -153,7 +156,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const logout = () => {
     setUser(GUEST_USER);
     setToken(null);
-    localStorage.removeItem('token');
+    authStorage.clearSession();
   };
 
   const isGuest = !token && user?.role === 'Guest';
