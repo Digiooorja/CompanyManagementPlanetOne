@@ -77,6 +77,29 @@ router.get('/next-afe', async (req, res) => {
   }
 });
 
+// GET pending AFEs for dashboard
+router.get('/pending', async (req, res) => {
+  try {
+    const items = await Finance.findAll({
+      where: {
+        recordType: 'AFE',
+        status: ['Pending', 'Under Review']
+      },
+      include: [{
+        model: Activity,
+        as: 'activity',
+        include: [{
+          model: Project,
+          as: 'project'
+        }]
+      }]
+    });
+    res.json(items);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // GET finance item by ID
 router.get('/:id', async (req, res) => {
   try {
@@ -194,40 +217,94 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// GET next AFE number (projectId and/or activityId optional)
-router.get('/next-afe', async (req, res) => {
+// PUT delegate AFE
+router.put('/:id/delegate', async (req, res) => {
   try {
-    const { projectId, activityId } = req.query;
-    let activity = null;
-    let project = null;
-    let count = 0;
+    const item = await Finance.findByPk(req.params.id);
+    if (!item) return res.status(404).json({ message: 'Finance item not found' });
 
-    if (activityId) {
-      activity = await Activity.findByPk(activityId);
-      if (activity) project = await Project.findByPk(activity.projectId);
-      count = await Finance.count({ where: { recordType: 'AFE', activityId: Number(activityId) } });
-    } else if (projectId) {
-      const acts = await Activity.findAll({ where: { projectId: Number(projectId) }, attributes: ['id'] });
-      const actIds = acts.map((a) => a.id);
-      if (actIds.length > 0) {
-        count = await Finance.count({ where: { recordType: 'AFE', activityId: actIds } });
-      } else {
-        count = 0;
-      }
-      project = await Project.findByPk(projectId);
-    } else {
-      count = await Finance.count({ where: { recordType: 'AFE' } });
-    }
+    const { delegateTo, comment } = req.body;
+    if (!delegateTo) return res.status(400).json({ message: 'delegateTo is required' });
 
-    const projectCode = project ? String(project.name).replace(/\s+/g, '').toUpperCase().slice(0,5) : `P${projectId || '00'}`;
-    const activityCode = activity ? String(activity.name).replace(/\s+/g, '').toUpperCase().slice(0,5) : (activityId ? `A${activityId}` : 'NA');
-    const nextSeq = Number(count || 0) + 1;
-    const seqStr = String(nextSeq).padStart(3, '0');
-    const afeNumber = `${projectCode}-${activityCode}-${seqStr}`;
+    const actor = req.user?.username || req.user?.email || 'Unknown User';
+    
+    const history = item.delegationHistory || [];
+    history.push({
+      by: actor,
+      action: 'Delegated',
+      to: delegateTo,
+      comment: comment || '',
+      at: new Date().toISOString()
+    });
 
-    res.json({ afeNumber, next: nextSeq });
+    await item.update({
+      delegatedTo: delegateTo,
+      delegationHistory: history,
+      status: 'Under Review'
+    });
+
+    res.json(item);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// PUT approve AFE
+router.put('/:id/approve', async (req, res) => {
+  try {
+    const item = await Finance.findByPk(req.params.id);
+    if (!item) return res.status(404).json({ message: 'Finance item not found' });
+
+    const { comment } = req.body;
+    const actor = req.user?.username || req.user?.email || 'Unknown User';
+    
+    const history = item.delegationHistory || [];
+    history.push({
+      by: actor,
+      action: 'Approved',
+      to: 'System',
+      comment: comment || '',
+      at: new Date().toISOString()
+    });
+
+    await item.update({
+      approvedBy: actor,
+      delegationHistory: history,
+      status: 'Approved'
+    });
+
+    res.json(item);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// PUT reject AFE
+router.put('/:id/reject', async (req, res) => {
+  try {
+    const item = await Finance.findByPk(req.params.id);
+    if (!item) return res.status(404).json({ message: 'Finance item not found' });
+
+    const { comment } = req.body;
+    const actor = req.user?.username || req.user?.email || 'Unknown User';
+    
+    const history = item.delegationHistory || [];
+    history.push({
+      by: actor,
+      action: 'Rejected',
+      to: 'System',
+      comment: comment || '',
+      at: new Date().toISOString()
+    });
+
+    await item.update({
+      delegationHistory: history,
+      status: 'Rejected'
+    });
+
+    res.json(item);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
   }
 });
 

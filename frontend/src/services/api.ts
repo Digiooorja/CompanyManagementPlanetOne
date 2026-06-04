@@ -132,10 +132,14 @@ export const documentsApi = {
 // Finance API
 export const financeApi = {
   getAll: () => apiCall<any[]>('/finance'),
+  getPending: () => apiCall<any[]>('/finance/pending'),
   getById: (id: number) => apiCall<any>(`/finance/${id}`),
   create: (data: any) => apiCall('/finance', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: number, data: any) => apiCall(`/finance/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: number) => apiCall(`/finance/${id}`, { method: 'DELETE' }),
+  delegate: (id: number, data: { delegateTo: string, comment?: string }) => apiCall(`/finance/${id}/delegate`, { method: 'PUT', body: JSON.stringify(data) }),
+  approve: (id: number, data: { comment?: string }) => apiCall(`/finance/${id}/approve`, { method: 'PUT', body: JSON.stringify(data) }),
+  reject: (id: number, data: { comment?: string }) => apiCall(`/finance/${id}/reject`, { method: 'PUT', body: JSON.stringify(data) }),
   nextAfe: (projectId?: number | string, activityId?: number | string) => {
     const qs: string[] = [];
     if (projectId !== undefined && projectId !== null && projectId !== '') qs.push(`projectId=${projectId}`);

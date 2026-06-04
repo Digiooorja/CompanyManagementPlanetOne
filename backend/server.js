@@ -186,9 +186,9 @@ const startServer = async () => {
     await sequelize.authenticate();
     console.log('Database connected');
 
-    // Apply schema changes without dropping existing data so startup preserves records.
+    // Apply schema changes using migrations. Sync is only for initial missing tables.
     const queryInterface = sequelize.getQueryInterface();
-    await sequelize.sync({ alter: true, force: false });
+    await sequelize.sync();
     console.log('Database synchronized');
 
     const departmentNames = [

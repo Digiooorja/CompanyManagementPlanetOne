@@ -15,8 +15,9 @@ import {
   Clock,
   DollarSign,
   FileText,
+  User,
 } from "lucide-react";
-import { blocksApi, documentsApi, activitiesApi, projectsApi } from "../../services/api";
+import { blocksApi, documentsApi, activitiesApi, projectsApi, financeApi } from "../../services/api";
 import { useAuth } from "../contexts/AuthContext";
 
 export function ExecutiveDashboard() {
@@ -25,9 +26,16 @@ export function ExecutiveDashboard() {
   const [documents, setDocuments] = useState<any[]>([]);
   const [activities, setActivities] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
+  const [pendingAFEs, setPendingAFEs] = useState<any[]>([]);
   const [loadingBlocks, setLoadingBlocks] = useState(true);
   const [blockError, setBlockError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  
+  // State for inline AFE actions (Approve, Reject, Delegate)
+  const [activeActionId, setActiveActionId] = useState<number | null>(null);
+  const [actionType, setActionType] = useState<'Approve' | 'Reject' | 'Delegate' | null>(null);
+  const [actionForm, setActionForm] = useState({ delegateTo: '', comment: '' });
+  const [actionLoading, setActionLoading] = useState(false);
 
   const countdownCards = [
     {
@@ -70,19 +78,48 @@ export function ExecutiveDashboard() {
 
   const fetchSearchData = async () => {
     try {
-      const [docs, acts, projs] = await Promise.all([
+      const [docs, acts, projs, afes] = await Promise.all([
         documentsApi.getAll(),
         activitiesApi.getAll(),
         projectsApi.getAll(),
+        financeApi.getPending(),
       ]);
       setDocuments(Array.isArray(docs) ? docs : []);
       setActivities(Array.isArray(acts) ? acts : []);
       setProjects(Array.isArray(projs) ? projs : []);
+      setPendingAFEs(Array.isArray(afes) ? afes : []);
     } catch (err) {
       console.error('Error loading dashboard search data:', err);
       setDocuments([]);
       setActivities([]);
       setProjects([]);
+      setPendingAFEs([]);
+    }
+  };
+
+  const handleAfeAction = async (afeId: number) => {
+    if (!actionType) return;
+    try {
+      setActionLoading(true);
+      if (actionType === 'Approve') {
+        await financeApi.approve(afeId, { comment: actionForm.comment });
+      } else if (actionType === 'Reject') {
+        await financeApi.reject(afeId, { comment: actionForm.comment });
+      } else if (actionType === 'Delegate') {
+        if (!actionForm.delegateTo.trim()) return; // Must have delegate target
+        await financeApi.delegate(afeId, { delegateTo: actionForm.delegateTo, comment: actionForm.comment });
+      }
+      
+      // Remove it from the list since it's processed
+      setPendingAFEs(prev => prev.filter(a => a.id !== afeId));
+      setActiveActionId(null);
+      setActionType(null);
+      setActionForm({ delegateTo: '', comment: '' });
+    } catch (err) {
+      console.error('Failed to execute AFE action', err);
+      alert('Action failed. You may not have permission.');
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -116,12 +153,6 @@ export function ExecutiveDashboard() {
       message: "Monthly production report submitted",
       time: "1 day ago",
     },
-  ];
-
-  const pendingApprovals = [
-    { id: 1, type: "AFE", name: "Block A - Well Extension", amount: 5200000 },
-    { id: 2, type: "Contract", name: "Drilling Services Agreement", amount: 12000000 },
-    { id: 3, type: "Document", name: "Environmental Impact Assessment", amount: null },
   ];
 
   const normalizedSearch = searchQuery.trim().toLowerCase();
@@ -183,13 +214,13 @@ export function ExecutiveDashboard() {
         .includes(normalizedSearch))
     : alerts;
 
-  const filteredPendingApprovals = normalizedSearch
-    ? pendingApprovals.filter((approval) => [approval.type, approval.name, approval.amount?.toString()]
+  const filteredPendingAFEs = normalizedSearch
+    ? pendingAFEs.filter((afe) => [afe.afeNumber, afe.item, afe.amount?.toString(), afe.delegatedTo]
         .filter(Boolean)
         .join(' ')
         .toLowerCase()
         .includes(normalizedSearch))
-    : pendingApprovals;
+    : pendingAFEs;
 
   return (
     <div className="space-y-6">
@@ -364,35 +395,136 @@ export function ExecutiveDashboard() {
           </div>
         </Card>
 
-        {/* Pending Approvals */}
+        {/* Pending AFEs Inbox */}
         <Card className="p-6">
-          <h3 className="text-lg mb-4 flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            Pending Approvals
-          </h3>
-          <div className="space-y-3">
-            {filteredPendingApprovals.map((approval) => (
-              <div
-                key={approval.id}
-                className="flex items-center justify-between p-3 rounded-lg bg-gray-50"
-              >
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline">{approval.type}</Badge>
-                    <span className="text-sm">{approval.name}</span>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg flex items-center gap-2">
+              <FileText className="h-5 w-5 text-blue-500" />
+              AFE Action Inbox
+            </h3>
+            <Badge variant="outline">{filteredPendingAFEs.length} Pending</Badge>
+          </div>
+          
+          <div className="space-y-4">
+            {filteredPendingAFEs.length === 0 ? (
+              <div className="text-center p-8 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                <CheckCircle className="h-8 w-8 text-green-400 mx-auto mb-2" />
+                <p className="text-gray-500 text-sm">You're all caught up!</p>
+              </div>
+            ) : (
+              filteredPendingAFEs.map((afe) => (
+                <div
+                  key={afe.id}
+                  className="rounded-lg border border-gray-200 bg-white overflow-hidden shadow-sm"
+                >
+                  <div className="p-4 bg-gray-50 flex items-start justify-between border-b border-gray-100">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <Badge variant="secondary">{afe.afeNumber || `AFE-${afe.id}`}</Badge>
+                        <span className="font-medium">{afe.item}</span>
+                      </div>
+                      <div className="text-sm text-gray-500 flex items-center gap-4">
+                        <span className="flex items-center gap-1">
+                          <DollarSign className="h-3 w-3" />
+                          {Number(afe.amount).toLocaleString()}
+                        </span>
+                        {afe.delegatedTo && (
+                          <span className="flex items-center gap-1">
+                            <User className="h-3 w-3" />
+                            Holding: {afe.delegatedTo}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <Link to={`/finance/${afe.id}`}>
+                      <Button size="sm" variant="ghost" className="text-blue-600">Details</Button>
+                    </Link>
                   </div>
-                  {approval.amount && (
-                    <p className="text-sm text-gray-600 mt-1 flex items-center gap-1">
-                      <DollarSign className="h-3 w-3" />
-                      ${(approval.amount / 1000000).toFixed(1)}M
-                    </p>
+
+                  {/* Action Buttons */}
+                  {activeActionId !== afe.id ? (
+                    <div className="p-3 flex gap-2">
+                      <Button 
+                        size="sm" 
+                        className="flex-1 bg-green-600 hover:bg-green-700"
+                        onClick={() => { setActiveActionId(afe.id); setActionType('Approve'); }}
+                      >
+                        Approve
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        className="flex-1 text-red-600 hover:text-red-700 hover:bg-red-50"
+                        onClick={() => { setActiveActionId(afe.id); setActionType('Reject'); }}
+                      >
+                        Reject
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        variant="secondary" 
+                        className="flex-1"
+                        onClick={() => { setActiveActionId(afe.id); setActionType('Delegate'); }}
+                      >
+                        Forward/Delegate
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="p-4 bg-blue-50/50 space-y-3">
+                      <h4 className="text-sm font-medium flex items-center gap-2">
+                        {actionType === 'Approve' && <CheckCircle className="h-4 w-4 text-green-600"/>}
+                        {actionType === 'Reject' && <AlertCircle className="h-4 w-4 text-red-600"/>}
+                        {actionType === 'Delegate' && <User className="h-4 w-4 text-blue-600"/>}
+                        {actionType} AFE
+                      </h4>
+                      
+                      {actionType === 'Delegate' && (
+                        <div>
+                          <label className="text-xs font-medium text-gray-700">Forward To (Name or Dept)</label>
+                          <input
+                            type="text"
+                            className="w-full mt-1 p-2 text-sm border rounded"
+                            placeholder="e.g. Finance Department or John Doe"
+                            value={actionForm.delegateTo}
+                            onChange={e => setActionForm({...actionForm, delegateTo: e.target.value})}
+                          />
+                        </div>
+                      )}
+                      
+                      <div>
+                        <label className="text-xs font-medium text-gray-700">Comment (Optional)</label>
+                        <input
+                          type="text"
+                          className="w-full mt-1 p-2 text-sm border rounded"
+                          placeholder="Add a note..."
+                          value={actionForm.comment}
+                          onChange={e => setActionForm({...actionForm, comment: e.target.value})}
+                        />
+                      </div>
+                      
+                      <div className="flex gap-2 pt-2">
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="flex-1"
+                          onClick={() => { setActiveActionId(null); setActionType(null); }}
+                          disabled={actionLoading}
+                        >
+                          Cancel
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          className="flex-1"
+                          onClick={() => handleAfeAction(afe.id)}
+                          disabled={actionLoading || (actionType === 'Delegate' && !actionForm.delegateTo.trim())}
+                        >
+                          {actionLoading ? 'Processing...' : 'Confirm'}
+                        </Button>
+                      </div>
+                    </div>
                   )}
                 </div>
-                <Link to={`/workflows/${approval.id}`}>
-                  <Button size="sm">Review</Button>
-                </Link>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </Card>
       </div>

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Block = require('../models/Block');
 const Project = require('../models/Project');
+const Licence = require('../models/Licence');
 
 function sumDecimalField(records, field) {
   if (!Array.isArray(records)) return 0;
@@ -79,13 +80,24 @@ router.post('/', async (req, res) => {
       name: req.body.name,
       description: req.body.description,
       status: req.body.status,
-      licenceStart: req.body.licenceStart || null,
-      licenceExpiry: req.body.licenceExpiry || null,
       operator: req.body.operator || null,
       workingInterest: req.body.workingInterest || null,
       area: req.body.area || null,
       location: req.body.location || null,
     });
+
+    if (req.body.newLicence && req.body.newLicence.licenceNumber) {
+      await Licence.create({
+        licenceNumber: req.body.newLicence.licenceNumber,
+        licenceType: req.body.newLicence.licenceType || 'Exploration',
+        blockIds: [block.id],
+        issuedBy: req.body.newLicence.issuedBy || null,
+        startDate: req.body.newLicence.startDate || null,
+        expiryDate: req.body.newLicence.expiryDate || null,
+        status: req.body.newLicence.status || 'Active',
+      });
+    }
+
     res.status(201).json(block);
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -102,8 +114,6 @@ router.put('/:id', async (req, res) => {
       name: req.body.name || block.name,
       description: req.body.description || block.description,
       status: req.body.status || block.status,
-      licenceStart: req.body.licenceStart || block.licenceStart,
-      licenceExpiry: req.body.licenceExpiry || block.licenceExpiry,
       operator: req.body.operator || block.operator,
       workingInterest: req.body.workingInterest || block.workingInterest,
       area: req.body.area || block.area,

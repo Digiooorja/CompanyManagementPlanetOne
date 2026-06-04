@@ -9,13 +9,14 @@ import { Textarea } from "../components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "../components/ui/dialog";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "../components/ui/table";
 import { Search, Plus } from "lucide-react";
-import { blocksApi } from "../../services/api";
+import { blocksApi, licencesApi } from "../../services/api";
 import { formatDisplayDateOrDefault } from "../lib/date";
 import { useAuth } from "../contexts/AuthContext";
 
 export function Blocks() {
   const { canEdit } = useAuth();
   const [blocks, setBlocks] = useState<any[]>([]);
+  const [licences, setLicences] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -25,12 +26,19 @@ export function Blocks() {
     name: '',
     description: '',
     status: 'Active',
-    licenceStart: '',
-    licenceExpiry: '',
     operator: '',
     workingInterest: '',
     area: '',
     location: ''
+  });
+  const [createLicence, setCreateLicence] = useState(false);
+  const [newLicence, setNewLicence] = useState({
+    licenceNumber: '',
+    licenceType: 'Exploration',
+    issuedBy: '',
+    startDate: '',
+    expiryDate: '',
+    status: 'Active'
   });
 
   const handleCreateBlock = async () => {
@@ -47,12 +55,11 @@ export function Blocks() {
         name: newBlock.name,
         description: newBlock.description,
         status: newBlock.status,
-        licenceStart: newBlock.licenceStart || undefined,
-        licenceExpiry: newBlock.licenceExpiry || undefined,
         operator: newBlock.operator || undefined,
         workingInterest: newBlock.workingInterest || undefined,
         area: newBlock.area || undefined,
         location: newBlock.location || undefined,
+        newLicence: createLicence ? newLicence : undefined
       });
 
       setIsCreateOpen(false);
@@ -60,16 +67,24 @@ export function Blocks() {
         name: '',
         description: '',
         status: 'Active',
-        licenceStart: '',
-        licenceExpiry: '',
         operator: '',
         workingInterest: '',
         area: '',
         location: ''
       });
+      setCreateLicence(false);
+      setNewLicence({
+        licenceNumber: '',
+        licenceType: 'Exploration',
+        issuedBy: '',
+        startDate: '',
+        expiryDate: '',
+        status: 'Active'
+      });
 
-      const data = await blocksApi.getAll();
+      const [data, lData] = await Promise.all([blocksApi.getAll(), licencesApi.getAll()]);
       setBlocks(Array.isArray(data) ? data : []);
+      setLicences(Array.isArray(lData) ? lData : []);
     } catch (err) {
       console.error('Create block error:', err);
       setError('Unable to create block. Please try again.');
@@ -83,12 +98,17 @@ export function Blocks() {
       try {
         setLoading(true);
         setError(null);
-        const data = await blocksApi.getAll();
+        const [data, lData] = await Promise.all([
+          blocksApi.getAll(),
+          licencesApi.getAll()
+        ]);
         setBlocks(Array.isArray(data) ? data : []);
+        setLicences(Array.isArray(lData) ? lData : []);
       } catch (err) {
-        console.error('Error fetching blocks:', err);
-        setError('Unable to load blocks from the database.');
+        console.error('Error fetching data:', err);
+        setError('Unable to load data from the database.');
         setBlocks([]);
+        setLicences([]);
       } finally {
         setLoading(false);
       }
@@ -112,12 +132,12 @@ export function Blocks() {
         .includes(normalizedSearch))
     : blocks;
 
-  const getDaysUntilExpiry = (expiryDate: string) => {
-    const today = new Date("2026-05-01");
-    const expiry = new Date(expiryDate);
-    const diffTime = expiry.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays;
+  const getActiveLicences = (blockId: number) => {
+    return licences.filter(l => 
+      l.status === 'Active' && 
+      Array.isArray(l.blockIds) && 
+      l.blockIds.includes(blockId)
+    );
   };
 
   const getStatusColor = (status: string) => {
@@ -182,21 +202,102 @@ export function Blocks() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label>Licence Start</Label>
+                  <Label>Operator</Label>
                   <Input
-                    type="date"
-                    value={newBlock.licenceStart}
-                    onChange={(e) => setNewBlock({ ...newBlock, licenceStart: e.target.value })}
+                    value={newBlock.operator}
+                    onChange={(e) => setNewBlock({ ...newBlock, operator: e.target.value })}
                   />
                 </div>
                 <div>
-                  <Label>Licence Expiry</Label>
+                  <Label>Working Interest</Label>
                   <Input
-                    type="date"
-                    value={newBlock.licenceExpiry}
-                    onChange={(e) => setNewBlock({ ...newBlock, licenceExpiry: e.target.value })}
+                    value={newBlock.workingInterest}
+                    onChange={(e) => setNewBlock({ ...newBlock, workingInterest: e.target.value })}
                   />
                 </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Area</Label>
+                  <Input
+                    value={newBlock.area}
+                    onChange={(e) => setNewBlock({ ...newBlock, area: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>Location</Label>
+                  <Input
+                    value={newBlock.location}
+                    onChange={(e) => setNewBlock({ ...newBlock, location: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="border-t pt-4 mt-4">
+                <div className="flex items-center gap-2 mb-4">
+                  <input
+                    type="checkbox"
+                    id="createLicence"
+                    checked={createLicence}
+                    onChange={(e) => setCreateLicence(e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  <Label htmlFor="createLicence" className="cursor-pointer font-medium">Link Initial Licence (Optional)</Label>
+                </div>
+
+                {createLicence && (
+                  <div className="space-y-4 pl-6 border-l-2 border-primary/20">
+                    <div>
+                      <Label>Licence Number</Label>
+                      <Input
+                        value={newLicence.licenceNumber}
+                        onChange={(e) => setNewLicence({ ...newLicence, licenceNumber: e.target.value })}
+                        placeholder="e.g. EXPL-2026-001"
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label>Licence Type</Label>
+                        <select
+                          className="w-full rounded-md border px-3 py-2"
+                          value={newLicence.licenceType}
+                          onChange={(e) => setNewLicence({ ...newLicence, licenceType: e.target.value })}
+                        >
+                          <option value="Exploration">Exploration</option>
+                          <option value="Production">Production</option>
+                          <option value="Environmental">Environmental</option>
+                          <option value="Drilling">Drilling</option>
+                          <option value="Contract">Contract</option>
+                        </select>
+                      </div>
+                      <div>
+                        <Label>Issued By</Label>
+                        <Input
+                          value={newLicence.issuedBy}
+                          onChange={(e) => setNewLicence({ ...newLicence, issuedBy: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label>Start Date</Label>
+                        <Input
+                          type="date"
+                          value={newLicence.startDate}
+                          onChange={(e) => setNewLicence({ ...newLicence, startDate: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <Label>Expiry Date</Label>
+                        <Input
+                          type="date"
+                          value={newLicence.expiryDate}
+                          onChange={(e) => setNewLicence({ ...newLicence, expiryDate: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -274,10 +375,8 @@ export function Blocks() {
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
-              <TableHead>Licence Start</TableHead>
-              <TableHead>Licence Expiry</TableHead>
-              <TableHead>Days Until Expiry</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Active Licences</TableHead>
               <TableHead>Operator</TableHead>
               <TableHead>Working Interest</TableHead>
               <TableHead>Area</TableHead>
@@ -293,36 +392,34 @@ export function Blocks() {
               </TableRow>
             ) : (
               filteredBlocks.map((block) => {
-                const daysLeft = getDaysUntilExpiry(block.licenceExpiry);
+                const activeLics = getActiveLicences(block.id);
                 return (
                   <TableRow key={block.id}>
                     <TableCell>
                       <Link
                         to={`/blocks/${block.id}`}
-                        className="hover:underline"
+                        className="hover:underline font-medium text-primary"
                       >
                         {block.name}
                       </Link>
-                    </TableCell>
-                    <TableCell>{formatDisplayDateOrDefault(block.licenceStart)}</TableCell>
-                    <TableCell>{formatDisplayDateOrDefault(block.licenceExpiry)}</TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          daysLeft < 90
-                            ? "destructive"
-                            : daysLeft < 180
-                            ? "default"
-                            : "outline"
-                        }
-                      >
-                        {daysLeft} days
-                      </Badge>
                     </TableCell>
                     <TableCell>
                       <Badge variant={getStatusColor(block.status)}>
                         {block.status}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {activeLics.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {activeLics.map(l => (
+                            <Badge key={l.id} variant="outline" className="text-xs">
+                              {l.licenceNumber}
+                            </Badge>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-gray-400 text-sm">None</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-sm text-gray-600">
                       {block.operator}

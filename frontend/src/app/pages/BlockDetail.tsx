@@ -6,13 +6,14 @@ import { Button } from "../components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "../components/ui/table";
 import { ArrowLeft, MapPin, Calendar, Users, FileText } from "lucide-react";
-import { blocksApi, projectsApi, activitiesApi, documentsApi, registersApi } from "../../services/api";
+import { blocksApi, projectsApi, activitiesApi, documentsApi, registersApi, licencesApi } from "../../services/api";
 import { formatDisplayDateOrDefault } from "../lib/date";
 
 export function BlockDetail() {
   const { id } = useParams();
   const [block, setBlock] = useState<any | null>(null);
   const [projects, setProjects] = useState<any[]>([]);
+  const [licences, setLicences] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,6 +34,14 @@ export function BlockDetail() {
 
         const blockProjects = await projectsApi.getByBlockId(Number(id));
         setProjects(blockProjects);
+
+        try {
+          const allLicences = await licencesApi.getAll();
+          const linkedLics = allLicences.filter((l: any) => Array.isArray(l.blockIds) && l.blockIds.includes(Number(id)));
+          setLicences(linkedLics);
+        } catch (licErr) {
+          console.warn('Failed to load licences:', licErr);
+        }
 
         // Load documents for all projects under this block, including docs tagged to activities
         try {
@@ -141,10 +150,6 @@ export function BlockDetail() {
               <MapPin className="h-4 w-4" />
               {block.location}
             </div>
-            <div className="flex items-center gap-1">
-              <Calendar className="h-4 w-4" />
-              Licence: {formatDisplayDateOrDefault(block.licenceStart)} - {formatDisplayDateOrDefault(block.licenceExpiry)}
-            </div>
           </div>
         </div>
         <Badge variant="default">{block.status}</Badge>
@@ -184,6 +189,7 @@ export function BlockDetail() {
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="projects">Projects</TabsTrigger>
           <TabsTrigger value="documents">Documents</TabsTrigger>
+          <TabsTrigger value="licences">Licences</TabsTrigger>
           <TabsTrigger value="registers">Registers</TabsTrigger>
         </TabsList>
 
@@ -277,6 +283,47 @@ export function BlockDetail() {
                 ))}
               </TableBody>
             </Table>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="licences" className="mt-6">
+          <Card className="p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium">Associated Licences</h3>
+              <Link to="/licences">
+                <Button size="sm" variant="outline">Manage All Licences</Button>
+              </Link>
+            </div>
+            {licences.length === 0 ? (
+              <p className="text-gray-500 text-center py-8">No licences linked to this block.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Licence Number</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Issued By</TableHead>
+                    <TableHead>Expiry</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {licences.map(lic => (
+                    <TableRow key={lic.id}>
+                      <TableCell className="font-medium text-primary">{lic.licenceNumber}</TableCell>
+                      <TableCell>{lic.licenceType}</TableCell>
+                      <TableCell>
+                        <Badge variant={lic.status === 'Active' ? 'default' : lic.status === 'Suspended' ? 'destructive' : 'outline'}>
+                          {lic.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{lic.issuedBy || '-'}</TableCell>
+                      <TableCell>{formatDisplayDateOrDefault(lic.expiryDate)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </Card>
         </TabsContent>
 

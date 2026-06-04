@@ -19,14 +19,6 @@ const Block = sequelize.define('Block', {
     type: DataTypes.ENUM('Active', 'Inactive', 'Completed'),
     defaultValue: 'Active'
   },
-  licenceStart: {
-    type: DataTypes.DATE,
-    allowNull: true
-  },
-  licenceExpiry: {
-    type: DataTypes.DATE,
-    allowNull: true
-  },
   operator: {
     type: DataTypes.STRING,
     allowNull: true
