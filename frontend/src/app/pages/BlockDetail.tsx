@@ -5,12 +5,14 @@ import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "../components/ui/table";
-import { ArrowLeft, MapPin, Calendar, Users, FileText } from "lucide-react";
+import { ArrowLeft, MapPin, Users, FileText } from "lucide-react";
 import { blocksApi, projectsApi, activitiesApi, documentsApi, registersApi, licencesApi } from "../../services/api";
 import { formatDisplayDateOrDefault } from "../lib/date";
+import { useAuth } from "../contexts/AuthContext";
 
 export function BlockDetail() {
   const { id } = useParams();
+  const { canEdit } = useAuth();
   const [block, setBlock] = useState<any | null>(null);
   const [projects, setProjects] = useState<any[]>([]);
   const [licences, setLicences] = useState<any[]>([]);
@@ -310,7 +312,14 @@ export function BlockDetail() {
                 <TableBody>
                   {licences.map(lic => (
                     <TableRow key={lic.id}>
-                      <TableCell className="font-medium text-primary">{lic.licenceNumber}</TableCell>
+                      <TableCell className="font-medium text-primary">
+                        <Link 
+                          to={canEdit ? `/licences?edit=${lic.id}` : `/licences?search=${encodeURIComponent(lic.licenceNumber)}`}
+                          className="text-primary hover:underline"
+                        >
+                          {lic.licenceNumber}
+                        </Link>
+                      </TableCell>
                       <TableCell>{lic.licenceType}</TableCell>
                       <TableCell>
                         <Badge variant={lic.status === 'Active' ? 'default' : lic.status === 'Suspended' ? 'destructive' : 'outline'}>

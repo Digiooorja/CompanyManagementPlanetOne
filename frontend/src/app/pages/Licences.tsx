@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Card } from "../components/ui/card";
-import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import {
@@ -23,6 +23,7 @@ import {
   RefreshCw,
   Loader2,
   Building2,
+  Search,
 } from "lucide-react";
 import { licencesApi, blocksApi } from "../../services/api";
 import { useAuth } from "../contexts/AuthContext";
@@ -68,7 +69,6 @@ function getExpiryTheme(days: number | null): {
   return { border: "border-emerald-400", bg: "bg-white", badge: "bg-emerald-100 text-emerald-700", label: `${days}d remaining`, icon: <CheckCircle className="h-4 w-4 text-emerald-500" /> };
 }
 
-const LICENCE_TYPES = ["Exploration", "Production", "Environmental", "Drilling", "Contract"];
 const LICENCE_STATUSES = ["Active", "Suspended", "Renewed"];
 
 // -----------------------------------------------------------------------
@@ -77,7 +77,7 @@ const LICENCE_STATUSES = ["Active", "Suspended", "Renewed"];
 function emptyForm() {
   return {
     licenceNumber: "",
-    licenceType: "Exploration",
+    licenceType: "",
     blockIds: [] as number[],
     issuedBy: "",
     startDate: "",
@@ -89,6 +89,8 @@ function emptyForm() {
 
 export function Licences() {
   const { canEdit, isAdmin } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchQuery, setSearchQuery] = useState(searchParams.get("search") || "");
 
   const [licences, setLicences] = useState<any[]>([]);
   const [blocks, setBlocks] = useState<any[]>([]);
@@ -100,6 +102,50 @@ export function Licences() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [selectedLicence, setSelectedLicence] = useState<any | null>(null);
   const [form, setForm] = useState(emptyForm());
+
+  // Trigger edit mode if URL parameter "edit" matches a licence ID/number
+  useEffect(() => {
+    if (!loading && licences.length > 0) {
+      const editParam = searchParams.get("edit");
+      if (editParam) {
+        const found = licences.find(
+          (l) =>
+            String(l.id) === editParam ||
+            String(l.licenceNumber).toLowerCase() === editParam.toLowerCase()
+        );
+        if (found && canEdit) {
+          setSelectedLicence(found);
+          setForm({
+            licenceNumber: found.licenceNumber || "",
+            licenceType: found.licenceType || "",
+            blockIds: Array.isArray(found.blockIds) ? found.blockIds.map(Number) : [],
+            issuedBy: found.issuedBy || "",
+            startDate: found.startDate ? String(found.startDate).slice(0, 10) : "",
+            expiryDate: found.expiryDate ? String(found.expiryDate).slice(0, 10) : "",
+            status: found.status || "Active",
+            notes: found.notes || "",
+          });
+          setIsEditOpen(true);
+          const newParams = new URLSearchParams(searchParams);
+          newParams.delete("edit");
+          setSearchParams(newParams, { replace: true });
+        }
+      }
+    }
+  }, [loading, licences, searchParams, canEdit, setSearchParams]);
+
+  // Automatically clear search filter from URL and state when edit/add dialog is closed
+  useEffect(() => {
+    if (!isEditOpen && !isAddOpen) {
+      const searchParam = searchParams.get("search");
+      if (searchParam) {
+        setSearchQuery("");
+        const newParams = new URLSearchParams(searchParams);
+        newParams.delete("search");
+        setSearchParams(newParams, { replace: true });
+      }
+    }
+  }, [isEditOpen, isAddOpen, searchParams, setSearchParams]);
 
   // -----------------------------------------------------------------------
   // Data loading
@@ -165,7 +211,7 @@ export function Licences() {
     setSelectedLicence(licence);
     setForm({
       licenceNumber: licence.licenceNumber || "",
-      licenceType: licence.licenceType || "Exploration",
+      licenceType: licence.licenceType || "",
       blockIds: Array.isArray(licence.blockIds) ? licence.blockIds.map(Number) : [],
       issuedBy: licence.issuedBy || "",
       startDate: licence.startDate ? String(licence.startDate).slice(0, 10) : "",
@@ -244,19 +290,18 @@ export function Licences() {
           />
         </div>
         <div className="space-y-1.5">
-          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Licence Type *</label>
-          <select
-            className="w-full h-10 px-3 bg-white border border-slate-200 rounded-md text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Licence Name *</label>
+          <Input
+            required
+            placeholder="e.g. Deep Water Exploration"
             value={form.licenceType}
             onChange={(e) => setForm((p) => ({ ...p, licenceType: e.target.value }))}
-          >
-            {LICENCE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-          </select>
+          />
         </div>
       </div>
 
       <div className="space-y-1.5">
-        <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Issuing Authority</label>
+        <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Issuing Company</label>
         <Input
           placeholder="e.g. Ministry of Petroleum"
           value={form.issuedBy}
@@ -301,11 +346,10 @@ export function Licences() {
                 key={block.id}
                 type="button"
                 onClick={() => toggleBlock(Number(block.id))}
-                className={`px-3 py-1 rounded-full text-xs font-medium border transition-all duration-150 ${
-                  selected
+                className={`px-3 py-1 rounded-full text-xs font-medium border transition-all duration-150 ${selected
                     ? "bg-blue-600 text-white border-blue-600 shadow-sm"
                     : "bg-white text-slate-600 border-slate-300 hover:border-blue-400"
-                }`}
+                  }`}
               >
                 {block.name}
               </button>
@@ -344,6 +388,18 @@ export function Licences() {
       </div>
     );
   }
+
+  const filteredLicences = licences.filter((lic) => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return true;
+    return (
+      String(lic.licenceNumber).toLowerCase().includes(q) ||
+      String(lic.licenceType).toLowerCase().includes(q) ||
+      String(lic.issuedBy).toLowerCase().includes(q) ||
+      (Array.isArray(lic.blockNames) && lic.blockNames.some((name: string) => String(name).toLowerCase().includes(q))) ||
+      String(lic.status).toLowerCase().includes(q)
+    );
+  });
 
   return (
     <div className="space-y-6">
@@ -408,12 +464,53 @@ export function Licences() {
         </Card>
       </div>
 
+      {/* Search & Filter Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="relative w-full max-w-md">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <Input
+            type="search"
+            placeholder="Search licences by number, name, authority or block..."
+            className="pl-10 bg-white"
+            value={searchQuery}
+            onChange={(e) => {
+              const val = e.target.value;
+              setSearchQuery(val);
+              const newParams = new URLSearchParams(searchParams);
+              if (val) {
+                newParams.set("search", val);
+              } else {
+                newParams.delete("search");
+              }
+              setSearchParams(newParams, { replace: true });
+            }}
+          />
+        </div>
+        {searchQuery && (
+          <div className="flex items-center gap-2 text-sm text-slate-500 bg-slate-50 border border-slate-200 px-3 py-2 rounded-md w-fit">
+            <span>Showing search results for <strong>"{searchQuery}"</strong></span>
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery("");
+                const newParams = new URLSearchParams(searchParams);
+                newParams.delete("search");
+                setSearchParams(newParams, { replace: true });
+              }}
+              className="text-blue-600 hover:text-blue-800 hover:underline font-semibold text-xs ml-1"
+            >
+              Clear
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* Licence Cards Grid */}
-      {licences.length === 0 ? (
+      {filteredLicences.length === 0 ? (
         <Card className="p-12 text-center">
           <ScrollText className="h-12 w-12 text-slate-300 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-slate-600 mb-1">No licences found</h3>
-          <p className="text-slate-400 text-sm mb-4">Start building your licence registry by adding the first record.</p>
+          <p className="text-slate-400 text-sm mb-4">Start building your licence registry by adding the first record or clearing your search.</p>
           {canEdit && (
             <Button onClick={openAdd} className="bg-slate-900 hover:bg-slate-800 text-white">
               <Plus className="h-4 w-4 mr-2" />
@@ -423,7 +520,7 @@ export function Licences() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-          {licences.map((licence) => {
+          {filteredLicences.map((licence) => {
             const days = daysUntilExpiry(licence.expiryDate);
             const theme = getExpiryTheme(days);
             const blockNames: string[] = Array.isArray(licence.blockNames) ? licence.blockNames : [];

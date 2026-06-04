@@ -34,7 +34,7 @@ export function Blocks() {
   const [createLicence, setCreateLicence] = useState(false);
   const [newLicence, setNewLicence] = useState({
     licenceNumber: '',
-    licenceType: 'Exploration',
+    licenceType: '',
     issuedBy: '',
     startDate: '',
     expiryDate: '',
@@ -75,7 +75,7 @@ export function Blocks() {
       setCreateLicence(false);
       setNewLicence({
         licenceNumber: '',
-        licenceType: 'Exploration',
+        licenceType: '',
         issuedBy: '',
         startDate: '',
         expiryDate: '',
@@ -257,18 +257,12 @@ export function Blocks() {
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <Label>Licence Type</Label>
-                        <select
-                          className="w-full rounded-md border px-3 py-2"
+                        <Label>Licence Name</Label>
+                        <Input
                           value={newLicence.licenceType}
                           onChange={(e) => setNewLicence({ ...newLicence, licenceType: e.target.value })}
-                        >
-                          <option value="Exploration">Exploration</option>
-                          <option value="Production">Production</option>
-                          <option value="Environmental">Environmental</option>
-                          <option value="Drilling">Drilling</option>
-                          <option value="Contract">Contract</option>
-                        </select>
+                          placeholder="e.g. Deep Water Exploration"
+                        />
                       </div>
                       <div>
                         <Label>Issued By</Label>

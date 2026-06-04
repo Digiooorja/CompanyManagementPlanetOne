@@ -17,7 +17,7 @@ import {
   FileText,
   User,
 } from "lucide-react";
-import { blocksApi, documentsApi, activitiesApi, projectsApi, financeApi } from "../../services/api";
+import { blocksApi, documentsApi, activitiesApi, projectsApi, financeApi, licencesApi } from "../../services/api";
 import { useAuth } from "../contexts/AuthContext";
 
 export function ExecutiveDashboard() {
@@ -27,6 +27,7 @@ export function ExecutiveDashboard() {
   const [activities, setActivities] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
   const [pendingAFEs, setPendingAFEs] = useState<any[]>([]);
+  const [licences, setLicences] = useState<any[]>([]);
   const [loadingBlocks, setLoadingBlocks] = useState(true);
   const [blockError, setBlockError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -37,29 +38,72 @@ export function ExecutiveDashboard() {
   const [actionForm, setActionForm] = useState({ delegateTo: '', comment: '' });
   const [actionLoading, setActionLoading] = useState(false);
 
-  const countdownCards = [
-    {
-      title: "Drilling Deadline",
-      date: "2026-08-30",
-      daysLeft: 103,
-      status: "critical",
-      block: "Deep Water Block",
-    },
-    {
-      title: "Licence Expiry",
-      date: "2027-08-15",
-      daysLeft: 465,
-      status: "warning",
-      block: "Shallow Water Block",
-    },
-    {
-      title: "Contract Expiry",
-      date: "2026-09-20",
-      daysLeft: 142,
-      status: "normal",
-      block: "Service Contract #123",
-    },
-  ];
+  const computeMilestones = () => {
+    const milestones: any[] = [];
+    const now = new Date();
+
+    // 1. Licences Expirations
+    licences.forEach(lic => {
+      if (lic.expiryDate && lic.status === 'Active') {
+        const exp = new Date(lic.expiryDate);
+        const diffTime = exp.getTime() - now.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        if (diffDays > 0 && diffDays < 365 * 2) {
+          milestones.push({
+            title: `${lic.licenceType || 'Licence'} Expiry`,
+            date: exp.toISOString().split('T')[0],
+            daysLeft: diffDays,
+            status: diffDays < 90 ? 'critical' : diffDays < 180 ? 'warning' : 'normal',
+            block: lic.licenceNumber || 'Unknown'
+          });
+        }
+      }
+    });
+
+    // 2. Activities Deadlines
+    activities.forEach(act => {
+      if (act.endDate && act.status !== 'Completed') {
+        const end = new Date(act.endDate);
+        const diffTime = end.getTime() - now.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        if (diffDays > 0 && diffDays < 180) {
+          milestones.push({
+            title: `Activity Deadline`,
+            date: end.toISOString().split('T')[0],
+            daysLeft: diffDays,
+            status: diffDays < 14 ? 'critical' : diffDays < 30 ? 'warning' : 'normal',
+            block: act.name || act.title || 'Unknown Activity'
+          });
+        }
+      }
+    });
+
+    // 3. Projects Deadlines
+    projects.forEach(proj => {
+      if (proj.endDate && proj.status !== 'Completed') {
+        const end = new Date(proj.endDate);
+        const diffTime = end.getTime() - now.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        if (diffDays > 0 && diffDays < 365) {
+          milestones.push({
+            title: `Project Deadline`,
+            date: end.toISOString().split('T')[0],
+            daysLeft: diffDays,
+            status: diffDays < 30 ? 'critical' : diffDays < 90 ? 'warning' : 'normal',
+            block: proj.name || proj.title || 'Unknown Project'
+          });
+        }
+      }
+    });
+
+    // Sort by closest date and take top 3
+    return milestones.sort((a, b) => a.daysLeft - b.daysLeft).slice(0, 3);
+  };
+
+  const liveCountdownCards = computeMilestones();
 
   const fetchBlocks = async () => {
     try {
@@ -78,22 +122,25 @@ export function ExecutiveDashboard() {
 
   const fetchSearchData = async () => {
     try {
-      const [docs, acts, projs, afes] = await Promise.all([
+      const [docs, acts, projs, afes, lics] = await Promise.all([
         documentsApi.getAll(),
         activitiesApi.getAll(),
         projectsApi.getAll(),
         financeApi.getPending(),
+        licencesApi.getAll(),
       ]);
       setDocuments(Array.isArray(docs) ? docs : []);
       setActivities(Array.isArray(acts) ? acts : []);
       setProjects(Array.isArray(projs) ? projs : []);
       setPendingAFEs(Array.isArray(afes) ? afes : []);
+      setLicences(Array.isArray(lics) ? lics : []);
     } catch (err) {
       console.error('Error loading dashboard search data:', err);
       setDocuments([]);
       setActivities([]);
       setProjects([]);
       setPendingAFEs([]);
+      setLicences([]);
     }
   };
 
@@ -191,12 +238,12 @@ export function ExecutiveDashboard() {
     : [];
 
   const filteredCountdownCards = normalizedSearch
-    ? countdownCards.filter((card) => [card.title, card.block, card.date]
+    ? liveCountdownCards.filter((card) => [card.title, card.block, card.date]
         .filter(Boolean)
         .join(' ')
         .toLowerCase()
         .includes(normalizedSearch))
-    : countdownCards;
+    : liveCountdownCards;
 
   const filteredBlocks = normalizedSearch
     ? blocks.filter((block) => [block.name, block.operator, block.location, block.area, block.description]
@@ -482,11 +529,22 @@ export function ExecutiveDashboard() {
                           <label className="text-xs font-medium text-gray-700">Forward To (Name or Dept)</label>
                           <input
                             type="text"
+                            list="department-options"
                             className="w-full mt-1 p-2 text-sm border rounded"
                             placeholder="e.g. Finance Department or John Doe"
                             value={actionForm.delegateTo}
                             onChange={e => setActionForm({...actionForm, delegateTo: e.target.value})}
                           />
+                          <datalist id="department-options">
+                            <option value="Executive Management" />
+                            <option value="Procurement" />
+                            <option value="Accounts" />
+                            <option value="Operations" />
+                            <option value="Finance & Accounts" />
+                            <option value="HSE" />
+                            <option value="Commercial" />
+                            <option value="HR" />
+                          </datalist>
                         </div>
                       )}
                       
