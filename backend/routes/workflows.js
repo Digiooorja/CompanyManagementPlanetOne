@@ -3,6 +3,63 @@ const router = express.Router();
 const { Op, fn, col, where } = require('sequelize');
 const Workflow = require('../models/Workflow');
 const Finance = require('../models/Finance');
+const Task = require('../models/Task');
+const User = require('../models/User');
+const Department = require('../models/Department');
+
+// Helper to auto-assign workflow tasks to department managers
+async function autoAssignWorkflowTask(workflow) {
+  try {
+    if (!workflow.currentStep) return;
+    
+    // Map common step names to departments
+    let deptName = workflow.currentStep;
+    if (deptName === 'HSE Review') deptName = 'HSE';
+    if (deptName === 'Manager Review') deptName = 'Operations'; // Default to operations for generic manager
+    if (deptName === 'Finance & Accounts' || deptName === 'Accounts') deptName = 'Finance';
+    if (deptName === 'Executive Management') deptName = 'Management';
+
+    const department = await Department.findOne({ where: { name: { [Op.like]: `%${deptName}%` } } });
+    if (!department) return;
+
+    // Find manager for that department
+    let manager = await User.findOne({
+      where: { departmentId: department.id, role: 'Manager' }
+    });
+    
+    // Fallback: If no manager, assign to any user in department
+    if (!manager) {
+      manager = await User.findOne({ where: { departmentId: department.id } });
+    }
+
+    if (manager) {
+      // Find active tasks for this workflow
+      const existingTask = await Task.findOne({
+        where: { relatedType: 'Workflow', relatedId: workflow.id, status: { [Op.notIn]: ['Completed'] } }
+      });
+
+      if (existingTask) {
+        await existingTask.update({
+          assignedToId: manager.id,
+          title: `Action Required: ${workflow.title} (${workflow.currentStep})`
+        });
+      } else {
+        await Task.create({
+          title: `Action Required: ${workflow.title} (${workflow.currentStep})`,
+          description: workflow.description || `Please review workflow step: ${workflow.currentStep}`,
+          status: 'Not Started',
+          priority: workflow.priority || 'Medium',
+          dueDate: workflow.dueDate ? new Date(workflow.dueDate) : null,
+          assignedToId: manager.id,
+          relatedType: 'Workflow',
+          relatedId: workflow.id
+        });
+      }
+    }
+  } catch (err) {
+    console.error('Failed to auto-assign workflow task:', err);
+  }
+}
 
 // GET workflow inbox items for operational overview
 router.get('/inbox', async (req, res) => {
@@ -120,6 +177,10 @@ router.post('/', async (req, res) => {
       steps: req.body.steps || [],
       status: req.body.status || 'Awaiting Action'
     });
+    
+    // Auto-assign task
+    await autoAssignWorkflowTask(newWorkflow);
+    
     res.status(201).json(newWorkflow);
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -145,6 +206,9 @@ router.put('/:id', async (req, res) => {
       steps: req.body.steps || workflow.steps,
       status: req.body.status || workflow.status
     });
+
+    // Auto-assign or update task
+    await autoAssignWorkflowTask(workflow);
 
     res.json(workflow);
   } catch (err) {

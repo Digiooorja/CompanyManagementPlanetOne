@@ -54,6 +54,7 @@ export function Layout() {
     { name: "Finance", href: "/finance", icon: DollarSign },
     { name: "Licences", href: "/licences", icon: ScrollText },
     { name: "Reports", href: "/reports", icon: BarChart3 },
+    { name: "Tasks", href: "/tasks", icon: Activity }, // Activity icon or CheckSquare icon, using Activity for now as it's imported
     ...(isAdmin ? [{ name: "Admin", href: "/admin", icon: Settings }] : []),
   ];
 

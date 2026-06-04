@@ -203,3 +203,14 @@ export const licencesApi = {
   update: (id: number, data: any) => apiCall(`/licences/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: number) => apiCall(`/licences/${id}`, { method: 'DELETE' }),
 };
+
+// Tasks API
+export const tasksApi = {
+  getAll: () => apiCall<any[]>('/tasks'),
+  getMyTasks: () => apiCall<any[]>('/tasks/my'),
+  getAssignedByMe: () => apiCall<any[]>('/tasks/assigned-by-me'),
+  getById: (id: number) => apiCall<any>(`/tasks/${id}`),
+  create: (data: any) => apiCall('/tasks', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: number, data: any) => apiCall(`/tasks/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: number) => apiCall(`/tasks/${id}`, { method: 'DELETE' }),
+};

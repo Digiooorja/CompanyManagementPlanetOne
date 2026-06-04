@@ -23,6 +23,7 @@ import { Admin } from "./pages/Admin";
 import { Notifications } from "./pages/Notifications";
 import { Login } from "./pages/Login";
 import { Register } from "./pages/Register";
+import { Tasks } from "./pages/Tasks";
 
 export const router = createBrowserRouter([
   {
@@ -61,6 +62,7 @@ export const router = createBrowserRouter([
           { path: "licences", Component: Licences },
           { path: "admin", Component: Admin },
           { path: "notifications", Component: Notifications },
+          { path: "tasks", Component: Tasks },
         ],
       }
     ],
