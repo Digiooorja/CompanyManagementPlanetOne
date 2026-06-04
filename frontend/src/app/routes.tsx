@@ -18,6 +18,7 @@ import { RegisterDetail } from "./pages/RegisterDetail";
 import { Finance } from "./pages/Finance";
 import { AfeDetail } from "./pages/AfeDetail";
 import { Reports } from "./pages/Reports";
+import { Licences } from "./pages/Licences";
 import { Admin } from "./pages/Admin";
 import { Notifications } from "./pages/Notifications";
 import { Login } from "./pages/Login";
@@ -57,6 +58,7 @@ export const router = createBrowserRouter([
           { path: "finance", Component: Finance },
           { path: "finance/:id", Component: AfeDetail },
           { path: "reports", Component: Reports },
+          { path: "licences", Component: Licences },
           { path: "admin", Component: Admin },
           { path: "notifications", Component: Notifications },
         ],

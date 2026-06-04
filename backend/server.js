@@ -120,6 +120,7 @@ const reportsRoutes = require('./routes/reports');
 const risksRoutes = require('./routes/risks');
 const departmentsRoutes = require('./routes/departments');
 const commentsRoutes = require('./routes/comments');
+const licencesRoutes = require('./routes/licences');
 const adminRoutes = require('./routes/admin');
 const authRoutes = require('./routes/auth');
 
@@ -176,6 +177,7 @@ app.use('/api/reports', reportsRoutes);
 app.use('/api/risks', risksRoutes);
 app.use('/api/departments', departmentsRoutes);
 app.use('/api/comments', commentsRoutes);
+app.use('/api/licences', licencesRoutes);
 app.use('/api/admin', authMiddleware, adminMiddleware, adminRoutes);
 app.use('/api/auth', authRoutes);
 

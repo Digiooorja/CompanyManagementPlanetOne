@@ -1,0 +1,571 @@
+import { useState, useEffect } from "react";
+import { Card } from "../components/ui/card";
+import { Badge } from "../components/ui/badge";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogClose,
+} from "../components/ui/dialog";
+import {
+  ScrollText,
+  Plus,
+  Edit3,
+  Trash2,
+  AlertTriangle,
+  CheckCircle,
+  XCircle,
+  Clock,
+  RefreshCw,
+  Loader2,
+  Building2,
+} from "lucide-react";
+import { licencesApi, blocksApi } from "../../services/api";
+import { useAuth } from "../contexts/AuthContext";
+
+// -----------------------------------------------------------------------
+// Utility: compute days until expiry (negative = already expired)
+// -----------------------------------------------------------------------
+function daysUntilExpiry(expiryDate: string | null): number | null {
+  if (!expiryDate) return null;
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const expiry = new Date(expiryDate);
+  expiry.setHours(0, 0, 0, 0);
+  return Math.round((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+// -----------------------------------------------------------------------
+// Utility: determine card colour theme by expiry proximity
+//   > 60 days  → green
+//   31–60 days → amber/orange
+//   1–30 days  → red
+//   expired    → maroon/dark-red
+// -----------------------------------------------------------------------
+function getExpiryTheme(days: number | null): {
+  border: string;
+  bg: string;
+  badge: string;
+  label: string;
+  icon: React.ReactNode;
+} {
+  if (days === null) {
+    return { border: "border-slate-200", bg: "bg-white", badge: "bg-slate-100 text-slate-600", label: "No Expiry Set", icon: <Clock className="h-4 w-4 text-slate-400" /> };
+  }
+  if (days < 0) {
+    return { border: "border-red-900", bg: "bg-red-50", badge: "bg-red-900 text-white", label: "Expired", icon: <XCircle className="h-4 w-4 text-red-900" /> };
+  }
+  if (days <= 30) {
+    return { border: "border-red-500", bg: "bg-red-50", badge: "bg-red-500 text-white", label: `${days}d remaining`, icon: <AlertTriangle className="h-4 w-4 text-red-500" /> };
+  }
+  if (days <= 60) {
+    return { border: "border-orange-400", bg: "bg-orange-50", badge: "bg-orange-400 text-white", label: `${days}d remaining`, icon: <AlertTriangle className="h-4 w-4 text-orange-500" /> };
+  }
+  return { border: "border-emerald-400", bg: "bg-white", badge: "bg-emerald-100 text-emerald-700", label: `${days}d remaining`, icon: <CheckCircle className="h-4 w-4 text-emerald-500" /> };
+}
+
+const LICENCE_TYPES = ["Exploration", "Production", "Environmental", "Drilling", "Contract"];
+const LICENCE_STATUSES = ["Active", "Suspended", "Renewed"];
+
+// -----------------------------------------------------------------------
+// Empty form state factory
+// -----------------------------------------------------------------------
+function emptyForm() {
+  return {
+    licenceNumber: "",
+    licenceType: "Exploration",
+    blockIds: [] as number[],
+    issuedBy: "",
+    startDate: "",
+    expiryDate: "",
+    status: "Active",
+    notes: "",
+  };
+}
+
+export function Licences() {
+  const { canEdit, isAdmin } = useAuth();
+
+  const [licences, setLicences] = useState<any[]>([]);
+  const [blocks, setBlocks] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [selectedLicence, setSelectedLicence] = useState<any | null>(null);
+  const [form, setForm] = useState(emptyForm());
+
+  // -----------------------------------------------------------------------
+  // Data loading
+  // -----------------------------------------------------------------------
+  const loadData = async () => {
+    setLoading(true);
+    setErrorMsg(null);
+    try {
+      const [licData, blockData] = await Promise.all([
+        licencesApi.getAll(),
+        blocksApi.getAll(),
+      ]);
+      setLicences(Array.isArray(licData) ? licData : []);
+      setBlocks(Array.isArray(blockData) ? blockData : []);
+    } catch (err: any) {
+      setErrorMsg(err.message || "Failed to load licence data.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  // -----------------------------------------------------------------------
+  // Derived summary stats
+  // -----------------------------------------------------------------------
+  const totalActive = licences.filter((l) => l.status === "Active").length;
+  const expiringWithin60 = licences.filter((l) => {
+    const d = daysUntilExpiry(l.expiryDate);
+    return d !== null && d >= 0 && d <= 60;
+  }).length;
+  const expired = licences.filter((l) => {
+    const d = daysUntilExpiry(l.expiryDate);
+    return d !== null && d < 0;
+  }).length;
+
+  // -----------------------------------------------------------------------
+  // Block selector helper: toggle a block ID inside the form array
+  // -----------------------------------------------------------------------
+  const toggleBlock = (blockId: number) => {
+    setForm((prev) => {
+      const exists = prev.blockIds.includes(blockId);
+      return {
+        ...prev,
+        blockIds: exists
+          ? prev.blockIds.filter((id) => id !== blockId)
+          : [...prev.blockIds, blockId],
+      };
+    });
+  };
+
+  // -----------------------------------------------------------------------
+  // Dialog openers
+  // -----------------------------------------------------------------------
+  const openAdd = () => {
+    setForm(emptyForm());
+    setIsAddOpen(true);
+  };
+
+  const openEdit = (licence: any) => {
+    setSelectedLicence(licence);
+    setForm({
+      licenceNumber: licence.licenceNumber || "",
+      licenceType: licence.licenceType || "Exploration",
+      blockIds: Array.isArray(licence.blockIds) ? licence.blockIds.map(Number) : [],
+      issuedBy: licence.issuedBy || "",
+      startDate: licence.startDate ? String(licence.startDate).slice(0, 10) : "",
+      expiryDate: licence.expiryDate ? String(licence.expiryDate).slice(0, 10) : "",
+      status: licence.status || "Active",
+      notes: licence.notes || "",
+    });
+    setIsEditOpen(true);
+  };
+
+  // -----------------------------------------------------------------------
+  // CRUD handlers
+  // -----------------------------------------------------------------------
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setErrorMsg(null);
+    try {
+      await licencesApi.create({
+        ...form,
+        startDate: form.startDate || null,
+        expiryDate: form.expiryDate || null,
+      });
+      setIsAddOpen(false);
+      loadData();
+    } catch (err: any) {
+      setErrorMsg(err.message || "Failed to create licence.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedLicence) return;
+    setSaving(true);
+    setErrorMsg(null);
+    try {
+      await licencesApi.update(selectedLicence.id, {
+        ...form,
+        startDate: form.startDate || null,
+        expiryDate: form.expiryDate || null,
+      });
+      setIsEditOpen(false);
+      loadData();
+    } catch (err: any) {
+      setErrorMsg(err.message || "Failed to update licence.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: number, licenceNumber: string) => {
+    if (!confirm(`Permanently delete licence "${licenceNumber}"? This action cannot be undone.`)) return;
+    try {
+      await licencesApi.delete(id);
+      loadData();
+    } catch (err: any) {
+      alert("Failed to delete: " + (err.message || err));
+    }
+  };
+
+  // -----------------------------------------------------------------------
+  // Shared form body rendered inside both Add and Edit dialogs
+  // -----------------------------------------------------------------------
+  const renderFormBody = () => (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Licence Number *</label>
+          <Input
+            required
+            placeholder="e.g. EXP-DW-2024-001"
+            value={form.licenceNumber}
+            onChange={(e) => setForm((p) => ({ ...p, licenceNumber: e.target.value }))}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Licence Type *</label>
+          <select
+            className="w-full h-10 px-3 bg-white border border-slate-200 rounded-md text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            value={form.licenceType}
+            onChange={(e) => setForm((p) => ({ ...p, licenceType: e.target.value }))}
+          >
+            {LICENCE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Issuing Authority</label>
+        <Input
+          placeholder="e.g. Ministry of Petroleum"
+          value={form.issuedBy}
+          onChange={(e) => setForm((p) => ({ ...p, issuedBy: e.target.value }))}
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Start Date</label>
+          <Input type="date" value={form.startDate} onChange={(e) => setForm((p) => ({ ...p, startDate: e.target.value }))} />
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Expiry Date</label>
+          <Input type="date" value={form.expiryDate} onChange={(e) => setForm((p) => ({ ...p, expiryDate: e.target.value }))} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Status</label>
+          <select
+            className="w-full h-10 px-3 bg-white border border-slate-200 rounded-md text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            value={form.status}
+            onChange={(e) => setForm((p) => ({ ...p, status: e.target.value }))}
+          >
+            {LICENCE_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* Multi-block selector */}
+      <div className="space-y-1.5">
+        <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
+          Covered Blocks <span className="text-slate-400 font-normal normal-case">(select all that apply)</span>
+        </label>
+        <div className="flex flex-wrap gap-2 p-3 bg-slate-50 rounded-lg border border-slate-200 min-h-[48px]">
+          {blocks.map((block) => {
+            const selected = form.blockIds.includes(Number(block.id));
+            return (
+              <button
+                key={block.id}
+                type="button"
+                onClick={() => toggleBlock(Number(block.id))}
+                className={`px-3 py-1 rounded-full text-xs font-medium border transition-all duration-150 ${
+                  selected
+                    ? "bg-blue-600 text-white border-blue-600 shadow-sm"
+                    : "bg-white text-slate-600 border-slate-300 hover:border-blue-400"
+                }`}
+              >
+                {block.name}
+              </button>
+            );
+          })}
+          {blocks.length === 0 && (
+            <span className="text-xs text-slate-400 self-center">No blocks available</span>
+          )}
+        </div>
+        {form.blockIds.length > 0 && (
+          <p className="text-xs text-slate-500">{form.blockIds.length} block(s) selected</p>
+        )}
+      </div>
+
+      <div className="space-y-1.5">
+        <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Notes / Conditions</label>
+        <textarea
+          rows={3}
+          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+          placeholder="Renewal conditions, special clauses, regulatory requirements..."
+          value={form.notes}
+          onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
+        />
+      </div>
+    </div>
+  );
+
+  // -----------------------------------------------------------------------
+  // Render
+  // -----------------------------------------------------------------------
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
+        <Loader2 className="h-10 w-10 text-blue-600 animate-spin" />
+        <p className="text-slate-500 font-medium animate-pulse">Loading licence registry...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Page Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Licence Registry</h1>
+          <p className="text-slate-500 mt-1">
+            Track and manage all regulatory licences, permits, and contracts across concession blocks.
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Button onClick={loadData} variant="outline" className="flex items-center gap-2">
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </Button>
+          {canEdit && (
+            <Button onClick={openAdd} className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white">
+              <Plus className="h-4 w-4" />
+              Add Licence
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Error banner */}
+      {errorMsg && (
+        <Card className="p-4 bg-red-50 border-red-200 text-red-700 text-sm flex items-center justify-between">
+          <span><strong>Error:</strong> {errorMsg}</span>
+          <Button variant="ghost" size="sm" onClick={() => setErrorMsg(null)} className="text-red-700 hover:bg-red-100">Dismiss</Button>
+        </Card>
+      )}
+
+      {/* Summary strip */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className="p-4 flex items-center gap-3 border-l-4 border-l-emerald-400">
+          <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center flex-shrink-0">
+            <CheckCircle className="h-5 w-5 text-emerald-600" />
+          </div>
+          <div>
+            <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Total Active</p>
+            <p className="text-2xl font-bold text-slateald-900">{totalActive}</p>
+          </div>
+        </Card>
+        <Card className="p-4 flex items-center gap-3 border-l-4 border-l-orange-400">
+          <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center flex-shrink-0">
+            <AlertTriangle className="h-5 w-5 text-orange-500" />
+          </div>
+          <div>
+            <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Expiring within 60 days</p>
+            <p className="text-2xl font-bold text-orange-600">{expiringWithin60}</p>
+          </div>
+        </Card>
+        <Card className="p-4 flex items-center gap-3 border-l-4 border-l-red-800">
+          <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+            <XCircle className="h-5 w-5 text-red-800" />
+          </div>
+          <div>
+            <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Expired</p>
+            <p className="text-2xl font-bold text-red-800">{expired}</p>
+          </div>
+        </Card>
+      </div>
+
+      {/* Licence Cards Grid */}
+      {licences.length === 0 ? (
+        <Card className="p-12 text-center">
+          <ScrollText className="h-12 w-12 text-slate-300 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-slate-600 mb-1">No licences found</h3>
+          <p className="text-slate-400 text-sm mb-4">Start building your licence registry by adding the first record.</p>
+          {canEdit && (
+            <Button onClick={openAdd} className="bg-slate-900 hover:bg-slate-800 text-white">
+              <Plus className="h-4 w-4 mr-2" />
+              Add First Licence
+            </Button>
+          )}
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {licences.map((licence) => {
+            const days = daysUntilExpiry(licence.expiryDate);
+            const theme = getExpiryTheme(days);
+            const blockNames: string[] = Array.isArray(licence.blockNames) ? licence.blockNames : [];
+
+            return (
+              <Card
+                key={licence.id}
+                className={`p-5 border-2 ${theme.border} ${theme.bg} transition-all duration-200 hover:shadow-lg relative flex flex-col gap-3`}
+              >
+                {/* Header */}
+                <div className="flex items-start justify-between">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <ScrollText className="h-4 w-4 text-slate-500 flex-shrink-0" />
+                      <h3 className="font-bold text-slate-900 truncate text-base">{licence.licenceNumber}</h3>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs font-medium">
+                        {licence.licenceType}
+                      </span>
+                      <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs font-medium">
+                        {licence.status}
+                      </span>
+                    </div>
+                  </div>
+                  {/* Expiry urgency badge */}
+                  <span className={`ml-2 flex-shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${theme.badge}`}>
+                    {theme.icon}
+                    {theme.label}
+                  </span>
+                </div>
+
+                {/* Details */}
+                <div className="space-y-1.5 text-sm text-slate-600">
+                  {licence.issuedBy && (
+                    <p><span className="font-medium text-slate-700">Issued by:</span> {licence.issuedBy}</p>
+                  )}
+                  {licence.startDate && (
+                    <p><span className="font-medium text-slate-700">Start:</span> {new Date(licence.startDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>
+                  )}
+                  {licence.expiryDate && (
+                    <p><span className="font-medium text-slate-700">Expiry:</span> {new Date(licence.expiryDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>
+                  )}
+                </div>
+
+                {/* Covered blocks */}
+                {blockNames.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    <Building2 className="h-3.5 w-3.5 text-slate-400 self-center flex-shrink-0" />
+                    {blockNames.map((name, i) => (
+                      <span key={i} className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-100 rounded-full text-xs font-medium">
+                        {name}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Notes */}
+                {licence.notes && (
+                  <p className="text-xs text-slate-500 italic border-t border-slate-200 pt-2 line-clamp-2">
+                    {licence.notes}
+                  </p>
+                )}
+
+                {/* Action buttons */}
+                {canEdit && (
+                  <div className="flex gap-2 pt-1 border-t border-slate-100">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openEdit(licence)}
+                      className="flex items-center gap-1 text-xs flex-1"
+                    >
+                      <Edit3 className="h-3.5 w-3.5" />
+                      Edit
+                    </Button>
+                    {isAdmin && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDelete(licence.id, licence.licenceNumber)}
+                        className="flex items-center gap-1 text-xs text-red-600 hover:bg-red-50 hover:border-red-300"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Delete
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Add Licence Dialog */}
+      <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ScrollText className="h-5 w-5" />
+              Register New Licence
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCreate} className="space-y-4">
+            {renderFormBody()}
+            <DialogFooter className="gap-2 pt-2">
+              <DialogClose asChild>
+                <Button type="button" variant="outline">Cancel</Button>
+              </DialogClose>
+              <Button type="submit" disabled={saving} className="bg-slate-900 hover:bg-slate-800 text-white">
+                {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
+                Register Licence
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Licence Dialog */}
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit3 className="h-5 w-5" />
+              Edit Licence
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleUpdate} className="space-y-4">
+            {renderFormBody()}
+            <DialogFooter className="gap-2 pt-2">
+              <DialogClose asChild>
+                <Button type="button" variant="outline">Cancel</Button>
+              </DialogClose>
+              <Button type="submit" disabled={saving} className="bg-slate-900 hover:bg-slate-800 text-white">
+                {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Edit3 className="h-4 w-4 mr-2" />}
+                Save Changes
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

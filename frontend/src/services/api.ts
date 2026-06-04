@@ -189,3 +189,12 @@ export const workflowsApi = {
   update: (id: number, data: any) => apiCall(`/workflows/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: number) => apiCall(`/workflows/${id}`, { method: 'DELETE' }),
 };
+
+// Licences API
+export const licencesApi = {
+  getAll: () => apiCall<any[]>('/licences'),
+  getById: (id: number) => apiCall<any>(`/licences/${id}`),
+  create: (data: any) => apiCall('/licences', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: number, data: any) => apiCall(`/licences/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: number) => apiCall(`/licences/${id}`, { method: 'DELETE' }),
+};

@@ -16,7 +16,8 @@ import {
   Menu,
   X,
   LogOut,
-  ChevronDown
+  ChevronDown,
+  ScrollText
 } from "lucide-react";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
@@ -51,6 +52,7 @@ export function Layout() {
     { name: "Workflows", href: "/workflows", icon: GitBranch },
     { name: "Registers", href: "/registers", icon: BookOpen },
     { name: "Finance", href: "/finance", icon: DollarSign },
+    { name: "Licences", href: "/licences", icon: ScrollText },
     { name: "Reports", href: "/reports", icon: BarChart3 },
     ...(isAdmin ? [{ name: "Admin", href: "/admin", icon: Settings }] : []),
   ];
