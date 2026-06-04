@@ -120,6 +120,7 @@ export const documentsApi = {
   getAll: () => apiCall<any[]>('/documents'),
   getByProjectId: (projectId: number) => apiCall<any[]>(`/documents?projectId=${projectId}`),
   getByActivityId: (activityId: number) => apiCall<any[]>(`/documents?activityId=${activityId}`),
+  getByLicenceId: (licenceId: number) => apiCall<any[]>(`/documents?licenceId=${licenceId}`),
   getById: (id: number) => apiCall<any>(`/documents/${id}`),
   getPresignedUrl: (id: number, type: 'download' | 'preview' = 'download') => apiCall<{ url: string; expiresIn: number }>(`/documents/${id}/presigned?type=${type}`),
   create: (data: any) => apiCall('/documents', { method: 'POST', body: JSON.stringify(data) }),

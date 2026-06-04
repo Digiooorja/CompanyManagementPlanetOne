@@ -24,8 +24,13 @@ import {
   Loader2,
   Building2,
   Search,
+  Upload,
+  Eye,
+  Download,
+  FileText,
+  Link2
 } from "lucide-react";
-import { licencesApi, blocksApi } from "../../services/api";
+import { licencesApi, blocksApi, documentsApi } from "../../services/api";
 import { useAuth } from "../contexts/AuthContext";
 
 // -----------------------------------------------------------------------
@@ -102,6 +107,28 @@ export function Licences() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [selectedLicence, setSelectedLicence] = useState<any | null>(null);
   const [form, setForm] = useState(emptyForm());
+  const [licenceDocuments, setLicenceDocuments] = useState<any[]>([]);
+  const [allDocuments, setAllDocuments] = useState<any[]>([]);
+  const [loadingDocs, setLoadingDocs] = useState(false);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+  const [linkingDocId, setLinkingDocId] = useState('');
+  const [linkingDoc, setLinkingDoc] = useState(false);
+
+  const loadDocuments = async (licId: number) => {
+    setLoadingDocs(true);
+    try {
+      const [docs, allDocs] = await Promise.all([
+        documentsApi.getByLicenceId(licId),
+        documentsApi.getAll(),
+      ]);
+      setLicenceDocuments(Array.isArray(docs) ? docs : []);
+      setAllDocuments(Array.isArray(allDocs) ? allDocs : []);
+    } catch (err) {
+      console.error("Failed to load documents", err);
+    } finally {
+      setLoadingDocs(false);
+    }
+  };
 
   // Trigger edit mode if URL parameter "edit" matches a licence ID/number
   useEffect(() => {
@@ -126,6 +153,7 @@ export function Licences() {
             notes: found.notes || "",
           });
           setIsEditOpen(true);
+          loadDocuments(found.id);
           const newParams = new URLSearchParams(searchParams);
           newParams.delete("edit");
           setSearchParams(newParams, { replace: true });
@@ -220,6 +248,7 @@ export function Licences() {
       notes: licence.notes || "",
     });
     setIsEditOpen(true);
+    loadDocuments(licence.id);
   };
 
   // -----------------------------------------------------------------------
@@ -271,6 +300,49 @@ export function Licences() {
       loadData();
     } catch (err: any) {
       alert("Failed to delete: " + (err.message || err));
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || !e.target.files[0] || !selectedLicence) return;
+    const file = e.target.files[0];
+    setUploadingDoc(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("title", file.name);
+      formData.append("documentType", "Licence");
+      formData.append("licenceId", String(selectedLicence.id));
+      await documentsApi.upload(formData);
+      await loadDocuments(selectedLicence.id);
+    } catch (err) {
+      alert("Failed to upload document");
+    } finally {
+      setUploadingDoc(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleDownloadDoc = async (id: number, type: 'download' | 'preview') => {
+    try {
+      const presigned = await documentsApi.getPresignedUrl(id, type);
+      window.open(presigned.url, '_blank');
+    } catch (err) {
+      alert(`Failed to ${type} document`);
+    }
+  };
+
+  const handleLinkDocument = async () => {
+    if (!linkingDocId || !selectedLicence) return;
+    setLinkingDoc(true);
+    try {
+      await documentsApi.update(Number(linkingDocId), { licenceId: selectedLicence.id });
+      setLinkingDocId('');
+      await loadDocuments(selectedLicence.id);
+    } catch (err) {
+      alert('Failed to link document. Please try again.');
+    } finally {
+      setLinkingDoc(false);
     }
   };
 
@@ -651,7 +723,97 @@ export function Licences() {
           </DialogHeader>
           <form onSubmit={handleUpdate} className="space-y-4">
             {renderFormBody()}
-            <DialogFooter className="gap-2 pt-2">
+            
+            {/* Attached Documents Section (Moved above footer) */}
+            <div className="mt-6 pt-6 border-t border-slate-200">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                  <ScrollText className="h-4 w-4 text-slate-500" />
+                  Attached Documents
+                </h4>
+                <div>
+                  <input
+                    type="file"
+                    id="licence-doc-upload"
+                    className="hidden"
+                    onChange={handleFileUpload}
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
+                  />
+                  <Button 
+                    type="button"
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => document.getElementById('licence-doc-upload')?.click()}
+                    disabled={uploadingDoc}
+                    className="h-8"
+                  >
+                    {uploadingDoc ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Upload className="h-3.5 w-3.5 mr-1" />}
+                    {uploadingDoc ? 'Uploading...' : 'Upload File'}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Link existing document from the library */}
+              <div className="flex gap-2 mb-3">
+                <select
+                  className="flex-1 h-8 text-sm border border-slate-200 rounded-md px-2 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={linkingDocId}
+                  onChange={(e) => setLinkingDocId(e.target.value)}
+                >
+                  <option value="">— Link an existing library document —</option>
+                  {allDocuments
+                    .filter(doc => !licenceDocuments.some(ld => ld.id === doc.id))
+                    .map(doc => (
+                      <option key={doc.id} value={String(doc.id)}>
+                        {doc.title || doc.filename}
+                      </option>
+                    ))
+                  }
+                </select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleLinkDocument}
+                  disabled={!linkingDocId || linkingDoc}
+                  className="h-8 shrink-0"
+                >
+                  {linkingDoc
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : <><Link2 className="h-3.5 w-3.5 mr-1" />Link</>
+                  }
+                </Button>
+              </div>
+              
+              <div className="space-y-2">
+                {loadingDocs ? (
+                  <div className="flex justify-center p-4"><Loader2 className="h-5 w-5 animate-spin text-slate-400" /></div>
+                ) : licenceDocuments.length === 0 ? (
+                  <div className="text-center p-4 bg-slate-50 border border-dashed rounded text-sm text-slate-500">
+                    No documents attached to this licence yet.
+                  </div>
+                ) : (
+                  licenceDocuments.map(doc => (
+                    <div key={doc.id} className="flex items-center justify-between p-2.5 bg-slate-50 border rounded hover:bg-slate-100 transition-colors">
+                      <div className="flex items-center gap-2 overflow-hidden">
+                        <FileText className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                        <span className="text-sm font-medium text-slate-700 truncate">{doc.title || doc.filename}</span>
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <Button type="button" size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => handleDownloadDoc(doc.id, 'preview')}>
+                          <Eye className="h-3.5 w-3.5 text-slate-500" />
+                        </Button>
+                        <Button type="button" size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => handleDownloadDoc(doc.id, 'download')}>
+                          <Download className="h-3.5 w-3.5 text-slate-500" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <DialogFooter className="gap-2 pt-4 border-t border-slate-200 mt-4">
               <DialogClose asChild>
                 <Button type="button" variant="outline">Cancel</Button>
               </DialogClose>

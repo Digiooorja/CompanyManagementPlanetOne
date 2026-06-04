@@ -19,7 +19,7 @@ import {
   DialogTrigger,
   DialogClose,
 } from "../components/ui/dialog";
-import { documentsApi, blocksApi, activitiesApi, projectsApi, departmentsApi } from "../../services/api";
+import { documentsApi, blocksApi, activitiesApi, projectsApi, departmentsApi, licencesApi } from "../../services/api";
 import { formatDisplayDateOrDefault } from "../lib/date";
 
 export function Documents() {
@@ -31,6 +31,7 @@ export function Documents() {
   const [projects, setProjects] = useState<any[]>([]);
   const [activities, setActivities] = useState<any[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
+  const [licences, setLicences] = useState<any[]>([]);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
@@ -45,7 +46,8 @@ export function Documents() {
     blockId: "",
     projectId: "",
     activityIds: [] as string[],
-    departmentId: ""
+    departmentId: "",
+    licenceId: ""
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -63,17 +65,19 @@ export function Documents() {
       try {
         setLoading(true);
         setError(null);
-        const [documentData, blockData, projectData, departmentData] = await Promise.all([
+        const [documentData, blockData, projectData, departmentData, licenceData] = await Promise.all([
           documentsApi.getAll(),
           blocksApi.getAll(),
           // get all projects and use block filtering client-side
           projectsApi.getAll ? projectsApi.getAll() : [],
-          departmentsApi.getAll()
+          departmentsApi.getAll(),
+          licencesApi.getAll()
         ]);
         setDocuments(Array.isArray(documentData) ? documentData : []);
         setBlocks(Array.isArray(blockData) ? blockData : []);
         setProjects(Array.isArray(projectData) ? projectData : []);
         setDepartments(Array.isArray(departmentData) ? departmentData : []);
+        setLicences(Array.isArray(licenceData) ? licenceData : []);
       } catch (err) {
         console.error('Error loading documents page data:', err);
         setDocuments([]);
@@ -219,6 +223,9 @@ export function Documents() {
       if (uploadForm.departmentId) {
         formData.append('departmentId', uploadForm.departmentId);
       }
+      if (uploadForm.licenceId) {
+        formData.append('licenceId', uploadForm.licenceId);
+      }
 
       await documentsApi.upload(formData);
 
@@ -234,7 +241,8 @@ export function Documents() {
         blockId: '',
         projectId: '',
         activityIds: [],
-        departmentId: ''
+        departmentId: '',
+        licenceId: ''
       });
     } catch (err) {
       console.error('Error uploading document:', err);
@@ -504,6 +512,7 @@ export function Documents() {
                   </select>
                 </div>
               </div>
+
               <div>
                 <Label htmlFor="document-activities">Tagged Activities</Label>
                 <select
@@ -535,6 +544,8 @@ export function Documents() {
                     <option value="HSE">HSE</option>
                     <option value="Finance">Finance</option>
                     <option value="Report">Report</option>
+                    <option value="Licence">Licence</option>
+                    <option value="Legal">Legal</option>
                   </select>
                 </div>
                 <div>
@@ -551,6 +562,31 @@ export function Documents() {
                   </select>
                 </div>
               </div>
+              {/* Licence selector — only shown when document type is 'Licence' */}
+              {uploadForm.documentType === 'Licence' && (
+                <div className="pt-2">
+                  <Label htmlFor="document-licence">Link to Licence</Label>
+                  <select
+                    id="document-licence"
+                    className="mt-1 block w-full rounded-md border bg-input-background px-3 py-2 text-sm text-foreground shadow-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                    value={uploadForm.licenceId}
+                    onChange={(event) => handleUploadChange('licenceId', event.target.value)}
+                  >
+                    <option value="">— Select a licence (recommended) —</option>
+                    {licences.map((licence) => (
+                      <option key={licence.id} value={String(licence.id)}>
+                        {licence.licenceNumber} {licence.licenceType ? `(${licence.licenceType})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {!uploadForm.licenceId && (
+                    <p className="mt-1 text-xs text-amber-600">
+                      ⚠️ No licence selected — document will be saved to the library unlinked.
+                      You can link it later from the Edit Licence dialog.
+                    </p>
+                  )}
+                </div>
+              )}
               <div>
                 <Label htmlFor="document-file">File</Label>
 

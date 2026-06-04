@@ -16,8 +16,9 @@ import {
   DollarSign,
   FileText,
   User,
+  AlertTriangle,
 } from "lucide-react";
-import { blocksApi, documentsApi, activitiesApi, projectsApi, financeApi, licencesApi } from "../../services/api";
+import { blocksApi, documentsApi, activitiesApi, projectsApi, financeApi, licencesApi, risksApi } from "../../services/api";
 import { useAuth } from "../contexts/AuthContext";
 
 export function ExecutiveDashboard() {
@@ -28,6 +29,7 @@ export function ExecutiveDashboard() {
   const [projects, setProjects] = useState<any[]>([]);
   const [pendingAFEs, setPendingAFEs] = useState<any[]>([]);
   const [licences, setLicences] = useState<any[]>([]);
+  const [risks, setRisks] = useState<any[]>([]);
   const [loadingBlocks, setLoadingBlocks] = useState(true);
   const [blockError, setBlockError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -122,18 +124,20 @@ export function ExecutiveDashboard() {
 
   const fetchSearchData = async () => {
     try {
-      const [docs, acts, projs, afes, lics] = await Promise.all([
+      const [docs, acts, projs, afes, lics, rks] = await Promise.all([
         documentsApi.getAll(),
         activitiesApi.getAll(),
         projectsApi.getAll(),
         financeApi.getPending(),
         licencesApi.getAll(),
+        risksApi.getAll(),
       ]);
       setDocuments(Array.isArray(docs) ? docs : []);
       setActivities(Array.isArray(acts) ? acts : []);
       setProjects(Array.isArray(projs) ? projs : []);
       setPendingAFEs(Array.isArray(afes) ? afes : []);
       setLicences(Array.isArray(lics) ? lics : []);
+      setRisks(Array.isArray(rks) ? rks : []);
     } catch (err) {
       console.error('Error loading dashboard search data:', err);
       setDocuments([]);
@@ -141,6 +145,7 @@ export function ExecutiveDashboard() {
       setProjects([]);
       setPendingAFEs([]);
       setLicences([]);
+      setRisks([]);
     }
   };
 
@@ -181,26 +186,19 @@ export function ExecutiveDashboard() {
     return () => window.removeEventListener('globalSearch', handler as EventListener);
   }, []);
 
-  const alerts = [
-    {
-      id: 1,
-      type: "critical",
-      message: "Well A-1 drilling behind schedule by 5 days",
-      time: "2 hours ago",
-    },
-    {
-      id: 2,
-      type: "warning",
-      message: "Environmental permit renewal required for Block B",
-      time: "5 hours ago",
-    },
-    {
-      id: 3,
-      type: "info",
-      message: "Monthly production report submitted",
-      time: "1 day ago",
-    },
-  ];
+  const criticalRisks = risks
+    .filter(r => r.severity === 'High' || r.severity === 'Critical')
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 5);
+
+  const topExpiringLicence = licences
+    .filter(lic => lic.expiryDate && lic.status === 'Active')
+    .map(lic => {
+      const diffDays = Math.ceil((new Date(lic.expiryDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+      return { ...lic, diffDays };
+    })
+    .filter(lic => lic.diffDays > 0)
+    .sort((a, b) => a.diffDays - b.diffDays)[0];
 
   const normalizedSearch = searchQuery.trim().toLowerCase();
 
@@ -253,13 +251,13 @@ export function ExecutiveDashboard() {
         .includes(normalizedSearch))
     : blocks;
 
-  const filteredAlerts = normalizedSearch
-    ? alerts.filter((alert) => [alert.message, alert.time, alert.type]
+  const filteredRisks = normalizedSearch
+    ? criticalRisks.filter((risk) => [risk.title, risk.description, risk.severity]
         .filter(Boolean)
         .join(' ')
         .toLowerCase()
         .includes(normalizedSearch))
-    : alerts;
+    : criticalRisks;
 
   const filteredPendingAFEs = normalizedSearch
     ? pendingAFEs.filter((afe) => [afe.afeNumber, afe.item, afe.amount?.toString(), afe.delegatedTo]
@@ -317,6 +315,29 @@ export function ExecutiveDashboard() {
         </Card>
       )}
 
+      {/* Top Expirable Licence Widget */}
+      {topExpiringLicence && (
+        <Card className="p-4 bg-orange-50 border-orange-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-orange-100 rounded-full">
+              <AlertTriangle className="h-6 w-6 text-orange-600" />
+            </div>
+            <div>
+              <h3 className="font-bold text-orange-900">Licence Action Required: {topExpiringLicence.licenceNumber}</h3>
+              <p className="text-sm text-orange-700">
+                {topExpiringLicence.licenceType} expires in <span className="font-bold">{topExpiringLicence.diffDays} days</span> 
+                ({formatDisplayDateOrDefault(topExpiringLicence.expiryDate)}).
+              </p>
+            </div>
+          </div>
+          <Link to={!isGuest ? `/licences?edit=${topExpiringLicence.id}` : `/licences?search=${encodeURIComponent(topExpiringLicence.licenceNumber)}`}>
+            <Button className="bg-orange-600 hover:bg-orange-700 text-white shrink-0">
+              Manage Licence
+            </Button>
+          </Link>
+        </Card>
+      )}
+
       {/* Countdown Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {filteredCountdownCards.map((card, index) => (
@@ -350,11 +371,11 @@ export function ExecutiveDashboard() {
         ))}
       </div>
 
-      {/* Blocks Overview */}
+      {/* Sleek Asset Health Matrix */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl">Blocks Overview</h2>
-          {loadingBlocks && <span className="text-sm text-gray-500">Loading blocks...</span>}
+          <h2 className="text-xl font-bold">Asset Health Matrix</h2>
+          {loadingBlocks && <span className="text-sm text-gray-500 animate-pulse">Loading...</span>}
         </div>
 
         {blockError ? (
@@ -366,79 +387,66 @@ export function ExecutiveDashboard() {
             <p className="text-gray-600">No blocks found in the database.</p>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {filteredBlocks.map((block) => (
-              <Card key={block.id} className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 className="text-lg">{block.name}</h3>
-                    <p className="text-sm text-gray-500">{block.operator || block.location || 'No operator/location set'}</p>
-                  </div>
-                  <Badge variant={block.status === "Active" ? "default" : "outline"}>
-                    {block.status}
-                  </Badge>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="text-sm text-gray-600">
-                    <p>
-                      <span className="font-medium">Area:</span> {block.area || 'Unknown'}
-                    </p>
-                    <p>
-                      <span className="font-medium">Location:</span> {block.location || 'Unknown'}
-                    </p>
-                    <p>
-                      <span className="font-medium">Licence Expiry:</span>{' '}
-                      {block.licenceExpiry ? formatDisplayDateOrDefault(block.licenceExpiry) : 'Not set'}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-3 border-t">
-                    <div className="text-sm text-gray-600">
-                      {block.description ? block.description.slice(0, 100) : 'No description available'}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {filteredBlocks.map((block) => {
+              const isActive = block.status === "Active";
+              return (
+                <Link to={`/blocks/${block.id}`} key={block.id}>
+                  <Card className={`p-4 transition-all duration-200 hover:shadow-md hover:-translate-y-1 border-l-4 cursor-pointer h-full flex flex-col justify-between ${isActive ? 'border-l-emerald-500 bg-white' : 'border-l-slate-300 bg-slate-50'}`}>
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="font-bold text-slate-800 truncate pr-2" title={block.name}>{block.name}</h3>
+                        <Badge variant={isActive ? 'default' : 'secondary'} className={isActive ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200' : ''}>
+                          {block.status}
+                        </Badge>
+                      </div>
+                      <div className="space-y-1.5 text-xs text-slate-600">
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-400">Operator</span>
+                          <span className="font-medium text-right truncate max-w-[100px]">{block.operator || '-'}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-400">Area</span>
+                          <span className="font-medium">{block.area || '-'}</span>
+                        </div>
+                      </div>
                     </div>
-                    <Link to={`/blocks/${block.id}`}>
-                      <Button variant="outline" size="sm">
-                        Details
-                      </Button>
-                    </Link>
-                  </div>
-                </div>
-              </Card>
-            ))}
+                  </Card>
+                </Link>
+              );
+            })}
           </div>
         )}
       </div>
 
       {/* Bottom Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Alerts Panel */}
-        <Card className="p-6">
-          <h3 className="text-lg mb-4 flex items-center gap-2">
-            <AlertCircle className="h-5 w-5" />
-            Recent Alerts
-          </h3>
-          <div className="space-y-3">
-            {filteredAlerts.map((alert) => (
-              <div
-                key={alert.id}
-                className="flex items-start gap-3 p-3 rounded-lg bg-gray-50"
-              >
-                {alert.type === "critical" && (
-                  <AlertCircle className="h-5 w-5 text-red-500 mt-0.5" />
-                )}
-                {alert.type === "warning" && (
-                  <Clock className="h-5 w-5 text-orange-500 mt-0.5" />
-                )}
-                {alert.type === "info" && (
-                  <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
-                )}
-                <div className="flex-1">
-                  <p className="text-sm">{alert.message}</p>
-                  <p className="text-xs text-gray-500 mt-1">{alert.time}</p>
-                </div>
+        {/* Critical Risks Panel */}
+        <Card className="p-6 border-l-4 border-l-red-500 shadow-sm flex flex-col h-full">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-red-500" />
+              Critical Risks Alert Panel
+            </h3>
+            <Badge variant="destructive">{filteredRisks.length} High Priority</Badge>
+          </div>
+          <div className="space-y-3 flex-1 overflow-y-auto pr-2">
+            {filteredRisks.length === 0 ? (
+              <div className="text-center p-8 text-gray-500">
+                <CheckCircle className="h-8 w-8 text-emerald-400 mx-auto mb-2" />
+                <p>No critical risks currently active.</p>
               </div>
-            ))}
+            ) : (
+              filteredRisks.map((risk) => (
+                <div key={risk.id} className="flex flex-col gap-1 p-3 rounded-lg bg-red-50 border border-red-100">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-red-900 truncate" title={risk.title}>{risk.title}</span>
+                    <Badge variant="outline" className="bg-white text-xs border-red-200 text-red-700 shrink-0">{risk.status || 'Open'}</Badge>
+                  </div>
+                  <p className="text-sm text-red-700 line-clamp-2" title={risk.description}>{risk.description}</p>
+                </div>
+              ))
+            )}
           </div>
         </Card>
 

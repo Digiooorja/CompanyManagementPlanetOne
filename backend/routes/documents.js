@@ -25,7 +25,7 @@ function sanitizeSegment(name) {
 // GET all documents
 router.get('/', async (req, res) => {
   try {
-    const { projectId, activityId } = req.query;
+    const { projectId, activityId, licenceId } = req.query;
     const where = {};
 
     if (projectId) {
@@ -33,6 +33,9 @@ router.get('/', async (req, res) => {
     }
     if (activityId) {
       where.activityId = activityId;
+    }
+    if (licenceId) {
+      where.licenceId = licenceId;
     }
 
     const documents = await Document.findAll({ where });
@@ -248,10 +251,10 @@ router.get('/:id/presigned', async (req, res) => {
   }
 });
 
-// POST new document with file upload (field: file). Accepts activityId or projectId.
+// POST new document with file upload (field: file). Accepts activityId, projectId, or licenceId.
 router.post('/', upload.single('file'), async (req, res) => {
   try {
-    let { title, author, projectId, activityId, activityIds, documentType, status } = req.body;
+    let { title, author, projectId, activityId, activityIds, licenceId, documentType, status } = req.body;
 
     const parsedActivityIds = (() => {
       if (!activityIds) return [];
@@ -302,11 +305,14 @@ router.post('/', upload.single('file'), async (req, res) => {
     const sanitizedBlock = sanitizeSegment(blockName);
     const sanitizedProject = sanitizeSegment(projectName || 'general');
     const sanitizedActivity = sanitizeSegment(activityName || 'general');
+    const sanitizedLicence = licenceId ? sanitizeSegment(`licence-${licenceId}`) : 'general';
 
     const timestamp = Date.now();
     const originalName = req.file.originalname || 'upload.bin';
     const sanitizedFilename = originalName.replace(/[^a-zA-Z0-9.\-_/]/g, '_');
-    const s3Key = `${sanitizedBlock}/${sanitizedProject}/${sanitizedActivity}/${timestamp}-${sanitizedFilename}`;
+    const s3Key = licenceId 
+      ? `licences/${sanitizedLicence}/${timestamp}-${sanitizedFilename}`
+      : `${sanitizedBlock}/${sanitizedProject}/${sanitizedActivity}/${timestamp}-${sanitizedFilename}`;
 
     // Upload to S3
     const params = {
@@ -325,6 +331,7 @@ router.post('/', upload.single('file'), async (req, res) => {
       projectId: projectId || null,
       activityId: activityId || parsedActivityIds[0] || null,
       activityIds: parsedActivityIds.length > 0 ? parsedActivityIds : null,
+      licenceId: licenceId || null,
       documentType: documentType || 'Report',
       uploadDate: new Date(),
       status: status || 'Review',
@@ -384,10 +391,13 @@ router.post('/:id/versions', upload.single('file'), async (req, res) => {
     const sanitizedBlock = sanitizeSegment(blockName);
     const sanitizedProject = sanitizeSegment(projectName || 'general');
     const sanitizedActivity = sanitizeSegment(activityName || 'general');
+    const sanitizedLicence = originalDocument.licenceId ? sanitizeSegment(`licence-${originalDocument.licenceId}`) : 'general';
     const timestamp = Date.now();
     const originalName = req.file.originalname || 'upload.bin';
     const sanitizedFilename = originalName.replace(/[^a-zA-Z0-9.\-_/]/g, '_');
-    const s3Key = `${sanitizedBlock}/${sanitizedProject}/${sanitizedActivity}/${timestamp}-${sanitizedFilename}`;
+    const s3Key = originalDocument.licenceId
+      ? `licences/${sanitizedLicence}/${timestamp}-${sanitizedFilename}`
+      : `${sanitizedBlock}/${sanitizedProject}/${sanitizedActivity}/${timestamp}-${sanitizedFilename}`;
 
     const params = {
       Bucket: process.env.AWS_STORAGE_BUCKET_NAME || process.env.AWS_S3_BUCKET || process.env.S3_BUCKET,
@@ -405,6 +415,7 @@ router.post('/:id/versions', upload.single('file'), async (req, res) => {
       projectId: originalDocument.projectId || null,
       activityId: originalDocument.activityId || null,
       activityIds: Array.isArray(originalDocument.activityIds) ? originalDocument.activityIds : null,
+      licenceId: originalDocument.licenceId || null,
       documentType: documentType || originalDocument.documentType || 'Report',
       uploadDate: new Date(),
       status: status || originalDocument.status || 'Review',
@@ -436,6 +447,7 @@ router.put('/:id', async (req, res) => {
       projectId: req.body.projectId || document.projectId,
       activityId: req.body.activityId !== undefined ? req.body.activityId : document.activityId,
       activityIds: req.body.activityIds !== undefined ? req.body.activityIds : document.activityIds,
+      licenceId: req.body.licenceId !== undefined ? req.body.licenceId : document.licenceId,
       documentType: req.body.documentType || document.documentType,
       uploadDate: req.body.uploadDate || document.uploadDate,
       status: req.body.status || document.status

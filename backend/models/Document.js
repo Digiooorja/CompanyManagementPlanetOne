@@ -95,8 +95,17 @@ const Document = sequelize.define('Document', {
     },
     comment: 'Link document to a project'
   },
+  licenceId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'licences',
+      key: 'id'
+    },
+    comment: 'Link document to a licence'
+  },
   documentType: {
-    type: DataTypes.ENUM('Technical', 'HSE', 'Finance', 'Report'),
+    type: DataTypes.ENUM('Technical', 'HSE', 'Finance', 'Report', 'Licence', 'Legal'),
     defaultValue: 'Report'
   },
   uploadDate: {

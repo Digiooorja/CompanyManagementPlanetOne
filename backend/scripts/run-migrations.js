@@ -67,12 +67,19 @@ async function run() {
       const filePath = path.join(MIGRATIONS_DIR, filename);
       const sql = fs.readFileSync(filePath, 'utf8');
 
-      // Split on semicolons to handle multi-statement files
-      // Filter out empty strings from splitting
+      // Split on semicolons to handle multi-statement files.
+      // Strip comment lines (--) from EACH chunk before checking emptiness,
+      // so that a comment header never causes a real SQL statement to be silently dropped.
       const statements = sql
         .split(';')
-        .map((s) => s.trim())
-        .filter((s) => s.length > 0 && !s.startsWith('--'));
+        .map((s) =>
+          s
+            .split('\n')
+            .filter((line) => !line.trim().startsWith('--'))
+            .join('\n')
+            .trim()
+        )
+        .filter((s) => s.length > 0);
 
       const transaction = await sequelize.transaction();
       try {
