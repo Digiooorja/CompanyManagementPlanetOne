@@ -53,7 +53,7 @@ export function Projects() {
         name: newProject.name,
         description: newProject.description,
         status: newProject.status,
-        blockId: newProject.blockId ? Number(newProject.blockId) : undefined,
+        blockId: newProject.blockId && newProject.blockId !== 'none' ? Number(newProject.blockId) : undefined,
         block: selectedBlock?.name,
         manager: newProject.manager || undefined,
         budget: newProject.budget ? Number(newProject.budget) : undefined,
@@ -190,7 +190,7 @@ export function Projects() {
                   </SelectTrigger>
                   <SelectContent>
                     {blocks.length === 0 ? (
-                      <SelectItem value="">No blocks available</SelectItem>
+                      <SelectItem value="none">No blocks available</SelectItem>
                     ) : (
                       blocks.map((block) => (
                         <SelectItem key={block.id} value={String(block.id)}>
@@ -304,9 +304,11 @@ export function Projects() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Blocks</SelectItem>
-              <SelectItem value="block-a">Block A</SelectItem>
-              <SelectItem value="block-b">Block B</SelectItem>
-              <SelectItem value="block-c">Block C</SelectItem>
+              {blocks.map((block) => (
+                <SelectItem key={block.id} value={String(block.id)}>
+                  {block.name}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Select value={filterStatus} onValueChange={setFilterStatus}>
@@ -315,9 +317,12 @@ export function Projects() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
               <SelectItem value="planning">Planning</SelectItem>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="in progress">In Progress</SelectItem>
+              <SelectItem value="on hold">On Hold</SelectItem>
               <SelectItem value="completed">Completed</SelectItem>
+              <SelectItem value="cancelled">Cancelled</SelectItem>
             </SelectContent>
           </Select>
         </div>

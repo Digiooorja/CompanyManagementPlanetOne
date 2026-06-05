@@ -8,7 +8,7 @@ import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
 import { Separator } from "../components/ui/separator";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog";
-import { ArrowLeft, FileText, Download, Trash2, Upload, File } from "lucide-react";
+import { ArrowLeft, FileText, Download, Trash2, Upload, File, Clock } from "lucide-react";
 import { financeApi, documentsApi } from "../../services/api";
 import { useAuth } from "../contexts/AuthContext";
 import { formatDisplayDateOrDefault } from "../lib/date";
@@ -354,6 +354,39 @@ export function AfeDetail() {
           <p className="text-sm text-gray-600">Approval Department</p>
           <p className="text-lg">{afe.approvalDepartment || 'Finance'}</p>
         </div>
+      </Card>
+
+      <Card className="p-6">
+        <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+          <Clock className="h-5 w-5 text-gray-500" />
+          Delegation Audit Trail
+        </h2>
+        {(!afe.delegationHistory || afe.delegationHistory.length === 0) ? (
+          <p className="text-gray-500 italic p-4 bg-gray-50 rounded border border-dashed text-center">No delegation history available for this AFE yet.</p>
+        ) : (
+          <div className="space-y-4 ml-2">
+            {afe.delegationHistory.map((log: any, index: number) => (
+              <div key={index} className="pl-6 border-l-2 border-blue-200 py-1 relative">
+                <div className="absolute w-3 h-3 bg-blue-500 rounded-full -left-[7px] top-2.5 shadow-[0_0_0_4px_white]"></div>
+                <div className="flex justify-between items-start mb-1">
+                  <div className="font-medium flex items-center gap-2">
+                    {log.by}
+                    <Badge variant={log.action === 'Approved' ? 'default' : log.action === 'Rejected' ? 'destructive' : 'secondary'}>
+                      {log.action}
+                    </Badge>
+                  </div>
+                  <span className="text-xs text-gray-500">{new Date(log.at).toLocaleString()}</span>
+                </div>
+                {log.action === 'Delegated' && (
+                  <p className="text-sm text-gray-600 mb-1">Forwarded to: <span className="font-medium text-gray-900">{log.to}</span></p>
+                )}
+                {log.comment && (
+                  <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded mt-2 border border-gray-100 italic">"{log.comment}"</p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </Card>
 
       <Card className="p-6">

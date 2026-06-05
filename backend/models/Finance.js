@@ -62,6 +62,38 @@ const Finance = sequelize.define('Finance', {
     type: DataTypes.DATE,
     allowNull: true
   },
+  approvedBy: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  actionComment: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  delegatedTo: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  delegationHistory: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    get() {
+      const rawValue = this.getDataValue('delegationHistory');
+      if (!rawValue) return [];
+      try {
+        return JSON.parse(rawValue);
+      } catch {
+        return [];
+      }
+    },
+    set(value) {
+      if (Array.isArray(value)) {
+        this.setDataValue('delegationHistory', JSON.stringify(value));
+      } else {
+        this.setDataValue('delegationHistory', value);
+      }
+    }
+  },
   date: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW

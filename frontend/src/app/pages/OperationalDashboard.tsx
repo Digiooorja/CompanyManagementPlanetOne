@@ -6,45 +6,11 @@ import { Button } from "../components/ui/button";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "../components/ui/table";
 import { AlertCircle, FileText, CheckCircle, Clock, Calendar, Search } from "lucide-react";
 import { formatDisplayDateOrDefault } from "../lib/date";
-import { workflowsApi, documentsApi, activitiesApi, projectsApi } from "../../services/api";
+import { workflowsApi, documentsApi, activitiesApi, projectsApi, tasksApi } from "../../services/api";
 import { useAuth } from "../contexts/AuthContext";
 
 export function OperationalDashboard() {
-  const myTasks = [
-    {
-      id: 1,
-      title: "Review drilling plan for Well B-3",
-      project: "Block B - Phase 2",
-      priority: "High",
-      dueDate: "2026-05-05",
-      status: "In Progress",
-    },
-    {
-      id: 2,
-      title: "Approve safety inspection report",
-      project: "Block A - Operations",
-      priority: "Critical",
-      dueDate: "2026-05-03",
-      status: "Pending",
-    },
-    {
-      id: 3,
-      title: "Update environmental monitoring data",
-      project: "Block C - Planning",
-      priority: "Medium",
-      dueDate: "2026-05-08",
-      status: "Not Started",
-    },
-    {
-      id: 4,
-      title: "Complete AFE documentation",
-      project: "Block A - Well Extension",
-      priority: "High",
-      dueDate: "2026-05-06",
-      status: "In Progress",
-    },
-  ];
-
+  const [myTasks, setMyTasks] = useState<any[]>([]);
   const upcomingDeadlines = [
     { date: "2026-05-03", event: "Safety Inspection Report Due", type: "Document" },
     { date: "2026-05-05", event: "Drilling Plan Review", type: "Activity" },
@@ -81,6 +47,16 @@ export function OperationalDashboard() {
     };
 
     loadInbox();
+
+    const fetchTasks = async () => {
+      try {
+        const tasks = await tasksApi.getMyTasks();
+        setMyTasks(Array.isArray(tasks) ? tasks : []);
+      } catch (err) {
+        console.error('Error fetching my tasks:', err);
+      }
+    };
+    fetchTasks();
   }, [departmentName]);
 
   useEffect(() => {
@@ -144,7 +120,7 @@ export function OperationalDashboard() {
     : [];
 
   const filteredMyTasks = normalizedSearch
-    ? myTasks.filter((task) => [task.title, task.project, task.priority, task.status]
+    ? myTasks.filter((task) => [task.title, task.description, task.priority, task.status]
         .filter(Boolean)
         .join(' ')
         .toLowerCase()
@@ -258,7 +234,7 @@ export function OperationalDashboard() {
           <TableHeader>
             <TableRow>
               <TableHead>Title</TableHead>
-              <TableHead>Project</TableHead>
+              <TableHead>Description</TableHead>
               <TableHead>Priority</TableHead>
               <TableHead>Due Date</TableHead>
               <TableHead>Status</TableHead>
@@ -266,25 +242,30 @@ export function OperationalDashboard() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredMyTasks.map((task) => (
-              <TableRow key={task.id}>
-                <TableCell>{task.title}</TableCell>
-                <TableCell className="text-sm text-gray-600">{task.project}</TableCell>
-                <TableCell>
-                  <Badge variant={getPriorityColor(task.priority)}>{task.priority}</Badge>
-                </TableCell>
-                <TableCell>{task.dueDate}</TableCell>
-                <TableCell>{formatDisplayDateOrDefault(task.dueDate)}</TableCell>
-                <TableCell>
-                  <Badge variant="outline">{task.status}</Badge>
-                </TableCell>
-                <TableCell>
-                  <Link to={`/activities/${task.id}`}>
-                    <Button size="sm" variant="ghost">View</Button>
-                  </Link>
-                </TableCell>
+            {filteredMyTasks.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center text-gray-500 py-6">No tasks currently assigned to you.</TableCell>
               </TableRow>
-            ))}
+            ) : (
+              filteredMyTasks.map((task) => (
+                <TableRow key={task.id}>
+                  <TableCell className="font-medium">{task.title}</TableCell>
+                  <TableCell className="text-sm text-gray-600 truncate max-w-[200px]">{task.description || '-'}</TableCell>
+                  <TableCell>
+                    <Badge variant={getPriorityColor(task.priority)}>{task.priority}</Badge>
+                  </TableCell>
+                  <TableCell>{task.dueDate ? formatDisplayDateOrDefault(task.dueDate) : '-'}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline">{task.status}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Link to={task.relatedType === 'Activity' ? `/activities/${task.relatedId}` : task.relatedType === 'Workflow' ? `/workflows/${task.relatedId}` : `/tasks`}>
+                      <Button size="sm" variant="ghost">Action</Button>
+                    </Link>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </Card>

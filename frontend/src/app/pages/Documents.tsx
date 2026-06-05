@@ -19,7 +19,8 @@ import {
   DialogTrigger,
   DialogClose,
 } from "../components/ui/dialog";
-import { documentsApi, blocksApi, activitiesApi, projectsApi, departmentsApi } from "../../services/api";
+import { documentsApi, blocksApi, activitiesApi, projectsApi, departmentsApi, licencesApi } from "../../services/api";
+import { formatDisplayDateOrDefault } from "../lib/date";
 
 export function Documents() {
   const [filterBlock, setFilterBlock] = useState("all");
@@ -30,6 +31,7 @@ export function Documents() {
   const [projects, setProjects] = useState<any[]>([]);
   const [activities, setActivities] = useState<any[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
+  const [licences, setLicences] = useState<any[]>([]);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
@@ -44,7 +46,8 @@ export function Documents() {
     blockId: "",
     projectId: "",
     activityIds: [] as string[],
-    departmentId: ""
+    departmentId: "",
+    licenceId: ""
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -62,17 +65,19 @@ export function Documents() {
       try {
         setLoading(true);
         setError(null);
-        const [documentData, blockData, projectData, departmentData] = await Promise.all([
+        const [documentData, blockData, projectData, departmentData, licenceData] = await Promise.all([
           documentsApi.getAll(),
           blocksApi.getAll(),
           // get all projects and use block filtering client-side
           projectsApi.getAll ? projectsApi.getAll() : [],
-          departmentsApi.getAll()
+          departmentsApi.getAll(),
+          licencesApi.getAll()
         ]);
         setDocuments(Array.isArray(documentData) ? documentData : []);
         setBlocks(Array.isArray(blockData) ? blockData : []);
         setProjects(Array.isArray(projectData) ? projectData : []);
         setDepartments(Array.isArray(departmentData) ? departmentData : []);
+        setLicences(Array.isArray(licenceData) ? licenceData : []);
       } catch (err) {
         console.error('Error loading documents page data:', err);
         setDocuments([]);
@@ -169,9 +174,9 @@ export function Documents() {
     };
 
     if (roots.length > 0) {
-      roots.forEach((activity) => addActivity(activity, false));
+      roots.forEach((activity) => addActivity(activity, 0));
     } else {
-      activities.forEach((activity) => addActivity(activity, false));
+      activities.forEach((activity) => addActivity(activity, 0));
     }
 
     return result;
@@ -218,6 +223,9 @@ export function Documents() {
       if (uploadForm.departmentId) {
         formData.append('departmentId', uploadForm.departmentId);
       }
+      if (uploadForm.licenceId) {
+        formData.append('licenceId', uploadForm.licenceId);
+      }
 
       await documentsApi.upload(formData);
 
@@ -233,7 +241,8 @@ export function Documents() {
         blockId: '',
         projectId: '',
         activityIds: [],
-        departmentId: ''
+        departmentId: '',
+        licenceId: ''
       });
     } catch (err) {
       console.error('Error uploading document:', err);
@@ -325,6 +334,7 @@ export function Documents() {
       Finance: 0,
       HSE: 0,
       Legal: 0,
+      Report: 0,
     };
 
     documents.forEach((doc) => {
@@ -337,6 +347,8 @@ export function Documents() {
         counts.HSE += 1;
       } else if (rawType.includes('legal')) {
         counts.Legal += 1;
+      } else if (rawType.includes('report')) {
+        counts.Report += 1;
       }
     });
 
@@ -500,6 +512,7 @@ export function Documents() {
                   </select>
                 </div>
               </div>
+
               <div>
                 <Label htmlFor="document-activities">Tagged Activities</Label>
                 <select
@@ -531,6 +544,8 @@ export function Documents() {
                     <option value="HSE">HSE</option>
                     <option value="Finance">Finance</option>
                     <option value="Report">Report</option>
+                    <option value="Licence">Licence</option>
+                    <option value="Legal">Legal</option>
                   </select>
                 </div>
                 <div>
@@ -547,6 +562,31 @@ export function Documents() {
                   </select>
                 </div>
               </div>
+              {/* Licence selector — only shown when document type is 'Licence' */}
+              {uploadForm.documentType === 'Licence' && (
+                <div className="pt-2">
+                  <Label htmlFor="document-licence">Link to Licence</Label>
+                  <select
+                    id="document-licence"
+                    className="mt-1 block w-full rounded-md border bg-input-background px-3 py-2 text-sm text-foreground shadow-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                    value={uploadForm.licenceId}
+                    onChange={(event) => handleUploadChange('licenceId', event.target.value)}
+                  >
+                    <option value="">— Select a licence (recommended) —</option>
+                    {licences.map((licence) => (
+                      <option key={licence.id} value={String(licence.id)}>
+                        {licence.licenceNumber} {licence.licenceType ? `(${licence.licenceType})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {!uploadForm.licenceId && (
+                    <p className="mt-1 text-xs text-amber-600">
+                      ⚠️ No licence selected — document will be saved to the library unlinked.
+                      You can link it later from the Edit Licence dialog.
+                    </p>
+                  )}
+                </div>
+              )}
               <div>
                 <Label htmlFor="document-file">File</Label>
 
@@ -645,40 +685,74 @@ export function Documents() {
       ) : (
         <>
       {/* Document Folders */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="p-4 cursor-pointer hover:bg-gray-50 transition-colors">
+      <div className="flex overflow-x-auto gap-4 pb-4 no-scrollbar">
+        <Card
+          className={`flex-none w-[220px] p-4 cursor-pointer hover:bg-gray-50 transition-all border ${
+            filterType === 'Technical' ? 'bg-blue-50/50 ring-2 ring-blue-500 border-transparent shadow-sm' : 'border-gray-200'
+          }`}
+          onClick={() => setFilterType(filterType === 'Technical' ? 'all' : 'Technical')}
+        >
           <div className="flex items-center gap-3">
             <FolderOpen className="h-8 w-8 text-blue-600" />
             <div>
-              <p className="font-medium">Technical</p>
+              <p className="font-medium text-gray-900">Technical</p>
               <p className="text-sm text-gray-500">{documentCategoryCounts.Technical} files</p>
             </div>
           </div>
         </Card>
-        <Card className="p-4 cursor-pointer hover:bg-gray-50 transition-colors">
+        <Card
+          className={`flex-none w-[220px] p-4 cursor-pointer hover:bg-gray-50 transition-all border ${
+            filterType === 'Finance' ? 'bg-green-50/50 ring-2 ring-green-500 border-transparent shadow-sm' : 'border-gray-200'
+          }`}
+          onClick={() => setFilterType(filterType === 'Finance' ? 'all' : 'Finance')}
+        >
           <div className="flex items-center gap-3">
             <FolderOpen className="h-8 w-8 text-green-600" />
             <div>
-              <p className="font-medium">Finance</p>
+              <p className="font-medium text-gray-900">Finance</p>
               <p className="text-sm text-gray-500">{documentCategoryCounts.Finance} files</p>
             </div>
           </div>
         </Card>
-        <Card className="p-4 cursor-pointer hover:bg-gray-50 transition-colors">
+        <Card
+          className={`flex-none w-[220px] p-4 cursor-pointer hover:bg-gray-50 transition-all border ${
+            filterType === 'HSE' ? 'bg-orange-50/50 ring-2 ring-orange-500 border-transparent shadow-sm' : 'border-gray-200'
+          }`}
+          onClick={() => setFilterType(filterType === 'HSE' ? 'all' : 'HSE')}
+        >
           <div className="flex items-center gap-3">
             <FolderOpen className="h-8 w-8 text-orange-600" />
             <div>
-              <p className="font-medium">HSE</p>
+              <p className="font-medium text-gray-900">HSE</p>
               <p className="text-sm text-gray-500">{documentCategoryCounts.HSE} files</p>
             </div>
           </div>
         </Card>
-        <Card className="p-4 cursor-pointer hover:bg-gray-50 transition-colors">
+        <Card
+          className={`flex-none w-[220px] p-4 cursor-pointer hover:bg-gray-50 transition-all border ${
+            filterType === 'Legal' ? 'bg-purple-50/50 ring-2 ring-purple-500 border-transparent shadow-sm' : 'border-gray-200'
+          }`}
+          onClick={() => setFilterType(filterType === 'Legal' ? 'all' : 'Legal')}
+        >
           <div className="flex items-center gap-3">
             <FolderOpen className="h-8 w-8 text-purple-600" />
             <div>
-              <p className="font-medium">Legal</p>
+              <p className="font-medium text-gray-900">Legal</p>
               <p className="text-sm text-gray-500">{documentCategoryCounts.Legal} files</p>
+            </div>
+          </div>
+        </Card>
+        <Card
+          className={`flex-none w-[220px] p-4 cursor-pointer hover:bg-gray-50 transition-all border ${
+            filterType === 'Report' ? 'bg-rose-50/50 ring-2 ring-rose-500 border-transparent shadow-sm' : 'border-gray-200'
+          }`}
+          onClick={() => setFilterType(filterType === 'Report' ? 'all' : 'Report')}
+        >
+          <div className="flex items-center gap-3">
+            <FolderOpen className="h-8 w-8 text-rose-600" />
+            <div>
+              <p className="font-medium text-gray-900">Report</p>
+              <p className="text-sm text-gray-500">{documentCategoryCounts.Report} files</p>
             </div>
           </div>
         </Card>
@@ -728,7 +802,7 @@ export function Documents() {
                 <TableCell className="text-sm text-gray-600">
                   {getDocumentActivities(doc)}
                 </TableCell>
-                <TableCell>{doc.uploadDate}</TableCell>
+                <TableCell>{formatDisplayDateOrDefault(doc.uploadDate)}</TableCell>
                 <TableCell className="text-sm text-gray-600">
                   {doc.uploadedBy || getActiveUserName()}
                 </TableCell>

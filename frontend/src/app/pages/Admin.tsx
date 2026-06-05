@@ -5,191 +5,336 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "../components/ui/table";
-import { Search, Plus, UserPlus, Shield, CheckCircle, XCircle } from "lucide-react";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogFooter,
+  DialogClose
+} from "../components/ui/dialog";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
+import { 
+  Search, 
+  Plus, 
+  UserPlus, 
+  Shield, 
+  ShieldAlert,
+  CheckCircle, 
+  XCircle, 
+  Trash2, 
+  Edit3, 
+  RefreshCw,
+  Loader2
+} from "lucide-react";
+import { adminApi, departmentsApi } from "../../services/api";
 
 export function Admin() {
-  const users = [
-    {
-      id: 1,
-      name: "John Smith",
-      email: "john.smith@optifield.com",
-      role: "Executive",
-      department: "Management",
-      status: "Active",
-      lastLogin: "2026-05-01 14:30",
-    },
-    {
-      id: 2,
-      name: "Sarah Johnson",
-      email: "sarah.johnson@optifield.com",
-      role: "Project Manager",
-      department: "Operations",
-      status: "Active",
-      lastLogin: "2026-05-01 13:15",
-    },
-    {
-      id: 3,
-      name: "Mike Chen",
-      email: "mike.chen@optifield.com",
-      role: "Technical Lead",
-      department: "Engineering",
-      status: "Active",
-      lastLogin: "2026-05-01 12:45",
-    },
-    {
-      id: 4,
-      name: "Emma Davis",
-      email: "emma.davis@optifield.com",
-      role: "Finance Manager",
-      department: "Finance",
-      status: "Active",
-      lastLogin: "2026-05-01 11:20",
-    },
-    {
-      id: 5,
-      name: "James Wilson",
-      email: "james.wilson@optifield.com",
-      role: "HSE Manager",
-      department: "HSE",
-      status: "Active",
-      lastLogin: "2026-04-30 16:00",
-    },
-    {
-      id: 6,
-      name: "Lisa Brown",
-      email: "lisa.brown@optifield.com",
-      role: "Analyst",
-      department: "Operations",
-      status: "Inactive",
-      lastLogin: "2026-04-15 09:30",
-    },
-  ];
+  const { user, isAdmin } = useAuth();
+  const navigate = useNavigate();
+  const [users, setUsers] = useState<any[]>([]);
+  const [departments, setDepartments] = useState<any[]>([]);
+  const [metrics, setMetrics] = useState({
+    totalUsers: 0,
+    activeUsers: 0,
+    totalProjects: 0,
+    totalActivities: 0
+  });
 
-  const roles = [
-    {
-      id: 1,
-      name: "Executive",
-      description: "Full system access and approval authority",
-      userCount: 2,
-    },
-    {
-      id: 2,
-      name: "Project Manager",
-      description: "Manage projects and activities",
-      userCount: 5,
-    },
-    {
-      id: 3,
-      name: "Technical Lead",
-      description: "Technical review and oversight",
-      userCount: 8,
-    },
-    {
-      id: 4,
-      name: "Finance Manager",
-      description: "Financial management and AFE approval",
-      userCount: 3,
-    },
-    {
-      id: 5,
-      name: "HSE Manager",
-      description: "Health, safety, and environmental oversight",
-      userCount: 4,
-    },
-    {
-      id: 6,
-      name: "Analyst",
-      description: "Data analysis and reporting",
-      userCount: 12,
-    },
-  ];
-
-  const permissions = [
-    { module: "Dashboard", view: true, create: false, edit: false, delete: false },
-    { module: "Blocks", view: true, create: true, edit: true, delete: false },
-    { module: "Projects", view: true, create: true, edit: true, delete: true },
-    { module: "Activities", view: true, create: true, edit: true, delete: true },
-    { module: "Documents", view: true, create: true, edit: true, delete: false },
-    { module: "Workflows", view: true, create: true, edit: false, delete: false },
-    { module: "Registers", view: true, create: true, edit: true, delete: false },
-    { module: "Finance", view: true, create: false, edit: false, delete: false },
-    { module: "Reports", view: true, create: true, edit: false, delete: false },
-    { module: "Admin", view: false, create: false, edit: false, delete: false },
-  ];
-
+  const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Dialog states
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<any | null>(null);
+
+  // Form states
+  const [formUsername, setFormUsername] = useState("");
+  const [formEmail, setFormEmail] = useState("");
+  const [formPassword, setFormPassword] = useState("");
+  const [formFirstName, setFormFirstName] = useState("");
+  const [formLastName, setFormLastName] = useState("");
+  const [formRole, setFormRole] = useState("User");
+  const [formDepartmentId, setFormDepartmentId] = useState("");
+  const [formActive, setFormActive] = useState(true);
+
+  // Hardcoded standard roles details for the Roles tab
+  const rolesInfo = [
+    { id: 1, name: "Admin", description: "Full system administration, security audits, database seed management, and user provisioning.", userCount: users.filter(u => u.role === "Admin").length },
+    { id: 2, name: "Manager", description: "Operational oversight. Allowed to create and edit blocks, projects, workflows, risks, and tasks.", userCount: users.filter(u => u.role === "Manager").length },
+    { id: 3, name: "User", description: "Standard business domain operations. Can view modules, upload documentation, and submit activity comments.", userCount: users.filter(u => u.role === "User").length },
+    { id: 4, name: "Guest", description: "Public view-only visitor access. Restricted from performing database mutations or edits.", userCount: users.filter(u => u.role === "Guest").length }
+  ];
+
+  const permissionsInfo = [
+    { module: "Dashboard Summary", Guest: "View Only", User: "View Only", Manager: "View Only", Admin: "Full Access" },
+    { module: "Blocks & Assets", Guest: "View Only", User: "View Only", Manager: "Create & Edit", Admin: "Full Access" },
+    { module: "Projects & Portfolios", Guest: "View Only", User: "View Only", Manager: "Create & Edit", Admin: "Full Access" },
+    { module: "Project Tasks & Activities", Guest: "View Only", User: "View Only", Manager: "Create & Edit", Admin: "Full Access" },
+    { module: "Finance & AFE Approvals", Guest: "No Access", User: "Departmental Only", Manager: "View & Approve", Admin: "Full Access" },
+    { module: "Document Uploads", Guest: "No Access", User: "Create & Comment", Manager: "Full Access", Admin: "Full Access" },
+    { module: "Risk & Mitigation Logs", Guest: "View Only", User: "View Only", Manager: "Create & Edit", Admin: "Full Access" },
+    { module: "System Gating & Users", Guest: "No Access", User: "No Access", Manager: "No Access", Admin: "Full Access" }
+  ];
+
+  const loadData = async () => {
+    setIsLoading(true);
+    setErrorMsg(null);
+    try {
+      const [usersData, dashboardMetrics, departmentsData] = await Promise.all([
+        adminApi.getUsers(),
+        adminApi.getDashboard(),
+        departmentsApi.getAll()
+      ]);
+      setUsers(usersData);
+      setMetrics(dashboardMetrics);
+      setDepartments(departmentsData);
+    } catch (err: any) {
+      console.error("Failed to load admin data:", err);
+      setErrorMsg(err.message || "An error occurred while loading administrative records.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isAdmin) {
+      loadData();
+    }
+  }, [isAdmin]);
+
+  // Listen for navigation-level global search requests
   useEffect(() => {
     const handler = (e: any) => setSearchQuery(e?.detail?.query || "");
     window.addEventListener('globalSearch', handler as EventListener);
     return () => window.removeEventListener('globalSearch', handler as EventListener);
   }, []);
 
+  const openAddDialog = () => {
+    setFormUsername("");
+    setFormEmail("");
+    setFormPassword("");
+    setFormFirstName("");
+    setFormLastName("");
+    setFormRole("User");
+    setFormDepartmentId(departments[0]?.id?.toString() || "");
+    setFormActive(true);
+    setIsAddOpen(true);
+  };
+
+  const openEditDialog = (user: any) => {
+    setSelectedUser(user);
+    setFormUsername(user.username || "");
+    setFormEmail(user.email || "");
+    setFormPassword(""); // Leave empty to keep unchanged
+    setFormFirstName(user.firstName || "");
+    setFormLastName(user.lastName || "");
+    setFormRole(user.role || "User");
+    setFormDepartmentId(user.departmentId?.toString() || "");
+    setFormActive(user.active !== false);
+    setIsEditOpen(true);
+  };
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+    try {
+      await adminApi.createUser({
+        username: formUsername,
+        email: formEmail,
+        password: formPassword || "Password123!",
+        firstName: formFirstName,
+        lastName: formLastName,
+        role: formRole,
+        departmentId: formDepartmentId ? parseInt(formDepartmentId) : null,
+        active: formActive
+      });
+      setIsAddOpen(false);
+      loadData();
+    } catch (err: any) {
+      setErrorMsg(err.message || "Failed to create user account.");
+    }
+  };
+
+  const handleUpdateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedUser) return;
+    setErrorMsg(null);
+    try {
+      await adminApi.updateUser(selectedUser.id, {
+        username: formUsername,
+        email: formEmail,
+        ...(formPassword ? { password: formPassword } : {}),
+        firstName: formFirstName,
+        lastName: formLastName,
+        role: formRole,
+        departmentId: formDepartmentId ? parseInt(formDepartmentId) : null,
+        active: formActive
+      });
+      setIsEditOpen(false);
+      loadData();
+    } catch (err: any) {
+      setErrorMsg(err.message || "Failed to update user account.");
+    }
+  };
+
+  const handleToggleStatus = async (user: any) => {
+    try {
+      await adminApi.updateUser(user.id, {
+        active: !user.active
+      });
+      loadData();
+    } catch (err: any) {
+      alert("Failed to toggle status: " + (err.message || err));
+    }
+  };
+
+  const handleDeleteUser = async (id: number, username: string) => {
+    if (!confirm(`Are you absolutely sure you want to delete the user account "${username}"? This action is permanent and cannot be undone.`)) {
+      return;
+    }
+    try {
+      await adminApi.deleteUser(id);
+      loadData();
+    } catch (err: any) {
+      alert("Failed to delete user account: " + (err.message || err));
+    }
+  };
+
   const normalizedSearch = searchQuery.trim().toLowerCase();
   const filteredUsers = normalizedSearch
-    ? users.filter((u) => [u.name, u.email, u.role, u.department]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-        .includes(normalizedSearch))
+    ? users.filter((u) => {
+        const fullName = `${u.firstName || ""} ${u.lastName || ""}`.trim().toLowerCase();
+        return [
+          u.username,
+          u.email,
+          u.role,
+          u.department,
+          fullName
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+          .includes(normalizedSearch);
+      })
     : users;
+
+  if (!isAdmin) {
+    return (
+      <div className="flex items-center justify-center min-h-[70vh] px-4 py-12">
+        <Card className="w-full max-w-lg p-8 border border-red-100 bg-white/70 backdrop-blur-md shadow-xl rounded-2xl relative overflow-hidden transition-all duration-300 hover:shadow-2xl">
+          {/* Subtle background red glow */}
+          <div className="absolute -top-24 -right-24 w-48 h-48 bg-red-100 rounded-full blur-3xl opacity-60 pointer-events-none" />
+          <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-rose-100 rounded-full blur-3xl opacity-60 pointer-events-none" />
+
+          <div className="flex flex-col items-center text-center space-y-6">
+            <div className="w-16 h-16 bg-red-50 border border-red-100 text-red-500 rounded-2xl flex items-center justify-center shadow-inner animate-pulse">
+              <ShieldAlert className="h-8 w-8" />
+            </div>
+            
+            <div className="space-y-2">
+              <h2 className="text-2xl font-bold tracking-tight text-slate-900">
+                Administrative Clearance Required
+              </h2>
+              <Badge variant="destructive" className="px-3 py-1 text-xs font-semibold rounded-full uppercase tracking-wider">
+                Access Restricted
+              </Badge>
+            </div>
+
+            <p className="text-sm text-slate-500 max-w-sm leading-relaxed">
+              Your account is currently identified as <strong className="text-slate-800">{user?.firstName} {user?.lastName} ({user?.role || 'Guest'})</strong>. 
+              Only certified system administrators are permitted to enter the security governance and user provisioning portal.
+            </p>
+
+            <div className="w-full pt-4">
+              <Button 
+                onClick={() => navigate("/operational")} 
+                className="w-full py-2.5 font-medium rounded-xl text-white bg-slate-900 hover:bg-slate-800 shadow-md transition-all duration-300 transform active:scale-[0.98]"
+              >
+                Return to Safety Dashboard
+              </Button>
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  if (isLoading && users.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
+        <Loader2 className="h-10 w-10 text-blue-600 animate-spin" />
+        <p className="text-gray-500 font-medium animate-pulse">Synchronizing with system database...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl">Administration</h1>
-          <p className="text-gray-500 mt-1">Manage users, roles, and permissions</p>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Administration Portal</h1>
+          <p className="text-slate-500 mt-1">Configure security credentials, department boundaries, and monitor live system metrics.</p>
         </div>
+        <Button onClick={loadData} variant="outline" className="flex items-center gap-2">
+          <RefreshCw className="h-4 w-4" />
+          Refresh
+        </Button>
       </div>
+
+      {errorMsg && (
+        <Card className="p-4 bg-red-50 border-red-200 text-red-700 text-sm flex items-center justify-between">
+          <span><strong>Error:</strong> {errorMsg}</span>
+          <Button variant="ghost" size="sm" onClick={() => setErrorMsg(null)} className="text-red-700 hover:bg-red-100">Dismiss</Button>
+        </Card>
+      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="p-4">
+        <Card className="p-4 hover:shadow-md transition-shadow">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
               <UserPlus className="h-5 w-5 text-blue-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-600">Total Users</p>
-              <p className="text-2xl">{users.length}</p>
+              <p className="text-xs text-slate-600 font-medium uppercase tracking-wider">Total Users</p>
+              <p className="text-2xl font-bold text-slate-900">{metrics.totalUsers}</p>
             </div>
           </div>
         </Card>
-        <Card className="p-4">
+        <Card className="p-4 hover:shadow-md transition-shadow">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-              <CheckCircle className="h-5 w-5 text-green-600" />
+            <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
+              <CheckCircle className="h-5 w-5 text-emerald-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-600">Active Users</p>
-              <p className="text-2xl">
-                {users.filter((u) => u.status === "Active").length}
-              </p>
+              <p className="text-xs text-slate-600 font-medium uppercase tracking-wider">Active Employees</p>
+              <p className="text-2xl font-bold text-emerald-600">{metrics.activeUsers}</p>
             </div>
           </div>
         </Card>
-        <Card className="p-4">
+        <Card className="p-4 hover:shadow-md transition-shadow">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
-              <Shield className="h-5 w-5 text-purple-600" />
+            <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
+              <Shield className="h-5 w-5 text-indigo-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-600">Roles</p>
-              <p className="text-2xl">{roles.length}</p>
+              <p className="text-xs text-slate-600 font-medium uppercase tracking-wider">Total Roles</p>
+              <p className="text-2xl font-bold text-slate-900">{rolesInfo.length}</p>
             </div>
           </div>
         </Card>
-        <Card className="p-4">
+        <Card className="p-4 hover:shadow-md transition-shadow">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
-              <XCircle className="h-5 w-5 text-orange-600" />
+            <div className="w-10 h-10 bg-rose-100 rounded-full flex items-center justify-center">
+              <XCircle className="h-5 w-5 text-rose-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-600">Inactive Users</p>
-              <p className="text-2xl">
-                {users.filter((u) => u.status === "Inactive").length}
-              </p>
+              <p className="text-xs text-slate-600 font-medium uppercase tracking-wider">Inactive Accounts</p>
+              <p className="text-2xl font-bold text-rose-600">{metrics.totalUsers - metrics.activeUsers}</p>
             </div>
           </div>
         </Card>
@@ -197,108 +342,137 @@ export function Admin() {
 
       {/* Tabs */}
       <Tabs defaultValue="users" className="w-full">
-        <TabsList>
-          <TabsTrigger value="users">Users</TabsTrigger>
-          <TabsTrigger value="roles">Roles</TabsTrigger>
-          <TabsTrigger value="permissions">Permissions</TabsTrigger>
+        <TabsList className="bg-slate-100 p-1 rounded-md">
+          <TabsTrigger value="users" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">Users & Staff</TabsTrigger>
+          <TabsTrigger value="roles" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">System Roles</TabsTrigger>
+          <TabsTrigger value="permissions" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">RBAC Matrix</TabsTrigger>
         </TabsList>
 
         <TabsContent value="users" className="space-y-4 mt-6">
-          {/* Search */}
+          {/* Search and Provision Button */}
           <Card className="p-4">
-            <div className="flex items-center gap-4">
-              <div className="relative flex-1">
+            <div className="flex flex-col sm:flex-row items-center gap-4">
+              <div className="relative flex-1 w-full">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input
                   type="search"
-                  placeholder="Search users..."
-                  className="pl-10"
+                  placeholder="Filter users by name, email, role, or department..."
+                  className="pl-10 w-full"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
-              <Button>
+              <Button onClick={openAddDialog} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-xs">
                 <Plus className="h-4 w-4 mr-2" />
-                Add User
+                Register Account
               </Button>
             </div>
           </Card>
 
           {/* Users Table */}
-          <Card className="p-6">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Department</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Last Login</TableHead>
-                  <TableHead></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredUsers.map((user) => (
-                  <TableRow key={user.id}>
-                    <TableCell>{user.name}</TableCell>
-                    <TableCell className="text-sm text-gray-600">
-                      {user.email}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{user.role}</Badge>
-                    </TableCell>
-                    <TableCell>{user.department}</TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          user.status === "Active" ? "default" : "secondary"
-                        }
-                      >
-                        {user.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm text-gray-600">
-                      {user.lastLogin}
-                    </TableCell>
-                    <TableCell>
-                      <Button size="sm" variant="ghost">
-                        Edit
-                      </Button>
-                    </TableCell>
+          <Card className="p-6 overflow-hidden">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-slate-50">
+                    <TableHead className="font-semibold text-slate-800">Staff Member</TableHead>
+                    <TableHead className="font-semibold text-slate-800">Email Address</TableHead>
+                    <TableHead className="font-semibold text-slate-800">System Role</TableHead>
+                    <TableHead className="font-semibold text-slate-800">Department</TableHead>
+                    <TableHead className="font-semibold text-slate-800">Status</TableHead>
+                    <TableHead className="font-semibold text-slate-800 text-right">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {filteredUsers.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-8 text-slate-400 font-medium">
+                        No employees found matching the filters.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredUsers.map((userItem) => {
+                      const fullName = `${userItem.firstName || ""} ${userItem.lastName || ""}`.trim() || userItem.username;
+                      return (
+                        <TableRow key={userItem.id} className="hover:bg-slate-50/50">
+                          <TableCell className="font-semibold text-slate-900">{fullName}</TableCell>
+                          <TableCell className="text-sm text-slate-600">{userItem.email}</TableCell>
+                          <TableCell>
+                            <Badge 
+                              variant="outline" 
+                              className={
+                                userItem.role === "Admin" 
+                                  ? "border-red-200 text-red-700 bg-red-50"
+                                  : userItem.role === "Manager"
+                                  ? "border-amber-200 text-amber-700 bg-amber-50"
+                                  : "border-slate-200 text-slate-700 bg-slate-50"
+                              }
+                            >
+                              {userItem.role}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-slate-700 font-medium">{userItem.department || "Operations"}</TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="p-0 hover:bg-transparent"
+                              onClick={() => handleToggleStatus(userItem)}
+                            >
+                              <Badge
+                                className="cursor-pointer font-medium"
+                                variant={userItem.active !== false ? "default" : "secondary"}
+                              >
+                                {userItem.active !== false ? "Active" : "Inactive"}
+                              </Badge>
+                            </Button>
+                          </TableCell>
+                          <TableCell className="text-right space-x-1">
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              className="text-slate-700 border-slate-200 hover:bg-slate-100 hover:text-slate-950 inline-flex items-center gap-1.5"
+                              onClick={() => openEditDialog(userItem)}
+                            >
+                              <Edit3 className="h-3.5 w-3.5" />
+                              Edit
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="ghost" 
+                              className="text-rose-600 hover:bg-rose-50 hover:text-rose-700 inline-flex items-center gap-1.5"
+                              onClick={() => handleDeleteUser(userItem.id, userItem.username)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              Delete
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           </Card>
         </TabsContent>
 
         <TabsContent value="roles" className="space-y-4 mt-6">
-          <div className="flex justify-end">
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Role
-            </Button>
-          </div>
-
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {roles.map((role) => (
-              <Card key={role.id} className="p-6">
+            {rolesInfo.map((role) => (
+              <Card key={role.id} className="p-6 hover:shadow-md transition-shadow">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <Shield className="h-5 w-5 text-gray-400" />
-                    <h3 className="font-medium">{role.name}</h3>
+                    <Shield className="h-5 w-5 text-indigo-600" />
+                    <h3 className="font-bold text-slate-800 text-lg">{role.name} Role</h3>
                   </div>
-                  <Badge variant="outline">{role.userCount} users</Badge>
+                  <Badge className="bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-100">{role.userCount} users active</Badge>
                 </div>
-                <p className="text-sm text-gray-600 mb-4">{role.description}</p>
+                <p className="text-sm text-slate-600 leading-relaxed mb-4">{role.description}</p>
                 <div className="flex gap-2">
-                  <Button size="sm" variant="outline">
-                    Edit Permissions
-                  </Button>
-                  <Button size="sm" variant="ghost">
-                    Edit
-                  </Button>
+                  <Badge variant="outline" className="border-indigo-100 text-indigo-700 bg-indigo-50/50">
+                    System Pre-configured Static Access
+                  </Badge>
                 </div>
               </Card>
             ))}
@@ -307,61 +481,279 @@ export function Admin() {
 
         <TabsContent value="permissions" className="mt-6">
           <Card className="p-6">
-            <div className="mb-4">
-              <h3 className="text-lg mb-2">Permission Matrix - Project Manager Role</h3>
-              <p className="text-sm text-gray-600">
-                Configure access permissions for each module
+            <div className="mb-6">
+              <h3 className="text-xl font-bold text-slate-900">Departmental & Role Gating Matrix</h3>
+              <p className="text-sm text-slate-500 mt-1">
+                Visualizing static Role-Based Access Controls (RBAC) configured across backend routes and React interfaces.
               </p>
             </div>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Module</TableHead>
-                  <TableHead>View</TableHead>
-                  <TableHead>Create</TableHead>
-                  <TableHead>Edit</TableHead>
-                  <TableHead>Delete</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {permissions.map((perm, index) => (
-                  <TableRow key={index}>
-                    <TableCell className="font-medium">{perm.module}</TableCell>
-                    <TableCell>
-                      {perm.view ? (
-                        <CheckCircle className="h-4 w-4 text-green-600" />
-                      ) : (
-                        <XCircle className="h-4 w-4 text-gray-300" />
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {perm.create ? (
-                        <CheckCircle className="h-4 w-4 text-green-600" />
-                      ) : (
-                        <XCircle className="h-4 w-4 text-gray-300" />
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {perm.edit ? (
-                        <CheckCircle className="h-4 w-4 text-green-600" />
-                      ) : (
-                        <XCircle className="h-4 w-4 text-gray-300" />
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {perm.delete ? (
-                        <CheckCircle className="h-4 w-4 text-green-600" />
-                      ) : (
-                        <XCircle className="h-4 w-4 text-gray-300" />
-                      )}
-                    </TableCell>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-slate-50">
+                    <TableHead className="font-semibold text-slate-800">Platform Asset / Module</TableHead>
+                    <TableHead className="font-semibold text-slate-800">Guest Visitor</TableHead>
+                    <TableHead className="font-semibold text-slate-800">Standard Employee</TableHead>
+                    <TableHead className="font-semibold text-slate-800">Department Manager</TableHead>
+                    <TableHead className="font-semibold text-slate-800">System Admin</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {permissionsInfo.map((perm, index) => (
+                    <TableRow key={index} className="hover:bg-slate-50/30">
+                      <TableCell className="font-semibold text-slate-900">{perm.module}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={perm.Guest === "No Access" ? "border-rose-100 text-rose-700 bg-rose-50" : "border-slate-100 text-slate-500"}>
+                          {perm.Guest}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={perm.User === "No Access" ? "border-rose-100 text-rose-700 bg-rose-50" : "border-blue-100 text-blue-700 bg-blue-50/30"}>
+                          {perm.User}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="border-amber-200 text-amber-700 bg-amber-50">
+                          {perm.Manager}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="default" className="bg-emerald-600 hover:bg-emerald-600 text-white border-0 font-medium">
+                          {perm.Admin}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* REGISTER ACCOUNT DIALOG */}
+      <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+        <DialogContent className="max-w-md bg-white border border-slate-200 shadow-xl rounded-lg p-6">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-slate-900">Register Staff Account</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCreateUser} className="space-y-4 mt-2">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">First Name</label>
+                <Input 
+                  required
+                  placeholder="e.g. Adarsh" 
+                  value={formFirstName}
+                  onChange={(e) => setFormFirstName(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Last Name</label>
+                <Input 
+                  required
+                  placeholder="e.g. Pandey" 
+                  value={formLastName}
+                  onChange={(e) => setFormLastName(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Email Address</label>
+              <Input 
+                required
+                type="email"
+                placeholder="employee@planetone.com" 
+                value={formEmail}
+                onChange={(e) => setFormEmail(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Username</label>
+              <Input 
+                required
+                placeholder="username (unique)" 
+                value={formUsername}
+                onChange={(e) => setFormUsername(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Account Password</label>
+              <Input 
+                type="password"
+                placeholder="Leave blank for Password123!" 
+                value={formPassword}
+                onChange={(e) => setFormPassword(e.target.value)}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">System Role</label>
+                <select 
+                  className="w-full h-10 px-3 bg-white border border-slate-200 rounded-md text-sm font-medium text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                  value={formRole}
+                  onChange={(e) => setFormRole(e.target.value)}
+                >
+                  <option value="User">User</option>
+                  <option value="Manager">Manager</option>
+                  <option value="Admin">Admin</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Department</label>
+                <select 
+                  className="w-full h-10 px-3 bg-white border border-slate-200 rounded-md text-sm font-medium text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                  value={formDepartmentId}
+                  onChange={(e) => setFormDepartmentId(e.target.value)}
+                >
+                  {departments.map((dept) => (
+                    <option key={dept.id} value={dept.id}>{dept.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 pt-2">
+              <input 
+                type="checkbox"
+                id="formActive"
+                checked={formActive}
+                className="h-4.5 w-4.5 rounded border-slate-350 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                onChange={(e) => setFormActive(e.target.checked)}
+              />
+              <label htmlFor="formActive" className="text-sm font-medium text-slate-800 cursor-pointer">
+                Enable account immediate active authorization
+              </label>
+            </div>
+
+            <DialogFooter className="pt-4 gap-2">
+              <DialogClose asChild>
+                <Button type="button" variant="outline">Cancel</Button>
+              </DialogClose>
+              <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-xs">
+                Register User
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* EDIT ACCOUNT DIALOG */}
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent className="max-w-md bg-white border border-slate-200 shadow-xl rounded-lg p-6">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-slate-900">Modify Staff Credentials</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleUpdateUser} className="space-y-4 mt-2">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">First Name</label>
+                <Input 
+                  required
+                  placeholder="First Name" 
+                  value={formFirstName}
+                  onChange={(e) => setFormFirstName(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Last Name</label>
+                <Input 
+                  required
+                  placeholder="Last Name" 
+                  value={formLastName}
+                  onChange={(e) => setFormLastName(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Email Address</label>
+              <Input 
+                required
+                type="email"
+                placeholder="employee@planetone.com" 
+                value={formEmail}
+                onChange={(e) => setFormEmail(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Username</label>
+              <Input 
+                required
+                placeholder="username" 
+                value={formUsername}
+                onChange={(e) => setFormUsername(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Password Reset (Optional)</label>
+              <Input 
+                type="password"
+                placeholder="Leave blank to keep current password" 
+                value={formPassword}
+                onChange={(e) => setFormPassword(e.target.value)}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">System Role</label>
+                <select 
+                  className="w-full h-10 px-3 bg-white border border-slate-200 rounded-md text-sm font-medium text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                  value={formRole}
+                  onChange={(e) => setFormRole(e.target.value)}
+                >
+                  <option value="User">User</option>
+                  <option value="Manager">Manager</option>
+                  <option value="Admin">Admin</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Department</label>
+                <select 
+                  className="w-full h-10 px-3 bg-white border border-slate-200 rounded-md text-sm font-medium text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                  value={formDepartmentId}
+                  onChange={(e) => setFormDepartmentId(e.target.value)}
+                >
+                  {departments.map((dept) => (
+                    <option key={dept.id} value={dept.id}>{dept.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 pt-2">
+              <input 
+                type="checkbox"
+                id="formEditActive"
+                checked={formActive}
+                className="h-4.5 w-4.5 rounded border-slate-350 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                onChange={(e) => setFormActive(e.target.checked)}
+              />
+              <label htmlFor="formEditActive" className="text-sm font-medium text-slate-800 cursor-pointer">
+                Account status remains active
+              </label>
+            </div>
+
+            <DialogFooter className="pt-4 gap-2">
+              <DialogClose asChild>
+                <Button type="button" variant="outline">Cancel</Button>
+              </DialogClose>
+              <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-xs">
+                Save Changes
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

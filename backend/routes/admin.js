@@ -1,9 +1,15 @@
 const express = require('express');
 const router = express.Router();
+const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const Department = require('../models/Department');
 const Project = require('../models/Project');
 const Activity = require('../models/Activity');
+const { authMiddleware, adminMiddleware } = require('../middleware/auth');
+
+// Apply strict administration and role verification gates globally
+router.use(authMiddleware);
+router.use(adminMiddleware);
 
 // GET all users
 router.get('/users', async (req, res) => {
@@ -59,10 +65,22 @@ router.post('/users', async (req, res) => {
       selectedDepartment = await Department.findOne({ where: { name: 'Operations' } });
     }
 
+    // Securely hash password using bcryptjs
+    let hashedPassword = req.body.password;
+    if (hashedPassword) {
+      const salt = await bcrypt.genSalt(10);
+      hashedPassword = await bcrypt.hash(hashedPassword, salt);
+    } else {
+      const salt = await bcrypt.genSalt(10);
+      hashedPassword = await bcrypt.hash('Password123!', salt);
+    }
+
     const user = await User.create({
       username: req.body.username,
       email: req.body.email,
-      password: req.body.password,
+      password: hashedPassword,
+      firstName: req.body.firstName,
+      lastName: req.body.lastName,
       role: req.body.role,
       active: req.body.active !== undefined ? req.body.active : true,
       departmentId: selectedDepartment ? selectedDepartment.id : null
@@ -97,14 +115,22 @@ router.put('/users/:id', async (req, res) => {
       }
     }
 
-    await user.update({
+    const updateData = {
       username: req.body.username || user.username,
       email: req.body.email || user.email,
-      password: req.body.password || user.password,
+      firstName: req.body.firstName !== undefined ? req.body.firstName : user.firstName,
+      lastName: req.body.lastName !== undefined ? req.body.lastName : user.lastName,
       role: req.body.role || user.role,
       active: req.body.active !== undefined ? req.body.active : user.active,
       departmentId: selectedDepartment ? selectedDepartment.id : user.departmentId
-    });
+    };
+
+    if (req.body.password) {
+      const salt = await bcrypt.genSalt(10);
+      updateData.password = await bcrypt.hash(req.body.password, salt);
+    }
+
+    await user.update(updateData);
 
     await user.reload({
       include: [{ association: 'departmentDetails', attributes: ['id', 'name'] }]

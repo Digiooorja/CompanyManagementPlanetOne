@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, ChangeEvent } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -15,6 +15,7 @@ import { useAuth } from "../contexts/AuthContext";
 
 export function DocumentDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { user, canEdit } = useAuth();
   const [document, setDocument] = useState<any | null>(null);
   const [selectedVersionId, setSelectedVersionId] = useState<number | null>(null);
@@ -243,21 +244,40 @@ export function DocumentDetail() {
     }
   };
 
+  const handleDeleteDocument = async () => {
+    if (!document) return;
+    const confirmDelete = window.confirm(
+      "Are you sure you want to delete this document? This will also remove the file from storage and cannot be undone."
+    );
+    if (!confirmDelete) return;
+
+    setLoading(true);
+    setError(null);
+    try {
+      await documentsApi.delete(document.id);
+      navigate('/documents');
+    } catch (err) {
+      console.error('Error deleting document:', err);
+      setError('Failed to delete document');
+      setLoading(false);
+    }
+  };
+
   const documentTitle = document?.title || document?.name || 'Document';
   const documentType = document?.documentType || document?.type || 'Document';
   const documentStatus = document?.status || 'Unknown';
   const documentDescription = document?.content || document?.description || 'No description available';
   const documentVersion = document?.versionNumber != null ? String(document.versionNumber) : '1';
   const documentUploadDate = document?.uploadDate ? new Date(document.uploadDate).toLocaleDateString('en-GB', {
-                            day: 'numeric',
-                            month: 'short',
-                            year: 'numeric'
-                          }) : 'Unknown';
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric'
+  }) : 'Unknown';
 
   const metadata = [
     { label: 'Document Type', value: documentType },
-    { label: 'Block', value: document?.block || document?.blockName || 'Unknown' },
-    { label: 'Project', value: document?.project || document?.projectId || 'Unknown' },
+    { label: 'Block', value: typeof document?.block === 'object' ? document?.block?.name : (document?.block || document?.blockName || 'None') },
+    { label: 'Project', value: typeof document?.project === 'object' ? document?.project?.name : (document?.project || document?.projectName || 'None') },
     { label: 'Tagged Activities', value: Array.isArray(document?.activityTags) && document.activityTags.length > 0 ? document.activityTags.join(', ') : document?.activityId ? `Activity ${document.activityId}` : 'None' },
     { label: 'File Size', value: document?.size ? `${document.size} bytes` : 'Unknown' },
     { label: 'Version', value: documentVersion },
@@ -268,29 +288,29 @@ export function DocumentDetail() {
 
   const versionItems = document?.versions?.length > 0
     ? document.versions.map((version: any, index: number) => ({
-        id: Number(version.id),
-        step: version.label || `Version ${version.versionNumber || index + 1}`,
-        status: version.status || 'Completed',
-        date: version.uploadDate ? new Date(version.uploadDate).toLocaleDateString('en-GB', {
-                            day: 'numeric',
-                            month: 'short',
-                            year: 'numeric'
-                          }) : documentUploadDate,
-        user: version.author || document?.author || 'Unknown',
-        version: version.versionNumber != null ? String(version.versionNumber) : `${index + 1}`,
-        mimeType: version.mimeType,
-      }))
+      id: Number(version.id),
+      step: version.label || `Version ${version.versionNumber || index + 1}`,
+      status: version.status || 'Completed',
+      date: version.uploadDate ? new Date(version.uploadDate).toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric'
+      }) : documentUploadDate,
+      user: version.author || document?.author || 'Unknown',
+      version: version.versionNumber != null ? String(version.versionNumber) : `${index + 1}`,
+      mimeType: version.mimeType,
+    }))
     : [
-        {
-          id: Number(document?.id),
-          step: 'Uploaded',
-          status: 'Completed',
-          date: documentUploadDate,
-          user: document?.author || 'Unknown',
-          version: documentVersion,
-          mimeType: document?.mimeType,
-        },
-      ];
+      {
+        id: Number(document?.id),
+        step: 'Uploaded',
+        status: 'Completed',
+        date: documentUploadDate,
+        user: document?.author || 'Unknown',
+        version: documentVersion,
+        mimeType: document?.mimeType,
+      },
+    ];
 
   const selectedVersion = getSelectedVersion(document, selectedVersionId);
   const selectedMimeType = selectedVersion?.mimeType || document?.mimeType;
@@ -388,7 +408,7 @@ export function DocumentDetail() {
         <Button variant="outline" onClick={handleUploadNewVersion} disabled={uploadingVersion || !canEdit}>
           Upload New Version
         </Button>
-        <Button variant="destructive" disabled={!canEdit}>
+        <Button variant="destructive" onClick={handleDeleteDocument} disabled={!canEdit}>
           <Trash2 className="h-4 w-4 mr-2" />
           Delete
         </Button>

@@ -179,3 +179,12 @@
     line-height: 1.5;
   }
 }
+
+/* Custom premium utility to hide browser scrollbars */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;     /* Firefox */
+}

@@ -1,3 +1,5 @@
+import { authStorage } from '../utils/authStorage';
+
 const API_BASE_URL = '/api';
 
 // Helper function for making API requests
@@ -6,7 +8,7 @@ async function apiCall<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
-  const token = localStorage.getItem('token');
+  const token = authStorage.getToken();
   const defaultOptions: RequestInit = {
     headers: {
       'Content-Type': 'application/json',
@@ -29,7 +31,7 @@ async function apiCall<T>(
 
 async function apiUpload<T>(endpoint: string, formData: FormData): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
-  const token = localStorage.getItem('token');
+  const token = authStorage.getToken();
 
   const response = await fetch(url, {
     method: 'POST',
@@ -94,6 +96,16 @@ export const usersApi = {
   getAll: () => apiCall<any[]>('/auth/users'),
 };
 
+// Admin API for user management and system metrics
+export const adminApi = {
+  getUsers: () => apiCall<any[]>('/admin/users'),
+  getUserById: (id: number) => apiCall<any>(`/admin/users/${id}`),
+  createUser: (data: any) => apiCall<any>('/admin/users', { method: 'POST', body: JSON.stringify(data) }),
+  updateUser: (id: number, data: any) => apiCall<any>(`/admin/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteUser: (id: number) => apiCall<any>(`/admin/users/${id}`, { method: 'DELETE' }),
+  getDashboard: () => apiCall<any>('/admin/dashboard')
+};
+
 // Blocks API
 export const blocksApi = {
   getAll: () => apiCall<any[]>('/blocks'),
@@ -108,6 +120,7 @@ export const documentsApi = {
   getAll: () => apiCall<any[]>('/documents'),
   getByProjectId: (projectId: number) => apiCall<any[]>(`/documents?projectId=${projectId}`),
   getByActivityId: (activityId: number) => apiCall<any[]>(`/documents?activityId=${activityId}`),
+  getByLicenceId: (licenceId: number) => apiCall<any[]>(`/documents?licenceId=${licenceId}`),
   getById: (id: number) => apiCall<any>(`/documents/${id}`),
   getPresignedUrl: (id: number, type: 'download' | 'preview' = 'download') => apiCall<{ url: string; expiresIn: number }>(`/documents/${id}/presigned?type=${type}`),
   create: (data: any) => apiCall('/documents', { method: 'POST', body: JSON.stringify(data) }),
@@ -120,10 +133,14 @@ export const documentsApi = {
 // Finance API
 export const financeApi = {
   getAll: () => apiCall<any[]>('/finance'),
+  getPending: () => apiCall<any[]>('/finance/pending'),
   getById: (id: number) => apiCall<any>(`/finance/${id}`),
   create: (data: any) => apiCall('/finance', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: number, data: any) => apiCall(`/finance/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: number) => apiCall(`/finance/${id}`, { method: 'DELETE' }),
+  delegate: (id: number, data: { delegateTo: string, comment?: string }) => apiCall(`/finance/${id}/delegate`, { method: 'PUT', body: JSON.stringify(data) }),
+  approve: (id: number, data: { comment?: string }) => apiCall(`/finance/${id}/approve`, { method: 'PUT', body: JSON.stringify(data) }),
+  reject: (id: number, data: { comment?: string }) => apiCall(`/finance/${id}/reject`, { method: 'PUT', body: JSON.stringify(data) }),
   nextAfe: (projectId?: number | string, activityId?: number | string) => {
     const qs: string[] = [];
     if (projectId !== undefined && projectId !== null && projectId !== '') qs.push(`projectId=${projectId}`);
@@ -176,4 +193,24 @@ export const workflowsApi = {
   create: (data: any) => apiCall('/workflows', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: number, data: any) => apiCall(`/workflows/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: number) => apiCall(`/workflows/${id}`, { method: 'DELETE' }),
+};
+
+// Licences API
+export const licencesApi = {
+  getAll: () => apiCall<any[]>('/licences'),
+  getById: (id: number) => apiCall<any>(`/licences/${id}`),
+  create: (data: any) => apiCall('/licences', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: number, data: any) => apiCall(`/licences/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: number) => apiCall(`/licences/${id}`, { method: 'DELETE' }),
+};
+
+// Tasks API
+export const tasksApi = {
+  getAll: () => apiCall<any[]>('/tasks'),
+  getMyTasks: () => apiCall<any[]>('/tasks/my'),
+  getAssignedByMe: () => apiCall<any[]>('/tasks/assigned-by-me'),
+  getById: (id: number) => apiCall<any>(`/tasks/${id}`),
+  create: (data: any) => apiCall('/tasks', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: number, data: any) => apiCall(`/tasks/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: number) => apiCall(`/tasks/${id}`, { method: 'DELETE' }),
 };

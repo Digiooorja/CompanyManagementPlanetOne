@@ -20,7 +20,7 @@ import {
 } from "../components/ui/dialog";
 import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
-import { activitiesApi, projectsApi } from "../../services/api";
+import { activitiesApi, projectsApi, usersApi } from "../../services/api";
 import { formatDisplayDateOrDefault } from "../lib/date";
 
 // Activities are loaded from the API; no local defaults are used.
@@ -45,6 +45,7 @@ export function Activities() {
     description: "",
   });
   const [projects, setProjects] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const { user, canEdit } = useAuth();
   const departmentName = user?.department || user?.departmentDetails?.name || '';
@@ -89,9 +90,20 @@ export function Activities() {
     }
   }
 
+  async function fetchUsers() {
+    try {
+      const data = await usersApi.getAll();
+      setUsers(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Error fetching users:', err);
+      setUsers([]);
+    }
+  }
+
   useEffect(() => {
     fetchActivities();
     fetchProjects();
+    fetchUsers();
   }, []);
 
   useEffect(() => {
@@ -217,7 +229,19 @@ export function Activities() {
                   </div>
                   <div>
                     <Label>Assigned To</Label>
-                    <Input value={newActivity.assignedTo} onChange={(e) => setNewActivity({...newActivity, assignedTo: e.target.value})} />
+                    <Input 
+                      list="users-datalist-create"
+                      placeholder="Type or select a user..."
+                      value={newActivity.assignedTo} 
+                      onChange={(e) => setNewActivity({...newActivity, assignedTo: e.target.value})} 
+                    />
+                    <datalist id="users-datalist-create">
+                      {users.map((u: any) => {
+                        const name = [u.firstName, u.lastName].filter(Boolean).join(' ').trim() || u.username;
+                        const dept = u.departmentDetails?.name || u.department || 'No Dept';
+                        return <option key={u.id} value={name}>{dept}</option>;
+                      })}
+                    </datalist>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     <div>

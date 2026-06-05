@@ -3,6 +3,57 @@ const router = express.Router();
 const Activity = require('../models/Activity');
 const { Op } = require('sequelize');
 const { optionalAuthMiddleware } = require('../middleware/auth');
+const Task = require('../models/Task');
+const User = require('../models/User');
+
+async function autoAssignActivityTask(activity) {
+  try {
+    if (!activity.assignedTo) return;
+
+    const assignName = String(activity.assignedTo).trim().toLowerCase();
+    
+    // Find matching user (simple heuristic)
+    const users = await User.findAll();
+    let matchedUser = users.find(u => {
+      const usernameMatch = u.username && u.username.toLowerCase() === assignName;
+      const fullName = `${u.firstName || ''} ${u.lastName || ''}`.trim().toLowerCase();
+      const nameMatch = fullName && fullName === assignName;
+      const firstNameMatch = u.firstName && u.firstName.toLowerCase() === assignName;
+      return usernameMatch || nameMatch || firstNameMatch;
+    });
+
+    if (matchedUser) {
+      const existingTask = await Task.findOne({
+        where: { relatedType: 'Activity', relatedId: activity.id }
+      });
+
+      let taskStatus = 'Not Started';
+      if (activity.status === 'In Progress' || activity.progress > 0) taskStatus = 'In Progress';
+      if (activity.status === 'Completed' || activity.progress >= 100) taskStatus = 'Completed';
+
+      if (existingTask) {
+        await existingTask.update({
+          assignedToId: matchedUser.id,
+          title: `Activity Assignment: ${activity.name}`,
+          status: taskStatus !== 'Completed' && existingTask.status === 'Completed' ? existingTask.status : taskStatus
+        });
+      } else {
+        await Task.create({
+          title: `Activity Assignment: ${activity.name}`,
+          description: activity.description || `You have been assigned to activity: ${activity.name}`,
+          status: taskStatus,
+          priority: activity.priority || 'Medium',
+          dueDate: activity.dueDate ? new Date(activity.dueDate) : null,
+          assignedToId: matchedUser.id,
+          relatedType: 'Activity',
+          relatedId: activity.id
+        });
+      }
+    }
+  } catch (err) {
+    console.error('Failed to auto-assign activity task:', err);
+  }
+}
 
 function getDepartmentName(user) {
   return String(user?.department || user?.departmentDetails?.name || '').toLowerCase();
@@ -333,6 +384,8 @@ router.post('/', async (req, res) => {
       await updateParentActualCost(parentActivity.id);
       await updateParentProgress(parentActivity.id);
     }
+    
+    await autoAssignActivityTask(activity);
 
     res.status(201).json(activity);
   } catch (err) {
@@ -517,6 +570,8 @@ router.put('/:id', async (req, res) => {
         attributes: ['id', 'name', 'description', 'status', 'priority', 'assignedTo', 'dueDate', 'progress', 'parentActivityId', 'plannedCost', 'actualCost']
       }]
     });
+    
+    await autoAssignActivityTask(updatedActivity);
 
     res.json(updatedActivity);
   } catch (err) {

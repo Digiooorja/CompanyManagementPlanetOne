@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { Card } from "../components/ui/card";
@@ -18,7 +18,7 @@ import {
   DialogTitle,
   DialogClose
 } from "../components/ui/dialog";
-import { ArrowLeft, Calendar, User, FileText, MessageSquare, Plus, Trash2, CheckCircle } from "lucide-react";
+import { ArrowLeft, Calendar, User, FileText, MessageSquare, Plus, Trash2, CheckCircle, UploadCloud, Search, Link2, X } from "lucide-react";
 import { activitiesApi, commentsApi, departmentsApi, documentsApi, usersApi } from "../../services/api";
 
 export function ActivityDetail() {
@@ -61,6 +61,17 @@ export function ActivityDetail() {
     progress: 0
   });
   const navigate = useNavigate();
+  const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [allDocuments, setAllDocuments] = useState<any[]>([]);
+  const [linkSearchQuery, setLinkSearchQuery] = useState("");
+  const [linkingDocId, setLinkingDocId] = useState<number | null>(null);
+
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadTitle, setUploadTitle] = useState("");
+  const [uploadType, setUploadType] = useState("Technical");
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [activityActionLoading, setActivityActionLoading] = useState(false);
   const { user, canEdit } = useAuth();
   const departmentName = user?.department || user?.departmentDetails?.name || '';
@@ -262,15 +273,13 @@ export function ActivityDetail() {
     }
   };
 
-  const handleUpdateActivityProgress = async () => {
+  const handleUpdateActivityProgressValue = async (progressValue: number) => {
     if (!activity) return;
     if (subActivities.length > 0) {
       setError('Progress is auto-calculated from sub-activities and cannot be set manually.');
       return;
     }
-    const progressInput = window.prompt('Enter new progress value (0-100)', String(activity.progress ?? 0));
-    if (progressInput === null) return;
-    const progressValue = Number(progressInput);
+    
     if (Number.isNaN(progressValue) || progressValue < 0 || progressValue > 100) {
       setError('Progress must be between 0 and 100');
       return;
@@ -303,17 +312,94 @@ export function ActivityDetail() {
     }
   };
 
-  const handleLinkDocument = () => {
-    const name = window.prompt('Enter document name to link');
-    if (!name) return;
-    const newDoc = {
-      id: Date.now(),
-      name,
-      type: 'Linked',
-      uploadDate: new Date().toISOString().split('T')[0]
-    };
-    setLinkedDocuments([newDoc, ...linkedDocuments]);
+  const handleOpenLinkModal = async () => {
+    try {
+      setIsLinkModalOpen(true);
+      const docs = await documentsApi.getAll();
+      setAllDocuments(Array.isArray(docs) ? docs : []);
+    } catch (err) {
+      console.error('Error fetching all documents:', err);
+    }
   };
+
+  const handleSelectLinkDocument = async (doc: any) => {
+    try {
+      setLinkingDocId(doc.id);
+      const currentActivityId = Number(id);
+      const existingIds = Array.isArray(doc.activityIds) ? doc.activityIds.map(Number) : [];
+      
+      const updatePayload: any = {};
+      if (!doc.activityId) {
+        updatePayload.activityId = currentActivityId;
+      }
+      if (!existingIds.includes(currentActivityId)) {
+        updatePayload.activityIds = [...existingIds, currentActivityId];
+      }
+      
+      if (Object.keys(updatePayload).length > 0) {
+        await documentsApi.update(doc.id, updatePayload);
+      }
+      
+      await fetchActivityDetails();
+      setIsLinkModalOpen(false);
+      setLinkSearchQuery("");
+    } catch (err) {
+      console.error('Error linking document:', err);
+      setError('Failed to link document');
+    } finally {
+      setLinkingDocId(null);
+    }
+  };
+
+  const handleUploadDocument = async () => {
+    if (!uploadFile) {
+      setUploadError('Please select a file to upload');
+      return;
+    }
+    try {
+      setUploadingDoc(true);
+      setUploadError(null);
+      
+      const authorName = user ? `${user.firstName || ''} ${user.lastName || user.username}`.trim() : 'unknown';
+      const formData = new FormData();
+      formData.append('file', uploadFile);
+      formData.append('title', uploadTitle || uploadFile.name);
+      formData.append('author', authorName);
+      formData.append('documentType', uploadType);
+      formData.append('status', 'Review');
+      if (activity?.projectId) {
+        formData.append('projectId', String(activity.projectId));
+      }
+      formData.append('activityId', String(id));
+      formData.append('activityIds', JSON.stringify([Number(id)]));
+      
+      await documentsApi.upload(formData);
+      
+      await fetchActivityDetails();
+      
+      setUploadFile(null);
+      setUploadTitle('');
+      setIsUploadModalOpen(false);
+    } catch (err) {
+      console.error('Error uploading document:', err);
+      setUploadError('Failed to upload document');
+    } finally {
+      setUploadingDoc(false);
+    }
+  };
+
+  const availableDocuments = useMemo(() => {
+    const linkedIds = new Set(linkedDocuments.map((d) => Number(d.id)));
+    return allDocuments.filter((doc) => {
+      if (linkedIds.has(Number(doc.id))) return false;
+      if (linkSearchQuery.trim()) {
+        const query = linkSearchQuery.toLowerCase();
+        const title = String(doc.title || doc.name || '').toLowerCase();
+        return title.includes(query);
+      }
+      return true;
+    });
+  }, [allDocuments, linkedDocuments, linkSearchQuery]);
 
   const getDocumentSourceLabel = (doc: any) => {
     if (Array.isArray(doc.activityTags) && doc.activityTags.length > 0) {
@@ -661,11 +747,35 @@ export function ActivityDetail() {
           <Progress value={displayActivity.progress} className="h-3" />
           <div className="flex gap-2 mt-4 flex-wrap items-center">
             {subActivities.length === 0 ? (
-              <Button size="sm" variant="outline" onClick={handleUpdateActivityProgress} disabled={!canEditFields || activityActionLoading}>
-                Update Progress
-              </Button>
+              <div className="flex items-center gap-2 mr-4 bg-gray-50 border border-gray-200 rounded-md py-1 px-2">
+                <label className="text-sm font-medium text-gray-700">Progress</label>
+                <Input
+                  type="number"
+                  min="0"
+                  max="100"
+                  className="w-16 h-7 text-center px-1"
+                  defaultValue={displayActivity.progress}
+                  disabled={!canEditFields || activityActionLoading}
+                  onBlur={(e) => {
+                    const val = Number(e.target.value);
+                    if (!isNaN(val) && val >= 0 && val <= 100) {
+                      if (val !== displayActivity.progress) {
+                        handleUpdateActivityProgressValue(val);
+                      }
+                    } else {
+                      e.target.value = String(displayActivity.progress);
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.currentTarget.blur();
+                    }
+                  }}
+                />
+                <span className="text-sm font-medium text-gray-700">%</span>
+              </div>
             ) : (
-              <p className="text-xs text-gray-500 italic">Progress is auto-calculated from sub-activities</p>
+              <p className="text-xs text-gray-500 italic mr-4">Progress is auto-calculated from sub-activities</p>
             )}
             <Button size="sm" variant="outline" onClick={handleChangeActivityStatus} disabled={!canEditFields || activityActionLoading}>
               Change Status
@@ -842,23 +952,31 @@ export function ActivityDetail() {
                           Mark Complete
                         </Button>
                         {!(subActivity.subActivities && subActivity.subActivities.length > 0) ? (
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="range"
-                              min={0}
-                              max={100}
-                              value={subActivity.progress}
-                              onChange={(e) => handleUpdateProgress(subActivity.id, parseInt(e.target.value, 10))}
-                              className="w-40"
-                            />
-                            <input
+                          <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-md py-1 px-2">
+                            <label className="text-sm font-medium text-gray-700">Progress</label>
+                            <Input
                               type="number"
                               min={0}
                               max={100}
-                              value={subActivity.progress}
-                              onChange={(e) => handleUpdateProgress(subActivity.id, Math.max(0, Math.min(100, Number(e.target.value || 0))))}
-                              className="w-16 text-sm px-2 py-1 border rounded"
+                              defaultValue={subActivity.progress}
+                              className="w-16 h-7 text-center px-1"
+                              onBlur={(e) => {
+                                const val = Number(e.target.value);
+                                if (!isNaN(val) && val >= 0 && val <= 100) {
+                                  if (val !== subActivity.progress) {
+                                    handleUpdateProgress(subActivity.id, val);
+                                  }
+                                } else {
+                                  e.target.value = String(subActivity.progress);
+                                }
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.currentTarget.blur();
+                                }
+                              }}
                             />
+                            <span className="text-sm font-medium text-gray-700">%</span>
                           </div>
                         ) : (
                           <span className="text-xs text-gray-500 italic">Auto-calculated from sub-activities</span>
@@ -873,38 +991,81 @@ export function ActivityDetail() {
 
           {/* Linked Documents */}
           <Card className="p-6">
-            <h3 className="text-lg mb-4 flex items-center gap-2">
-              <FileText className="h-5 w-5" />
+            <h3 className="text-lg mb-4 flex items-center gap-2 font-semibold">
+              <FileText className="h-5 w-5 text-gray-700" />
               Linked Documents
             </h3>
-            <div className="space-y-2">
-              {linkedDocuments.map((doc) => (
+            
+            <div className="space-y-4">
+              {/* Premium Dotted Drag-and-Upload Box */}
+              {canEdit && (
                 <div
-                  key={doc.id}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded"
+                  onClick={() => setIsUploadModalOpen(true)}
+                  className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-200 hover:border-blue-500 rounded-xl cursor-pointer bg-gray-50/50 hover:bg-blue-50/20 transition-all duration-300 group"
                 >
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-4 w-4" />
-                    <div>
-                      <p className="text-sm">{doc.name}</p>
-                      <p className="text-xs text-gray-500">
-                        {doc.type} • {doc.uploadDate}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {getDocumentSourceLabel(doc)}
-                      </p>
-                    </div>
+                  <div className="flex items-center justify-center w-12 h-12 rounded-full bg-white border border-gray-100 shadow-sm text-blue-600 group-hover:scale-110 transition-transform duration-300">
+                    <Plus className="h-5 w-5 group-hover:rotate-90 transition-transform duration-300" />
                   </div>
-                  <Link to={`/documents/${doc.id}`}>
-                    <Button size="sm" variant="ghost">
-                      View
-                    </Button>
-                  </Link>
+                  <p className="text-sm font-medium text-gray-800 mt-3 group-hover:text-blue-600 transition-colors">
+                    Upload New Document
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1 text-center">
+                    Directly attach files to this activity concessions
+                  </p>
                 </div>
-              ))}
+              )}
+
+              {/* Linked Documents List */}
+              {linkedDocuments.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-4 italic bg-gray-50/30 rounded-lg border border-gray-100">
+                  No documents linked to this activity yet.
+                </p>
+              ) : (
+                <div className="grid gap-3">
+                  {linkedDocuments.map((doc) => (
+                    <div
+                      key={doc.id}
+                      className="flex items-center justify-between p-3.5 border border-gray-100 hover:border-gray-200 bg-white hover:bg-gray-50/30 rounded-xl transition-all shadow-sm"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="p-2 bg-blue-50/60 rounded-lg text-blue-600">
+                          <FileText className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900 line-clamp-1">{doc.name}</p>
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-gray-50 font-normal">
+                              {doc.type}
+                            </Badge>
+                            <span className="text-xs text-gray-400">•</span>
+                            <span className="text-[11px] text-gray-400">
+                              {doc.uploadDate}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground mt-1 font-medium bg-slate-50 px-2 py-0.5 rounded-md inline-block">
+                            {getDocumentSourceLabel(doc)}
+                          </p>
+                        </div>
+                      </div>
+                      <Link to={`/documents/${doc.id}`}>
+                        <Button size="sm" variant="outline" className="h-8 hover:bg-gray-100">
+                          View
+                        </Button>
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-            <Button variant="outline" size="sm" className="w-full mt-3" onClick={handleLinkDocument}>
-              Link Document
+
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full mt-4 flex items-center justify-center gap-1.5 h-9 bg-white text-gray-700 border-gray-200 hover:bg-gray-50 hover:text-gray-900 shadow-sm"
+              onClick={handleOpenLinkModal}
+            >
+              <Link2 className="h-4 w-4 text-gray-500" />
+              Link Existing Document
             </Button>
           </Card>
 
@@ -1113,25 +1274,20 @@ export function ActivityDetail() {
                   <div className="grid gap-2 sm:grid-cols-2">
                     <div className="grid gap-2">
                       <label className="text-sm font-medium">Assigned To</label>
-                      <Select
+                      <Input
                         disabled={!canEditFields}
+                        list="users-datalist-edit"
+                        placeholder="Type or select a user..."
                         value={activityForm.assignedTo}
-                        onValueChange={(value) => setActivityForm({ ...activityForm, assignedTo: value })}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select user" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {users.map((user: any) => {
-                            const displayName = buildUserDisplayName(user);
-                            return (
-                              <SelectItem key={user.id} value={displayName}>
-                                {displayName}
-                              </SelectItem>
-                            );
-                          })}
-                        </SelectContent>
-                      </Select>
+                        onChange={(event) => setActivityForm({ ...activityForm, assignedTo: event.target.value })}
+                      />
+                      <datalist id="users-datalist-edit">
+                        {users.map((u: any) => {
+                          const displayName = buildUserDisplayName(u);
+                          const rawName = [u.firstName, u.lastName].filter(Boolean).join(' ').trim() || u.username;
+                          return <option key={u.id} value={rawName}>{u.departmentDetails?.name || u.department || 'No Dept'}</option>;
+                        })}
+                      </datalist>
                     </div>
                     <div className="grid gap-2">
                       <label className="text-sm font-medium">Planned Start</label>
@@ -1223,6 +1379,147 @@ export function ActivityDetail() {
                   </DialogClose>
                   <Button onClick={handleSaveActivity} disabled={activityActionLoading}>
                     Save Changes
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* Link Existing Document Dialog */}
+            <Dialog open={isLinkModalOpen} onOpenChange={setIsLinkModalOpen}>
+              <DialogContent className="sm:max-w-[500px]">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 font-bold text-gray-900">
+                    <Link2 className="h-5 w-5 text-blue-600" />
+                    Link Existing Document
+                  </DialogTitle>
+                  <DialogDescription>
+                    Search and select a document from the system to link it to this activity.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-4 my-2">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                    <Input
+                      placeholder="Search documents by title..."
+                      value={linkSearchQuery}
+                      onChange={(e) => setLinkSearchQuery(e.target.value)}
+                      className="pl-9"
+                    />
+                  </div>
+
+                  <div className="max-h-[300px] overflow-y-auto space-y-2 pr-1 no-scrollbar">
+                    {availableDocuments.length === 0 ? (
+                      <p className="text-sm text-gray-500 text-center py-8">
+                        No available documents found matching your search.
+                      </p>
+                    ) : (
+                      availableDocuments.map((doc) => (
+                        <div
+                          key={doc.id}
+                          className="flex items-center justify-between p-3 border border-gray-100 hover:bg-gray-50 rounded-lg transition-all"
+                        >
+                          <div className="flex-1 min-w-0 pr-3">
+                            <p className="text-sm font-medium text-gray-900 truncate">
+                              {doc.title || doc.name}
+                            </p>
+                            <p className="text-xs text-gray-400 truncate">
+                              {doc.documentType || doc.type || 'General'} • By {doc.author || 'System'}
+                            </p>
+                          </div>
+                          <Button
+                            size="sm"
+                            onClick={() => handleSelectLinkDocument(doc)}
+                            disabled={linkingDocId === doc.id}
+                            className="h-8 text-xs bg-blue-50 text-blue-600 hover:bg-blue-100 border-none"
+                          >
+                            {linkingDocId === doc.id ? 'Linking...' : 'Link'}
+                          </Button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                <DialogFooter>
+                  <DialogClose asChild>
+                    <Button variant="outline">Close</Button>
+                  </DialogClose>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* Upload New Document Dialog */}
+            <Dialog open={isUploadModalOpen} onOpenChange={setIsUploadModalOpen}>
+              <DialogContent className="sm:max-w-[450px]">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 font-bold text-gray-900">
+                    <UploadCloud className="h-5 w-5 text-blue-600" />
+                    Upload Document
+                  </DialogTitle>
+                  <DialogDescription>
+                    Select and configure a document to upload and attach directly to this activity.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-4 my-2">
+                  {uploadError && (
+                    <div className="p-3 bg-red-50 text-red-700 text-xs rounded-lg border border-red-100">
+                      {uploadError}
+                    </div>
+                  )}
+
+                  <div className="grid gap-1.5">
+                    <label className="text-sm font-medium text-gray-700">Select File</label>
+                    <Input
+                      type="file"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0] || null;
+                        setUploadFile(file);
+                        if (file && !uploadTitle) {
+                          setUploadTitle(file.name);
+                        }
+                      }}
+                      className="cursor-pointer"
+                    />
+                  </div>
+
+                  <div className="grid gap-1.5">
+                    <label className="text-sm font-medium text-gray-700">Document Title</label>
+                    <Input
+                      placeholder="Enter document title"
+                      value={uploadTitle}
+                      onChange={(e) => setUploadTitle(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="grid gap-1.5">
+                    <label className="text-sm font-medium text-gray-700">Document Type</label>
+                    <Select value={uploadType} onValueChange={setUploadType}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Technical">Technical</SelectItem>
+                        <SelectItem value="Finance">Finance</SelectItem>
+                        <SelectItem value="HSE">HSE</SelectItem>
+                        <SelectItem value="Report">Report</SelectItem>
+                        <SelectItem value="Legal">Legal</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <DialogFooter className="space-x-2">
+                  <DialogClose asChild>
+                    <Button variant="outline" disabled={uploadingDoc}>Cancel</Button>
+                  </DialogClose>
+                  <Button
+                    onClick={handleUploadDocument}
+                    disabled={uploadingDoc || !uploadFile}
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    {uploadingDoc ? 'Uploading...' : 'Upload File'}
                   </Button>
                 </DialogFooter>
               </DialogContent>

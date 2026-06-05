@@ -25,7 +25,7 @@ function sanitizeSegment(name) {
 // GET all documents
 router.get('/', async (req, res) => {
   try {
-    const { projectId, activityId } = req.query;
+    const { projectId, activityId, licenceId } = req.query;
     const where = {};
 
     if (projectId) {
@@ -33,6 +33,9 @@ router.get('/', async (req, res) => {
     }
     if (activityId) {
       where.activityId = activityId;
+    }
+    if (licenceId) {
+      where.licenceId = licenceId;
     }
 
     const documents = await Document.findAll({ where });
@@ -75,6 +78,60 @@ router.get('/', async (req, res) => {
       });
     }
 
+    // Pre-populate missing projectId from activity records if available
+    const documentsWithMissingProject = documentData.filter(doc => !doc.projectId && doc.activityId);
+    if (documentsWithMissingProject.length > 0) {
+      const actIds = documentsWithMissingProject.map(doc => doc.activityId);
+      const activityRecordsForProject = await Activity.findAll({ where: { id: actIds } });
+      const activityProjectMap = activityRecordsForProject.reduce((map, act) => {
+        map[act.id] = act.projectId;
+        return map;
+      }, {});
+      documentData = documentData.map(doc => {
+        if (!doc.projectId && doc.activityId && activityProjectMap[doc.activityId]) {
+          return {
+            ...doc,
+            projectId: activityProjectMap[doc.activityId]
+          };
+        }
+        return doc;
+      });
+    }
+
+    // Enrich with projects and blocks
+    const allProjectIds = Array.from(new Set(documentData.map(doc => doc.projectId).filter(Boolean)));
+    const projectRecords = await Project.findAll({ where: { id: allProjectIds } });
+    const projectMap = projectRecords.reduce((map, p) => {
+      map[p.id] = p;
+      return map;
+    }, {});
+
+    const allBlockIds = Array.from(new Set(projectRecords.map(p => p.blockId).filter(Boolean)));
+    const blockRecords = await Block.findAll({ where: { id: allBlockIds } });
+    const blockMap = blockRecords.reduce((map, b) => {
+      map[b.id] = b.name;
+      return map;
+    }, {});
+
+    documentData = documentData.map((doc) => {
+      let projectName = 'General';
+      let blockName = 'General';
+      if (doc.projectId && projectMap[doc.projectId]) {
+        projectName = projectMap[doc.projectId].name;
+        const blockId = projectMap[doc.projectId].blockId;
+        if (blockId && blockMap[blockId]) {
+          blockName = blockMap[blockId];
+        }
+      }
+      return {
+        ...doc,
+        projectName,
+        project: projectName,
+        blockName,
+        block: blockName
+      };
+    });
+
     res.json(documentData);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -88,6 +145,29 @@ router.get('/:id', async (req, res) => {
     if (!document) return res.status(404).json({ message: 'Document not found' });
 
     const documentData = document.toJSON();
+
+    if (documentData.activityId && !documentData.projectId) {
+      const activity = await Activity.findByPk(documentData.activityId);
+      if (activity && activity.projectId) {
+        documentData.projectId = activity.projectId;
+      }
+    }
+
+    if (documentData.projectId) {
+      const project = await Project.findByPk(documentData.projectId);
+      if (project) {
+        documentData.projectName = project.name;
+        documentData.project = project.name;
+        if (project.blockId) {
+          const block = await Block.findByPk(project.blockId);
+          if (block) {
+            documentData.blockName = block.name;
+            documentData.block = block.name;
+          }
+        }
+      }
+    }
+
     const taggedActivityIds = Array.isArray(documentData.activityIds)
       ? documentData.activityIds
       : [];
@@ -171,10 +251,10 @@ router.get('/:id/presigned', async (req, res) => {
   }
 });
 
-// POST new document with file upload (field: file). Accepts activityId or projectId.
+// POST new document with file upload (field: file). Accepts activityId, projectId, or licenceId.
 router.post('/', upload.single('file'), async (req, res) => {
   try {
-    let { title, author, projectId, activityId, activityIds, documentType, status } = req.body;
+    let { title, author, projectId, activityId, activityIds, licenceId, documentType, status } = req.body;
 
     const parsedActivityIds = (() => {
       if (!activityIds) return [];
@@ -225,11 +305,14 @@ router.post('/', upload.single('file'), async (req, res) => {
     const sanitizedBlock = sanitizeSegment(blockName);
     const sanitizedProject = sanitizeSegment(projectName || 'general');
     const sanitizedActivity = sanitizeSegment(activityName || 'general');
+    const sanitizedLicence = licenceId ? sanitizeSegment(`licence-${licenceId}`) : 'general';
 
     const timestamp = Date.now();
     const originalName = req.file.originalname || 'upload.bin';
     const sanitizedFilename = originalName.replace(/[^a-zA-Z0-9.\-_/]/g, '_');
-    const s3Key = `${sanitizedBlock}/${sanitizedProject}/${sanitizedActivity}/${timestamp}-${sanitizedFilename}`;
+    const s3Key = licenceId 
+      ? `licences/${sanitizedLicence}/${timestamp}-${sanitizedFilename}`
+      : `${sanitizedBlock}/${sanitizedProject}/${sanitizedActivity}/${timestamp}-${sanitizedFilename}`;
 
     // Upload to S3
     const params = {
@@ -248,6 +331,7 @@ router.post('/', upload.single('file'), async (req, res) => {
       projectId: projectId || null,
       activityId: activityId || parsedActivityIds[0] || null,
       activityIds: parsedActivityIds.length > 0 ? parsedActivityIds : null,
+      licenceId: licenceId || null,
       documentType: documentType || 'Report',
       uploadDate: new Date(),
       status: status || 'Review',
@@ -307,10 +391,13 @@ router.post('/:id/versions', upload.single('file'), async (req, res) => {
     const sanitizedBlock = sanitizeSegment(blockName);
     const sanitizedProject = sanitizeSegment(projectName || 'general');
     const sanitizedActivity = sanitizeSegment(activityName || 'general');
+    const sanitizedLicence = originalDocument.licenceId ? sanitizeSegment(`licence-${originalDocument.licenceId}`) : 'general';
     const timestamp = Date.now();
     const originalName = req.file.originalname || 'upload.bin';
     const sanitizedFilename = originalName.replace(/[^a-zA-Z0-9.\-_/]/g, '_');
-    const s3Key = `${sanitizedBlock}/${sanitizedProject}/${sanitizedActivity}/${timestamp}-${sanitizedFilename}`;
+    const s3Key = originalDocument.licenceId
+      ? `licences/${sanitizedLicence}/${timestamp}-${sanitizedFilename}`
+      : `${sanitizedBlock}/${sanitizedProject}/${sanitizedActivity}/${timestamp}-${sanitizedFilename}`;
 
     const params = {
       Bucket: process.env.AWS_STORAGE_BUCKET_NAME || process.env.AWS_S3_BUCKET || process.env.S3_BUCKET,
@@ -328,6 +415,7 @@ router.post('/:id/versions', upload.single('file'), async (req, res) => {
       projectId: originalDocument.projectId || null,
       activityId: originalDocument.activityId || null,
       activityIds: Array.isArray(originalDocument.activityIds) ? originalDocument.activityIds : null,
+      licenceId: originalDocument.licenceId || null,
       documentType: documentType || originalDocument.documentType || 'Report',
       uploadDate: new Date(),
       status: status || originalDocument.status || 'Review',
@@ -359,6 +447,7 @@ router.put('/:id', async (req, res) => {
       projectId: req.body.projectId || document.projectId,
       activityId: req.body.activityId !== undefined ? req.body.activityId : document.activityId,
       activityIds: req.body.activityIds !== undefined ? req.body.activityIds : document.activityIds,
+      licenceId: req.body.licenceId !== undefined ? req.body.licenceId : document.licenceId,
       documentType: req.body.documentType || document.documentType,
       uploadDate: req.body.uploadDate || document.uploadDate,
       status: req.body.status || document.status

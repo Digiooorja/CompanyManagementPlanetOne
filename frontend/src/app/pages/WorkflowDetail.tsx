@@ -8,9 +8,11 @@ import { Separator } from "../components/ui/separator";
 import { ArrowLeft, CheckCircle, XCircle, MessageSquare, Clock } from "lucide-react";
 import { workflowsApi, financeApi } from "../../services/api";
 import { formatDisplayDateOrDefault } from "../lib/date";
+import { useAuth } from "../contexts/AuthContext";
 
 export function WorkflowDetail() {
   const { id } = useParams();
+  const { user } = useAuth();
   const [workflow, setWorkflow] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -160,11 +162,19 @@ export function WorkflowDetail() {
     setActionSaving(true);
     setError(null);
 
+    const userName = user 
+      ? `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.username 
+      : "Approver";
+
     try {
       // If this is a finance AFE mapped item, update via financeApi
       if ((workflow as any).financeId) {
         const fid = (workflow as any).financeId;
-        const updated = await financeApi.update(fid, { status: newStatus });
+        const updated = await financeApi.update(fid, { 
+          status: newStatus,
+          approvedBy: userName,
+          actionComment: actionComment || null
+        });
         // reflect changes in UI
         const updatedAny: any = updated;
         setWorkflow((prev: any) => ({ ...(prev || {}), status: updatedAny.status, original: updatedAny }));
@@ -172,14 +182,51 @@ export function WorkflowDetail() {
         return;
       }
 
+      // Generate date string in format YYYY-MM-DD HH:MM
+      const d = new Date();
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const formattedDate = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+      // 1. Construct new steps array for standard workflows
+      const updatedSteps = [...workflowSteps].map((s) => ({ ...s }));
+      const pendingIndex = updatedSteps.findIndex(
+        (s) => s.status === "Pending" || s.step === workflow.currentStep
+      );
+
+      if (pendingIndex !== -1) {
+        // Complete the active step
+        updatedSteps[pendingIndex].status = newStatus === "Approved" ? "Completed" : "Rejected";
+        updatedSteps[pendingIndex].action = newStatus === "Approved" ? "Approved" : "Rejected";
+        updatedSteps[pendingIndex].comment = actionComment || null;
+        updatedSteps[pendingIndex].date = formattedDate;
+        updatedSteps[pendingIndex].user = userName;
+
+        // Shift next step to Pending if approved
+        if (newStatus === "Approved" && pendingIndex + 1 < updatedSteps.length) {
+          updatedSteps[pendingIndex + 1].status = "Pending";
+        }
+      }
+
+      // 2. Identify the new step name
+      let nextStepName = workflow.currentStep;
+      if (newStatus === "Approved") {
+        const nextPending = updatedSteps.find((s) => s.status === "Pending");
+        nextStepName = nextPending ? nextPending.step : "Completed";
+      } else {
+        nextStepName = "Rejected";
+      }
+
       const updated = await workflowsApi.update(workflow.id, {
         status: newStatus,
+        steps: updatedSteps,
+        currentStep: nextStepName,
       });
+
       setWorkflow(updated);
       setActionComment("");
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error updating workflow:', err);
-      setError('Unable to update workflow status.');
+      setError(err.message || 'Unable to update workflow status.');
     } finally {
       setActionSaving(false);
     }
