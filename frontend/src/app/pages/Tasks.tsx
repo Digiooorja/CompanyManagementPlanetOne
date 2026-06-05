@@ -37,7 +37,7 @@ export function Tasks() {
     status: "Not Started",
     priority: "Medium",
     dueDate: "",
-    assignedToId: ""
+    assignedToId: "self"
   });
 
   const loadData = async () => {
@@ -67,7 +67,7 @@ export function Tasks() {
     try {
       await tasksApi.create({
         ...formData,
-        assignedToId: formData.assignedToId ? parseInt(formData.assignedToId) : undefined
+        assignedToId: formData.assignedToId && formData.assignedToId !== "self" ? parseInt(formData.assignedToId) : undefined
       });
       setShowModal(false);
       setFormData({
@@ -76,7 +76,7 @@ export function Tasks() {
         status: "Not Started",
         priority: "Medium",
         dueDate: "",
-        assignedToId: ""
+        assignedToId: "self"
       });
       loadData();
     } catch (err) {
@@ -300,7 +300,7 @@ export function Tasks() {
                         <SelectValue placeholder="Select user (default: self)" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Assign to myself</SelectItem>
+                        <SelectItem value="self">Assign to myself</SelectItem>
                         {users.map(u => (
                           <SelectItem key={u.id} value={u.id.toString()}>{u.firstName} {u.lastName} ({u.username})</SelectItem>
                         ))}

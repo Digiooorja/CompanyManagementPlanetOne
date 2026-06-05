@@ -53,7 +53,7 @@ export function Projects() {
         name: newProject.name,
         description: newProject.description,
         status: newProject.status,
-        blockId: newProject.blockId ? Number(newProject.blockId) : undefined,
+        blockId: newProject.blockId && newProject.blockId !== 'none' ? Number(newProject.blockId) : undefined,
         block: selectedBlock?.name,
         manager: newProject.manager || undefined,
         budget: newProject.budget ? Number(newProject.budget) : undefined,
@@ -190,7 +190,7 @@ export function Projects() {
                   </SelectTrigger>
                   <SelectContent>
                     {blocks.length === 0 ? (
-                      <SelectItem value="">No blocks available</SelectItem>
+                      <SelectItem value="none">No blocks available</SelectItem>
                     ) : (
                       blocks.map((block) => (
                         <SelectItem key={block.id} value={String(block.id)}>
