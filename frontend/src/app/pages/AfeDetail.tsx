@@ -15,7 +15,7 @@ import { formatDisplayDateOrDefault } from "../lib/date";
 
 export function AfeDetail() {
   const { id } = useParams();
-  const { user, canEdit } = useAuth();
+  const { user, canEdit, canUpload } = useAuth();
   const [afe, setAfe] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -394,7 +394,7 @@ export function AfeDetail() {
           <h2 className="text-xl font-semibold">Related Documents</h2>
           <Button
             onClick={() => fileInputRef.current?.click()}
-            disabled={uploadingDoc}
+            disabled={uploadingDoc || !canUpload}
           >
             <Upload className="h-4 w-4 mr-2" />
             Upload Document

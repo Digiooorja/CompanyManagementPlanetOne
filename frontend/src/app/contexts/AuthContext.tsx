@@ -25,6 +25,7 @@ interface AuthContextType {
   isManager: boolean;
   isStandardUser: boolean;
   canEdit: boolean;
+  canUpload: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (data: any) => Promise<void>;
@@ -164,6 +165,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const isManager = ['Admin', 'Manager'].includes(user?.role || '');
   const isStandardUser = user?.role === 'User';
   const canEdit = !isGuest && isManager;
+  const canUpload = !isGuest;
 
   const value = {
     user,
@@ -174,6 +176,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     isManager,
     isStandardUser,
     canEdit,
+    canUpload,
     isLoading,
     login,
     register,

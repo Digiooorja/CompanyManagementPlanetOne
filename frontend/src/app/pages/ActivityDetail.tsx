@@ -73,7 +73,7 @@ export function ActivityDetail() {
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [activityActionLoading, setActivityActionLoading] = useState(false);
-  const { user, canEdit } = useAuth();
+  const { user, canEdit, canUpload } = useAuth();
   const departmentName = user?.department || user?.departmentDetails?.name || '';
   const isOperationsUser = departmentName.toLowerCase().includes('operation');
   const isFinanceUser = departmentName.toLowerCase().includes('finance');
@@ -998,7 +998,7 @@ export function ActivityDetail() {
             
             <div className="space-y-4">
               {/* Premium Dotted Drag-and-Upload Box */}
-              {canEdit && (
+              {canUpload && (
                 <div
                   onClick={() => setIsUploadModalOpen(true)}
                   className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-200 hover:border-blue-500 rounded-xl cursor-pointer bg-gray-50/50 hover:bg-blue-50/20 transition-all duration-300 group"
