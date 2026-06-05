@@ -273,15 +273,13 @@ export function ActivityDetail() {
     }
   };
 
-  const handleUpdateActivityProgress = async () => {
+  const handleUpdateActivityProgressValue = async (progressValue: number) => {
     if (!activity) return;
     if (subActivities.length > 0) {
       setError('Progress is auto-calculated from sub-activities and cannot be set manually.');
       return;
     }
-    const progressInput = window.prompt('Enter new progress value (0-100)', String(activity.progress ?? 0));
-    if (progressInput === null) return;
-    const progressValue = Number(progressInput);
+    
     if (Number.isNaN(progressValue) || progressValue < 0 || progressValue > 100) {
       setError('Progress must be between 0 and 100');
       return;
@@ -749,11 +747,35 @@ export function ActivityDetail() {
           <Progress value={displayActivity.progress} className="h-3" />
           <div className="flex gap-2 mt-4 flex-wrap items-center">
             {subActivities.length === 0 ? (
-              <Button size="sm" variant="outline" onClick={handleUpdateActivityProgress} disabled={!canEditFields || activityActionLoading}>
-                Update Progress
-              </Button>
+              <div className="flex items-center gap-2 mr-4 bg-gray-50 border border-gray-200 rounded-md py-1 px-2">
+                <label className="text-sm font-medium text-gray-700">Progress</label>
+                <Input
+                  type="number"
+                  min="0"
+                  max="100"
+                  className="w-16 h-7 text-center px-1"
+                  defaultValue={displayActivity.progress}
+                  disabled={!canEditFields || activityActionLoading}
+                  onBlur={(e) => {
+                    const val = Number(e.target.value);
+                    if (!isNaN(val) && val >= 0 && val <= 100) {
+                      if (val !== displayActivity.progress) {
+                        handleUpdateActivityProgressValue(val);
+                      }
+                    } else {
+                      e.target.value = String(displayActivity.progress);
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.currentTarget.blur();
+                    }
+                  }}
+                />
+                <span className="text-sm font-medium text-gray-700">%</span>
+              </div>
             ) : (
-              <p className="text-xs text-gray-500 italic">Progress is auto-calculated from sub-activities</p>
+              <p className="text-xs text-gray-500 italic mr-4">Progress is auto-calculated from sub-activities</p>
             )}
             <Button size="sm" variant="outline" onClick={handleChangeActivityStatus} disabled={!canEditFields || activityActionLoading}>
               Change Status
@@ -930,23 +952,31 @@ export function ActivityDetail() {
                           Mark Complete
                         </Button>
                         {!(subActivity.subActivities && subActivity.subActivities.length > 0) ? (
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="range"
-                              min={0}
-                              max={100}
-                              value={subActivity.progress}
-                              onChange={(e) => handleUpdateProgress(subActivity.id, parseInt(e.target.value, 10))}
-                              className="w-40"
-                            />
-                            <input
+                          <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-md py-1 px-2">
+                            <label className="text-sm font-medium text-gray-700">Progress</label>
+                            <Input
                               type="number"
                               min={0}
                               max={100}
-                              value={subActivity.progress}
-                              onChange={(e) => handleUpdateProgress(subActivity.id, Math.max(0, Math.min(100, Number(e.target.value || 0))))}
-                              className="w-16 text-sm px-2 py-1 border rounded"
+                              defaultValue={subActivity.progress}
+                              className="w-16 h-7 text-center px-1"
+                              onBlur={(e) => {
+                                const val = Number(e.target.value);
+                                if (!isNaN(val) && val >= 0 && val <= 100) {
+                                  if (val !== subActivity.progress) {
+                                    handleUpdateProgress(subActivity.id, val);
+                                  }
+                                } else {
+                                  e.target.value = String(subActivity.progress);
+                                }
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.currentTarget.blur();
+                                }
+                              }}
                             />
+                            <span className="text-sm font-medium text-gray-700">%</span>
                           </div>
                         ) : (
                           <span className="text-xs text-gray-500 italic">Auto-calculated from sub-activities</span>
@@ -1244,25 +1274,20 @@ export function ActivityDetail() {
                   <div className="grid gap-2 sm:grid-cols-2">
                     <div className="grid gap-2">
                       <label className="text-sm font-medium">Assigned To</label>
-                      <Select
+                      <Input
                         disabled={!canEditFields}
+                        list="users-datalist-edit"
+                        placeholder="Type or select a user..."
                         value={activityForm.assignedTo}
-                        onValueChange={(value) => setActivityForm({ ...activityForm, assignedTo: value })}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select user" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {users.map((user: any) => {
-                            const displayName = buildUserDisplayName(user);
-                            return (
-                              <SelectItem key={user.id} value={displayName}>
-                                {displayName}
-                              </SelectItem>
-                            );
-                          })}
-                        </SelectContent>
-                      </Select>
+                        onChange={(event) => setActivityForm({ ...activityForm, assignedTo: event.target.value })}
+                      />
+                      <datalist id="users-datalist-edit">
+                        {users.map((u: any) => {
+                          const displayName = buildUserDisplayName(u);
+                          const rawName = [u.firstName, u.lastName].filter(Boolean).join(' ').trim() || u.username;
+                          return <option key={u.id} value={rawName}>{u.departmentDetails?.name || u.department || 'No Dept'}</option>;
+                        })}
+                      </datalist>
                     </div>
                     <div className="grid gap-2">
                       <label className="text-sm font-medium">Planned Start</label>
