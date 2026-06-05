@@ -51,7 +51,7 @@ export function Documents() {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { user, canEdit } = useAuth();
+  const { user, canEdit, canUpload } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -426,7 +426,7 @@ export function Documents() {
         </div>
         <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
           <DialogTrigger asChild>
-            <Button disabled={!canEdit}>
+            <Button disabled={!canUpload}>
               <Plus className="h-4 w-4 mr-2" />
               Upload Document
             </Button>
