@@ -30,6 +30,28 @@ function canApprovePaid(user, approvalDepartment) {
   return requiredDept.includes(userDept) || userDept.includes(requiredDept) || isFinanceOrAccounts(user);
 }
 
+// Recomputes an AFE's committed/actual-to-date from the Invoice/Entry rows
+// linked to it via `afeId` — the "automatic aggregation of actuals from
+// linked vendor payments" key feature (§5.10). Uses `.save()` so the
+// variancePercent beforeSave hook still runs.
+async function recalcAfeActuals(afeId) {
+  if (!afeId) return;
+  const afe = await Finance.findByPk(afeId);
+  if (!afe || afe.recordType !== 'AFE') return;
+
+  const linked = await Finance.findAll({ where: { afeId } });
+  const actualToDate = linked
+    .filter((f) => f.status === 'Paid')
+    .reduce((sum, f) => sum + Number(f.amount || 0), 0);
+  const committedAmount = linked
+    .filter((f) => ['Approved', 'Under Review', 'Pending'].includes(f.status))
+    .reduce((sum, f) => sum + Number(f.amount || 0), 0);
+
+  afe.actualToDate = actualToDate;
+  afe.committedAmount = committedAmount;
+  await afe.save();
+}
+
 // GET all finance items
 router.get('/', async (req, res) => {
   try {
@@ -129,6 +151,11 @@ router.post('/', async (req, res) => {
       status: req.body.status || 'Pending',
       invoiceNumber: req.body.invoiceNumber || null,
       afeNumber: req.body.afeNumber || null,
+      afeId: req.body.afeId || null,
+      committedAmount: req.body.committedAmount || 0,
+      actualToDate: req.body.actualToDate || 0,
+      approvalDate: req.body.approvalDate || null,
+      approvingAuthority: req.body.approvingAuthority || null,
       transactionDetails: req.body.transactionDetails || null,
       transactionDate: req.body.transactionDate || null,
       date: req.body.date || null
@@ -139,6 +166,11 @@ router.post('/', async (req, res) => {
     }
 
     const newItem = await Finance.create(payload);
+
+    if (newItem.afeId) {
+      await recalcAfeActuals(newItem.afeId);
+    }
+
     res.status(201).json(newItem);
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -154,6 +186,14 @@ router.put('/:id', async (req, res) => {
     const requestedStatus = req.body.status || item.status;
     const approvalDepartment = req.body.approvalDepartment || item.approvalDepartment;
 
+    // AFE closure requires reconciliation sign-off (§5.10 business rule) —
+    // it cannot be set via a plain field edit, only via POST /:id/close.
+    if (item.recordType === 'AFE' && requestedStatus === 'Closed' && item.status !== 'Closed') {
+      return res.status(400).json({
+        message: 'AFE closure requires reconciliation sign-off — use POST /:id/close instead'
+      });
+    }
+
     if (requestedStatus !== item.status && !canApproveFinance(req.user, approvalDepartment)) {
       return res.status(403).json({ message: 'Approval from the assigned department or Finance/Accounts access is required' });
     }
@@ -167,6 +207,8 @@ router.put('/:id', async (req, res) => {
       }
     }
 
+    const previousStatus = item.status;
+
     await item.update({
       item: req.body.item || item.item,
       amount: req.body.amount || item.amount,
@@ -178,6 +220,11 @@ router.put('/:id', async (req, res) => {
       status: requestedStatus,
       invoiceNumber: req.body.invoiceNumber || item.invoiceNumber,
       afeNumber: req.body.afeNumber || item.afeNumber,
+      afeId: req.body.afeId !== undefined ? req.body.afeId : item.afeId,
+      committedAmount: req.body.committedAmount !== undefined ? req.body.committedAmount : item.committedAmount,
+      actualToDate: req.body.actualToDate !== undefined ? req.body.actualToDate : item.actualToDate,
+      approvalDate: req.body.approvalDate !== undefined ? req.body.approvalDate : item.approvalDate,
+      approvingAuthority: req.body.approvingAuthority !== undefined ? req.body.approvingAuthority : item.approvingAuthority,
       transactionDetails: req.body.transactionDetails || item.transactionDetails,
       transactionDate: req.body.transactionDate || item.transactionDate,
       approvedBy: req.body.approvedBy !== undefined ? req.body.approvedBy : item.approvedBy,
@@ -185,7 +232,7 @@ router.put('/:id', async (req, res) => {
       date: req.body.date || item.date
     });
 
-    if (requestedStatus === 'Paid' && item.status !== 'Paid' && item.activityId) {
+    if (requestedStatus === 'Paid' && previousStatus !== 'Paid' && item.activityId) {
       const activity = await Activity.findByPk(item.activityId);
       if (activity) {
         const currentActual = Number(activity.actualCost || 0);
@@ -193,6 +240,87 @@ router.put('/:id', async (req, res) => {
         await activity.update({ actualCost: currentActual + invoiceAmount });
       }
     }
+
+    // Keep the governing AFE's committed/actual-to-date in sync whenever a
+    // linked payment's status changes (§5.10 "automatic aggregation").
+    if (item.afeId && requestedStatus !== previousStatus) {
+      await recalcAfeActuals(item.afeId);
+    }
+
+    res.json(item);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// POST /:id/create-supplement - Supplementary AFE workflow (§5.10): creates
+// a new AFE row chained to the original via parentAfeId, for when projected
+// spend (committed + actual) exceeds the authorised amount.
+router.post('/:id/create-supplement', async (req, res) => {
+  try {
+    if (!isFinanceOrAccounts(req.user)) {
+      return res.status(403).json({ message: 'Finance or Accounts access required' });
+    }
+
+    const original = await Finance.findByPk(req.params.id);
+    if (!original) return res.status(404).json({ message: 'AFE not found' });
+    if (original.recordType !== 'AFE') {
+      return res.status(400).json({ message: 'Supplementary AFEs can only be created against an AFE record' });
+    }
+
+    const { additionalAmount, item, category } = req.body;
+    if (!additionalAmount || Number(additionalAmount) <= 0) {
+      return res.status(400).json({ message: 'additionalAmount is required and must be positive' });
+    }
+
+    const existingSupplements = await Finance.count({ where: { parentAfeId: original.id } });
+    const nextSupplementNumber = existingSupplements + 1;
+
+    const supplement = await Finance.create({
+      item: item || `${original.item} (Supplement ${nextSupplementNumber})`,
+      amount: additionalAmount,
+      category: category || original.category,
+      type: original.type,
+      recordType: 'AFE',
+      activityId: original.activityId,
+      approvalDepartment: original.approvalDepartment,
+      status: 'Pending',
+      afeNumber: `${original.afeNumber || `AFE-${original.id}`}-S${nextSupplementNumber}`,
+      parentAfeId: original.id,
+      supplementNumber: nextSupplementNumber
+    });
+
+    res.status(201).json(supplement);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// POST /:id/close - AFE closure with mandatory reconciliation sign-off
+// (§5.10 business rule / acceptance criteria).
+router.post('/:id/close', async (req, res) => {
+  try {
+    const item = await Finance.findByPk(req.params.id);
+    if (!item) return res.status(404).json({ message: 'Finance item not found' });
+    if (item.recordType !== 'AFE') {
+      return res.status(400).json({ message: 'Only AFE records can be closed via reconciliation sign-off' });
+    }
+    if (item.status === 'Closed') {
+      return res.status(400).json({ message: 'This AFE is already closed' });
+    }
+    if (!req.body.reconciliationConfirmed) {
+      return res.status(400).json({ message: 'reconciliationConfirmed must be true to close an AFE' });
+    }
+    if (!canApproveFinance(req.user, item.approvalDepartment)) {
+      return res.status(403).json({ message: 'Finance/Accounts approval is required to close an AFE' });
+    }
+
+    await item.update({
+      status: 'Closed',
+      reconciledById: req.user?.id || null,
+      reconciledAt: new Date(),
+      actionComment: req.body.comment || item.actionComment
+    });
 
     res.json(item);
   } catch (err) {

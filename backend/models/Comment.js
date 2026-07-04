@@ -13,11 +13,20 @@ const Comment = sequelize.define('Comment', {
   },
   activityId: {
     type: DataTypes.INTEGER,
-    allowNull: false,
+    allowNull: true,
     references: {
       model: 'activities',
       key: 'id'
     }
+  },
+  taskId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'tasks',
+      key: 'id'
+    },
+    comment: 'Comments on a task (Requirements §5.3) — exactly one of activityId/taskId should be set'
   },
   userId: {
     type: DataTypes.INTEGER,

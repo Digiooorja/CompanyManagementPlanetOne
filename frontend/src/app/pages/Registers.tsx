@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { BookOpen, AlertTriangle, Package, Shield, FileCheck } from "lucide-react";
+import { BookOpen, AlertTriangle, Package, Shield, FileCheck, Mail, ScrollText as DecisionIcon, ClipboardList, DollarSign } from "lucide-react";
 import { registersApi } from "../../services/api";
 
 const defaultRegisters = [
@@ -32,24 +32,26 @@ const defaultRegisters = [
     {
       id: 3,
       name: "Compliance Register",
-      description: "Track regulatory and compliance requirements",
+      description: "Statutory obligations, licence fees, royalties and filings",
       icon: Shield,
       iconColor: "text-green-600",
       bgColor: "bg-green-100",
       entries: 89,
       lastUpdated: "2026-04-29",
       blocks: ["Block A", "Block B", "Block C"],
+      href: "/compliance",
     },
     {
       id: 4,
       name: "Contract Register",
-      description: "Manage all contracts and agreements",
+      description: "Manage all contracts and agreements with expiry/renewal alerts",
       icon: FileCheck,
       iconColor: "text-purple-600",
       bgColor: "bg-purple-100",
       entries: 34,
       lastUpdated: "2026-04-28",
       blocks: ["Block A", "Block B"],
+      href: "/contracts",
     },
     {
       id: 5,
@@ -72,6 +74,54 @@ const defaultRegisters = [
       entries: 234,
       lastUpdated: "2026-05-01",
       blocks: ["Block A", "Block B", "Block C"],
+    },
+    {
+      id: 7,
+      name: "PC / GNPC Correspondence Log",
+      description: "Searchable register of inbound/outbound regulator correspondence",
+      icon: Mail,
+      iconColor: "text-blue-600",
+      bgColor: "bg-blue-100",
+      entries: 0,
+      lastUpdated: "2026-05-01",
+      blocks: [] as string[],
+      href: "/correspondence",
+    },
+    {
+      id: 8,
+      name: "Decision Log",
+      description: "Chronological record of key decisions and rationale",
+      icon: DecisionIcon,
+      iconColor: "text-indigo-600",
+      bgColor: "bg-indigo-100",
+      entries: 0,
+      lastUpdated: "2026-05-01",
+      blocks: [] as string[],
+      href: "/decisions",
+    },
+    {
+      id: 9,
+      name: "Operations Update",
+      description: "Periodic field/project status log per block/well",
+      icon: ClipboardList,
+      iconColor: "text-teal-600",
+      bgColor: "bg-teal-100",
+      entries: 0,
+      lastUpdated: "2026-05-01",
+      blocks: [] as string[],
+      href: "/operations-updates",
+    },
+    {
+      id: 10,
+      name: "Work Programme & Budget Tracker",
+      description: "Approved work programme and budget per block, with variance and drill-down",
+      icon: DollarSign,
+      iconColor: "text-blue-700",
+      bgColor: "bg-blue-100",
+      entries: 0,
+      lastUpdated: "2026-05-01",
+      blocks: [] as string[],
+      href: "/budget-tracker",
     },
   ];
 
@@ -151,7 +201,7 @@ export function Registers() {
                 </div>
               </div>
               
-              <Link to={`/registers/${register.id}`}>
+              <Link to={register.href || `/registers/${register.id}`}>
                 <Button className="w-full mt-4">View Register</Button>
               </Link>
             </Card>

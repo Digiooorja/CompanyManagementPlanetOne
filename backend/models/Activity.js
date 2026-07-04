@@ -40,6 +40,11 @@ const Activity = sequelize.define('Activity', {
     type: DataTypes.ENUM('Low', 'Medium', 'High', 'Critical'),
     allowNull: true
   },
+  linkedMilestone: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    comment: 'The critical event this activity counts down to, e.g. "Drilling Commencement" (Requirements §5.2)'
+  },
   assignedTo: {
     type: DataTypes.STRING,
     allowNull: true

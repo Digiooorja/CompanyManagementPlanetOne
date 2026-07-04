@@ -37,9 +37,47 @@ const User = sequelize.define('User', {
       key: 'id'
     }
   },
+  employeeId: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    unique: true,
+    comment: 'Business-facing employee identifier (Requirements §5.1)'
+  },
+  designation: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  reportingManagerId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'users',
+      key: 'id'
+    },
+    comment: 'Direct manager — drives the auto-generated org chart (Requirements §5.1)'
+  },
+  phone: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  photoUrl: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  qualifications: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  startDate: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    comment: 'Date joined (Requirements §5.1)'
+  },
   role: {
-    type: DataTypes.ENUM('Admin', 'Manager', 'User'),
-    defaultValue: 'User'
+    type: DataTypes.STRING,
+    allowNull: false,
+    defaultValue: 'User',
+    comment: 'References Role.name — kept as a plain string (not a DB ENUM) so Admin can add new roles via /api/admin/roles without a schema migration'
   },
   active: {
     type: DataTypes.BOOLEAN,
@@ -48,6 +86,17 @@ const User = sequelize.define('User', {
 }, {
   tableName: 'users',
   timestamps: true
+});
+
+// Reporting line for the auto-generated org chart (Requirements §5.1)
+User.belongsTo(User, {
+  foreignKey: 'reportingManagerId',
+  as: 'reportingManager'
+});
+
+User.hasMany(User, {
+  foreignKey: 'reportingManagerId',
+  as: 'directReports'
 });
 
 module.exports = User;

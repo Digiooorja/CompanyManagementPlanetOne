@@ -24,6 +24,12 @@ import { Notifications } from "./pages/Notifications";
 import { Login } from "./pages/Login";
 import { Register } from "./pages/Register";
 import { Tasks } from "./pages/Tasks";
+import { Contracts } from "./pages/Contracts";
+import { Compliance } from "./pages/Compliance";
+import { Correspondence } from "./pages/Correspondence";
+import { Decisions } from "./pages/Decisions";
+import { OperationsUpdates } from "./pages/OperationsUpdates";
+import { BudgetTracker } from "./pages/BudgetTracker";
 
 export const router = createBrowserRouter([
   {
@@ -63,6 +69,12 @@ export const router = createBrowserRouter([
           { path: "admin", Component: Admin },
           { path: "notifications", Component: Notifications },
           { path: "tasks", Component: Tasks },
+          { path: "contracts", Component: Contracts },
+          { path: "compliance", Component: Compliance },
+          { path: "correspondence", Component: Correspondence },
+          { path: "decisions", Component: Decisions },
+          { path: "operations-updates", Component: OperationsUpdates },
+          { path: "budget-tracker", Component: BudgetTracker },
         ],
       }
     ],

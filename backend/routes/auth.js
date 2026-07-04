@@ -3,6 +3,8 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Department = require('../models/Department');
+const Role = require('../models/Role');
+const Permission = require('../models/Permission');
 const { authMiddleware } = require('../middleware/auth');
 
 const router = express.Router();
@@ -183,6 +185,19 @@ router.get('/me', authMiddleware, async (req, res) => {
 
     const result = user.toJSON();
     result.department = user.departmentDetails?.name || null;
+
+    // Resolve the caller's effective permission set from the RBAC matrix (§4)
+    // so the frontend can gate UI affordances for the new business roles
+    // without hard-coding role names into every page.
+    if (user.role === 'Admin') {
+      result.permissions = ['*'];
+    } else {
+      const role = await Role.findOne({
+        where: { name: user.role },
+        include: [{ model: Permission, as: 'permissions', through: { attributes: [] } }]
+      });
+      result.permissions = role ? role.permissions.map((p) => p.key) : [];
+    }
 
     res.json(result);
   } catch (error) {

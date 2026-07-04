@@ -31,7 +31,12 @@ export function DocumentDetail() {
     title: "",
     author: "",
     documentType: "Report",
-    status: "Review",
+    status: "Draft",
+    category: "Other",
+    confidentialityLevel: "Public",
+    awaitingResponseFrom: "",
+    responseDueDate: "",
+    tags: "",
     description: "",
     activityIds: [] as string[]
   });
@@ -117,7 +122,12 @@ export function DocumentDetail() {
       title: document.title || document.name || '',
       author: document.author || document.uploadedBy || '',
       documentType: document.documentType || document.type || 'Report',
-      status: document.status || 'Review',
+      status: document.status || 'Draft',
+      category: document.category || 'Other',
+      confidentialityLevel: document.confidentialityLevel || 'Public',
+      awaitingResponseFrom: document.awaitingResponseFrom || '',
+      responseDueDate: document.responseDueDate ? String(document.responseDueDate).slice(0, 10) : '',
+      tags: Array.isArray(document.tags) ? document.tags.join(', ') : '',
       description: document.content || document.description || '',
       activityIds: Array.isArray(document.activityIds)
         ? document.activityIds.map(String)
@@ -177,7 +187,7 @@ export function DocumentDetail() {
         user ? `${user.firstName || ''} ${user.lastName || user.username}`.trim() : document.author || 'system'
       );
       formData.append('documentType', document.documentType || document.type || 'Report');
-      formData.append('status', document.status || 'Review');
+      formData.append('status', 'Draft');
 
       if (document.projectId) {
         formData.append('projectId', String(document.projectId));
@@ -229,6 +239,11 @@ export function DocumentDetail() {
         author: editForm.author,
         documentType: editForm.documentType,
         status: editForm.status,
+        category: editForm.category,
+        confidentialityLevel: editForm.confidentialityLevel,
+        awaitingResponseFrom: editForm.awaitingResponseFrom || null,
+        responseDueDate: editForm.responseDueDate || null,
+        tags: editForm.tags.split(',').map((tag) => tag.trim()).filter(Boolean),
         content: editForm.description,
         activityId: editForm.activityIds.length > 0 ? Number(editForm.activityIds[0]) : null,
         activityIds: editForm.activityIds.map(Number)
@@ -276,9 +291,14 @@ export function DocumentDetail() {
 
   const metadata = [
     { label: 'Document Type', value: documentType },
+    { label: 'Category', value: document?.category || 'Other' },
+    { label: 'Confidentiality', value: document?.confidentialityLevel || 'Public' },
     { label: 'Block', value: typeof document?.block === 'object' ? document?.block?.name : (document?.block || document?.blockName || 'None') },
     { label: 'Project', value: typeof document?.project === 'object' ? document?.project?.name : (document?.project || document?.projectName || 'None') },
     { label: 'Tagged Activities', value: Array.isArray(document?.activityTags) && document.activityTags.length > 0 ? document.activityTags.join(', ') : document?.activityId ? `Activity ${document.activityId}` : 'None' },
+    { label: 'Tags', value: Array.isArray(document?.tags) && document.tags.length > 0 ? document.tags.join(', ') : 'None' },
+    { label: 'Awaiting Response From', value: document?.awaitingResponseFrom || 'None' },
+    { label: 'Response Due Date', value: document?.responseDueDate ? new Date(document.responseDueDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'None' },
     { label: 'File Size', value: document?.size ? `${document.size} bytes` : 'Unknown' },
     { label: 'Version', value: documentVersion },
     { label: 'Created Date', value: documentUploadDate },
@@ -348,6 +368,7 @@ export function DocumentDetail() {
   }
 
   const canPreview = previewUrl !== null;
+  const canDeleteDocument = user?.role === 'Admin' || (!!document?.ownerId && user?.id === document.ownerId);
 
   return (
     <div className="space-y-6">
@@ -408,7 +429,7 @@ export function DocumentDetail() {
         <Button variant="outline" onClick={handleUploadNewVersion} disabled={uploadingVersion || !canEdit}>
           Upload New Version
         </Button>
-        <Button variant="destructive" onClick={handleDeleteDocument} disabled={!canEdit}>
+        <Button variant="destructive" onClick={handleDeleteDocument} disabled={!canEdit || !canDeleteDocument} title={!canDeleteDocument ? 'Only the document owner or an Admin may delete this document' : undefined}>
           <Trash2 className="h-4 w-4 mr-2" />
           Delete
         </Button>
@@ -479,7 +500,10 @@ export function DocumentDetail() {
                           v{version.version}
                         </Badge>
                         <div>
-                          <p className="text-sm font-medium">{version.step}</p>
+                          <p className="text-sm font-medium flex items-center gap-2">
+                            {version.step}
+                            {version.status === 'Superseded' && <Badge variant="outline">Superseded</Badge>}
+                          </p>
                           <p className="text-xs text-gray-500 mt-1">
                             {version.date} by {version.user}
                           </p>
@@ -582,13 +606,75 @@ export function DocumentDetail() {
                             <SelectValue placeholder="Select status" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="Review">Review</SelectItem>
-                            <SelectItem value="Approved">Approved</SelectItem>
                             <SelectItem value="Draft">Draft</SelectItem>
-                            <SelectItem value="Revision">Revision</SelectItem>
+                            <SelectItem value="Under Review">Under Review</SelectItem>
+                            <SelectItem value="Final">Final</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <Label htmlFor="edit-category">Category</Label>
+                        <Select
+                          value={editForm.category}
+                          onValueChange={(value) => handleEditFieldChange('category', value)}
+                        >
+                          <SelectTrigger id="edit-category">
+                            <SelectValue placeholder="Select category" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Contract">Contract</SelectItem>
+                            <SelectItem value="Letter">Letter</SelectItem>
+                            <SelectItem value="Notice">Notice</SelectItem>
+                            <SelectItem value="Report">Report</SelectItem>
+                            <SelectItem value="Other">Other</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label htmlFor="edit-confidentiality">Confidentiality Level</Label>
+                        <Select
+                          value={editForm.confidentialityLevel}
+                          onValueChange={(value) => handleEditFieldChange('confidentialityLevel', value)}
+                        >
+                          <SelectTrigger id="edit-confidentiality">
+                            <SelectValue placeholder="Select level" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Public">Public</SelectItem>
+                            <SelectItem value="Internal">Internal</SelectItem>
+                            <SelectItem value="Confidential">Confidential</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <Label htmlFor="edit-awaiting-response">Awaiting Response From</Label>
+                        <Input
+                          id="edit-awaiting-response"
+                          value={editForm.awaitingResponseFrom}
+                          onChange={(event) => handleEditFieldChange('awaitingResponseFrom', event.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="edit-response-due">Response Due Date</Label>
+                        <Input
+                          id="edit-response-due"
+                          type="date"
+                          value={editForm.responseDueDate}
+                          onChange={(event) => handleEditFieldChange('responseDueDate', event.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <Label htmlFor="edit-tags">Tags (comma-separated)</Label>
+                      <Input
+                        id="edit-tags"
+                        value={editForm.tags}
+                        onChange={(event) => handleEditFieldChange('tags', event.target.value)}
+                      />
                     </div>
                     <div>
                       <Label htmlFor="edit-description">Description</Label>

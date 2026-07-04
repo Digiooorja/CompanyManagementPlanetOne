@@ -463,10 +463,10 @@ export function ActivityDetail() {
       status: activity.status || 'Active',
       priority: activity.priority || 'Medium',
       assignedTo: matchedAssignedUser ? buildUserDisplayName(matchedAssignedUser) : activity.assignedTo || '',
-      plannedStartDate: activity.plannedStartDate || '',
-      plannedEndDate: activity.plannedEndDate || '',
-      actualStartDate: activity.actualStartDate || '',
-      actualEndDate: activity.actualEndDate || '',
+      plannedStartDate: normalizeDateInputValue(activity.plannedStartDate),
+      plannedEndDate: normalizeDateInputValue(activity.plannedEndDate),
+      actualStartDate: normalizeDateInputValue(activity.actualStartDate),
+      actualEndDate: normalizeDateInputValue(activity.actualEndDate),
       plannedCost: activity.plannedCost != null ? String(activity.plannedCost) : '',
       actualCost: activity.actualCost != null ? String(activity.actualCost) : '',
       progress: subActivities.length === 0 && activity.progress != null ? activity.progress : 0
@@ -490,12 +490,14 @@ export function ActivityDetail() {
         updatedPayload.description = activityForm.description.trim();
         updatedPayload.status = activityForm.status;
         updatedPayload.priority = activityForm.priority;
-        updatedPayload.assignedTo = activityForm.assignedTo.trim();
-        updatedPayload.plannedStartDate = activityForm.plannedStartDate;
-        updatedPayload.plannedEndDate = activityForm.plannedEndDate;
-        updatedPayload.actualStartDate = activityForm.actualStartDate;
-        updatedPayload.actualEndDate = activityForm.actualEndDate;
-        updatedPayload.plannedCost = activityForm.plannedCost ? parseFloat(activityForm.plannedCost) : 0;
+        updatedPayload.assignedTo = activityForm.assignedTo.trim() || null;
+        updatedPayload.plannedStartDate = activityForm.plannedStartDate || null;
+        updatedPayload.plannedEndDate = activityForm.plannedEndDate || null;
+        updatedPayload.actualStartDate = activityForm.actualStartDate || null;
+        updatedPayload.actualEndDate = activityForm.actualEndDate || null;
+        if (activityForm.plannedCost !== '') {
+          updatedPayload.plannedCost = parseFloat(activityForm.plannedCost);
+        }
         // Only allow manual progress when there are no sub-activities;
         // otherwise it is auto-calculated from sub-activity completion.
         if (subActivities.length === 0) {
@@ -503,17 +505,12 @@ export function ActivityDetail() {
         }
       }
 
-      if (canEditActualCost) {
-        updatedPayload.actualCost = activityForm.actualCost ? parseFloat(activityForm.actualCost) : 0;
+      if (canEditActualCost && activityForm.actualCost !== '') {
+        updatedPayload.actualCost = parseFloat(activityForm.actualCost);
       }
 
-      const updated: any = await activitiesApi.update(activity.id, updatedPayload);
-      setActivity({
-        ...activity,
-        ...updated,
-        title: updated.title || updated.name || activity.title,
-        project: typeof updated.project === 'object' ? updated.project?.name : updated.project || activity.project
-      });
+      await activitiesApi.update(activity.id, updatedPayload);
+      await fetchActivityDetails();
       setError(null);
       setIsEditDialogOpen(false);
     } catch (err) {

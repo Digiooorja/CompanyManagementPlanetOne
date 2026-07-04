@@ -2,16 +2,20 @@ const express = require('express');
 const router = express.Router();
 const Comment = require('../models/Comment');
 const Activity = require('../models/Activity');
+const Task = require('../models/Task');
 const Department = require('../models/Department');
 const User = require('../models/User');
 const { authMiddleware } = require('../middleware/auth');
 
-// GET comments, optionally filtered by activityId
+// GET comments, optionally filtered by activityId or taskId
 router.get('/', async (req, res) => {
   try {
     const whereClause = {};
     if (req.query.activityId) {
       whereClause.activityId = req.query.activityId;
+    }
+    if (req.query.taskId) {
+      whereClause.taskId = req.query.taskId;
     }
 
     const comments = await Comment.findAll({
@@ -35,18 +39,30 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Create a new comment for an activity
+// Create a new comment for an activity or a task
 router.post('/', authMiddleware, async (req, res) => {
   try {
-    const { activityId, content, departmentId } = req.body;
+    const { activityId, taskId, content, departmentId } = req.body;
 
-    if (!activityId || !content || !departmentId) {
-      return res.status(400).json({ message: 'activityId, content, and departmentId are required' });
+    if (!content || !departmentId) {
+      return res.status(400).json({ message: 'content and departmentId are required' });
+    }
+    if (!activityId && !taskId) {
+      return res.status(400).json({ message: 'Either activityId or taskId is required' });
     }
 
-    const activity = await Activity.findByPk(activityId);
-    if (!activity) {
-      return res.status(404).json({ message: 'Activity not found' });
+    if (activityId) {
+      const activity = await Activity.findByPk(activityId);
+      if (!activity) {
+        return res.status(404).json({ message: 'Activity not found' });
+      }
+    }
+
+    if (taskId) {
+      const task = await Task.findByPk(taskId);
+      if (!task) {
+        return res.status(404).json({ message: 'Task not found' });
+      }
     }
 
     const department = await Department.findByPk(departmentId);
@@ -56,7 +72,8 @@ router.post('/', authMiddleware, async (req, res) => {
 
     const comment = await Comment.create({
       content,
-      activityId,
+      activityId: activityId || null,
+      taskId: taskId || null,
       userId: req.user.id,
       departmentId
     });

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -17,8 +17,11 @@ import { useAuth } from "../contexts/AuthContext";
 
 export function Projects() {
   const { canEdit } = useAuth();
-  const [filterBlock, setFilterBlock] = useState("all");
-  const [filterStatus, setFilterStatus] = useState("all");
+  const [searchParams] = useSearchParams();
+  // §5.8 guaranteed drill-down: pre-apply block/status filters forwarded via
+  // query params from the Executive Dashboard's filter bar.
+  const [filterBlock, setFilterBlock] = useState(searchParams.get("blockId") || "all");
+  const [filterStatus, setFilterStatus] = useState(searchParams.get("status") || "all");
   const [projects, setProjects] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [blocks, setBlocks] = useState<any[]>([]);

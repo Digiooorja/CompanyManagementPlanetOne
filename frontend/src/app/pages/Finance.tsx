@@ -462,6 +462,7 @@ export function Finance() {
                       <TableHead>AFE No.</TableHead>
                       <TableHead>Description</TableHead>
                       <TableHead>Amount</TableHead>
+                      <TableHead>Utilisation</TableHead>
                       <TableHead>Activity</TableHead>
                       <TableHead>Approval Dept</TableHead>
                       <TableHead>AFE Docs</TableHead>
@@ -470,11 +471,20 @@ export function Finance() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredAfeItems.map((afe) => (
+                    {filteredAfeItems.map((afe) => {
+                      const utilisation = Number(afe.amount) > 0
+                        ? Math.round(((Number(afe.committedAmount || 0) + Number(afe.actualToDate || 0)) / Number(afe.amount)) * 100)
+                        : 0;
+                      return (
                       <TableRow key={afe.id} className="hover:bg-gray-50">
                         <TableCell className="font-semibold text-blue-600">{afe.afeNumber || `AFE-${afe.id}`}</TableCell>
                         <TableCell>{afe.item}</TableCell>
                         <TableCell>${Number(afe.amount || 0).toLocaleString()}</TableCell>
+                        <TableCell>
+                          <Badge variant={utilisation >= 100 ? "destructive" : utilisation >= 80 ? "secondary" : "outline"}>
+                            {utilisation}%
+                          </Badge>
+                        </TableCell>
                         <TableCell>{activityMap.get(afe.activityId)?.name || (afe.activityId ? `Activity ${afe.activityId}` : '-')}</TableCell>
                         <TableCell>{afe.approvalDepartment || 'Finance'}</TableCell>
                         <TableCell>
@@ -496,7 +506,8 @@ export function Finance() {
                           </Link>
                         </TableCell>
                       </TableRow>
-                    ))}
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>

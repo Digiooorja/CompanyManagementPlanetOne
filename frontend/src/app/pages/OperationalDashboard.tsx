@@ -6,18 +6,11 @@ import { Button } from "../components/ui/button";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "../components/ui/table";
 import { AlertCircle, FileText, CheckCircle, Clock, Calendar, Search } from "lucide-react";
 import { formatDisplayDateOrDefault } from "../lib/date";
-import { workflowsApi, documentsApi, activitiesApi, projectsApi, tasksApi } from "../../services/api";
+import { workflowsApi, documentsApi, activitiesApi, projectsApi, tasksApi, risksApi } from "../../services/api";
 import { useAuth } from "../contexts/AuthContext";
 
 export function OperationalDashboard() {
   const [myTasks, setMyTasks] = useState<any[]>([]);
-  const upcomingDeadlines = [
-    { date: "2026-05-03", event: "Safety Inspection Report Due", type: "Document" },
-    { date: "2026-05-05", event: "Drilling Plan Review", type: "Activity" },
-    { date: "2026-05-06", event: "AFE Approval Deadline", type: "Finance" },
-    { date: "2026-05-10", event: "Monthly Production Report", type: "Document" },
-    { date: "2026-05-15", event: "Environmental Compliance Check", type: "Activity" },
-  ];
 
   const [workflowInbox, setWorkflowInbox] = useState<any[]>([]);
   const [workflowInboxLoading, setWorkflowInboxLoading] = useState(true);
@@ -26,6 +19,7 @@ export function OperationalDashboard() {
   const [documents, setDocuments] = useState<any[]>([]);
   const [activities, setActivities] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
+  const [risks, setRisks] = useState<any[]>([]);
 
   const { user } = useAuth();
   const departmentName = user?.departmentDetails?.name || user?.department || '';
@@ -62,19 +56,22 @@ export function OperationalDashboard() {
   useEffect(() => {
     const fetchSearchData = async () => {
       try {
-        const [docs, acts, projs] = await Promise.all([
+        const [docs, acts, projs, rks] = await Promise.all([
           documentsApi.getAll(),
           activitiesApi.getAll(),
           projectsApi.getAll(),
+          risksApi.getAll().catch(() => []),
         ]);
         setDocuments(Array.isArray(docs) ? docs : []);
         setActivities(Array.isArray(acts) ? acts : []);
         setProjects(Array.isArray(projs) ? projs : []);
+        setRisks(Array.isArray(rks) ? rks : []);
       } catch (err) {
         console.error('Error loading dashboard search data:', err);
         setDocuments([]);
         setActivities([]);
         setProjects([]);
+        setRisks([]);
       }
     };
 
@@ -127,6 +124,21 @@ export function OperationalDashboard() {
         .includes(normalizedSearch))
     : myTasks;
 
+  // Real, live upcoming deadlines (replaces a previous hardcoded placeholder
+  // list) — sourced from open activities and my open tasks, so every entry
+  // links back to its real source record (§5.8 "guaranteed drill-down").
+  const upcomingDeadlines = [
+    ...activities
+      .filter((a) => a.endDate && a.status !== 'Completed')
+      .map((a) => ({ date: a.endDate, event: a.name || a.title || 'Activity deadline', type: 'Activity', link: `/activities/${a.id}` })),
+    ...myTasks
+      .filter((t) => t.dueDate && t.status !== 'Completed')
+      .map((t) => ({ date: t.dueDate, event: t.title || 'Task due', type: 'Task', link: `/tasks` })),
+  ]
+    .filter((d) => new Date(d.date).getTime() >= Date.now() - 24 * 60 * 60 * 1000)
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    .slice(0, 8);
+
   const filteredUpcomingDeadlines = normalizedSearch
     ? upcomingDeadlines.filter((deadline) => [deadline.event, deadline.type, deadline.date]
         .filter(Boolean)
@@ -143,11 +155,18 @@ export function OperationalDashboard() {
         .includes(normalizedSearch))
     : workflowInbox;
 
+  // Real, live quick stats (replaces previous hardcoded 12/8/15/3 placeholders)
+  // — each stat links back to its underlying filtered list (§5.8 drill-down).
+  const openRisksCount = risks.filter((r) => r.status !== 'Closed' && r.status !== 'Mitigated').length;
+  const pendingDocumentsCount = documents.filter((d) => d.status === 'Under Review' || d.status === 'Draft').length;
+  const activeWorkflowsCount = workflowInbox.length;
+  const overdueTasksCount = myTasks.filter((t) => t.status === 'Overdue').length;
+
   const quickStats = [
-    { label: "Open Risks", value: 12, trend: "up", color: "text-orange-600" },
-    { label: "Pending Documents", value: 8, trend: "down", color: "text-blue-600" },
-    { label: "Active Workflows", value: 15, trend: "up", color: "text-purple-600" },
-    { label: "Overdue Tasks", value: 3, trend: "down", color: "text-red-600" },
+    { label: "Open Risks", value: openRisksCount, color: "text-orange-600", link: "/registers" },
+    { label: "Pending Documents", value: pendingDocumentsCount, color: "text-blue-600", link: `/documents?status=${encodeURIComponent('Under Review')}` },
+    { label: "Active Workflows", value: activeWorkflowsCount, color: "text-purple-600", link: "/workflows" },
+    { label: "Overdue Tasks", value: overdueTasksCount, color: "text-red-600", link: "/tasks?status=Overdue" },
   ];
 
   const getPriorityColor = (priority: string) => {
@@ -211,19 +230,12 @@ export function OperationalDashboard() {
       {/* Quick Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {quickStats.map((stat, index) => (
-          <Card key={index} className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">{stat.label}</p>
-                <p className={`text-2xl mt-1 ${stat.color}`}>{stat.value}</p>
-              </div>
-              <div className={stat.trend === "up" ? "text-red-500" : "text-green-500"}>
-                <span className="text-xs">
-                  {stat.trend === "up" ? "↑" : "↓"}
-                </span>
-              </div>
-            </div>
-          </Card>
+          <Link key={index} to={stat.link}>
+            <Card className="p-4 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer">
+              <p className="text-sm text-gray-600">{stat.label}</p>
+              <p className={`text-2xl mt-1 ${stat.color}`}>{stat.value}</p>
+            </Card>
+          </Link>
         ))}
       </div>
 
@@ -278,10 +290,14 @@ export function OperationalDashboard() {
             Upcoming Deadlines
           </h2>
           <div className="space-y-3">
-            {filteredUpcomingDeadlines.map((deadline, index) => (
-              <div
+            {filteredUpcomingDeadlines.length === 0 ? (
+              <p className="text-sm text-gray-500">No upcoming activity or task deadlines.</p>
+            ) : (
+              filteredUpcomingDeadlines.map((deadline, index) => (
+              <Link
                 key={index}
-                className="flex items-center gap-4 p-3 rounded-lg bg-gray-50"
+                to={deadline.link || '/tasks'}
+                className="flex items-center gap-4 p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition"
               >
                 <div className="flex flex-col items-center justify-center bg-white rounded p-2 min-w-[60px] border">
                   <span className="text-xs text-gray-500">
@@ -299,8 +315,9 @@ export function OperationalDashboard() {
                     {deadline.type}
                   </Badge>
                 </div>
-              </div>
-            ))}
+              </Link>
+              ))
+            )}
           </div>
         </Card>
 

@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { formatDisplayDateOrDefault } from "../lib/date";
 import { Progress } from "../components/ui/progress";
 import {
@@ -17,12 +18,20 @@ import {
   FileText,
   User,
   AlertTriangle,
+  Crown,
+  ListChecks,
+  Printer,
+  RefreshCw,
+  Filter,
+  Download,
+  X,
 } from "lucide-react";
-import { blocksApi, documentsApi, activitiesApi, projectsApi, financeApi, licencesApi, risksApi } from "../../services/api";
+import { blocksApi, documentsApi, activitiesApi, projectsApi, financeApi, licencesApi, risksApi, contractsApi, complianceApi, correspondenceApi, tasksApi, decisionsApi } from "../../services/api";
 import { useAuth } from "../contexts/AuthContext";
 
 export function ExecutiveDashboard() {
-  const { isGuest } = useAuth();
+  const { isGuest, isAdmin, hasPermission } = useAuth();
+  const canSeeChairmanView = isAdmin || hasPermission("chairman_view.access");
   const [blocks, setBlocks] = useState<any[]>([]);
   const [documents, setDocuments] = useState<any[]>([]);
   const [activities, setActivities] = useState<any[]>([]);
@@ -33,6 +42,54 @@ export function ExecutiveDashboard() {
   const [loadingBlocks, setLoadingBlocks] = useState(true);
   const [blockError, setBlockError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+
+  // ------------------------------------------------------------------
+  // §5.8 Dashboard filter bar — Block / Project / Status / Date range.
+  // Synced to URL query params so a filtered view can be bookmarked or
+  // shared as a link (lightweight "shareable view" support).
+  // ------------------------------------------------------------------
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filterBlockId = searchParams.get("blockId") || "all";
+  const filterProjectId = searchParams.get("projectId") || "all";
+  const filterStatus = searchParams.get("status") || "all";
+  const filterDateFrom = searchParams.get("dateFrom") || "";
+  const filterDateTo = searchParams.get("dateTo") || "";
+  const hasActiveFilters = filterBlockId !== "all" || filterProjectId !== "all" || filterStatus !== "all" || !!filterDateFrom || !!filterDateTo;
+
+  const updateFilter = (key: string, value: string) => {
+    const next = new URLSearchParams(searchParams);
+    if (!value || value === "all") {
+      next.delete(key);
+    } else {
+      next.set(key, value);
+    }
+    setSearchParams(next, { replace: true });
+  };
+
+  const clearFilters = () => setSearchParams({}, { replace: true });
+
+  // Query params to forward to a destination page so a dashboard click
+  // actually drills down into a pre-filtered list rather than the full one.
+  const drillDownParams = (extra: Record<string, string | undefined> = {}) => {
+    const params = new URLSearchParams();
+    if (filterBlockId !== "all") params.set("blockId", filterBlockId);
+    if (filterProjectId !== "all") params.set("projectId", filterProjectId);
+    if (filterStatus !== "all") params.set("status", filterStatus);
+    Object.entries(extra).forEach(([k, v]) => {
+      if (v) params.set(k, v);
+    });
+    const qs = params.toString();
+    return qs ? `?${qs}` : "";
+  };
+
+  // Chairman View data (§6) — only fetched/rendered for authorized roles
+  const [contracts, setContracts] = useState<any[]>([]);
+  const [compliance, setCompliance] = useState<any[]>([]);
+  const [correspondence, setCorrespondence] = useState<any[]>([]);
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [decisions, setDecisions] = useState<any[]>([]);
+  const [chairmanGeneratedAt, setChairmanGeneratedAt] = useState<Date | null>(null);
+  const [chairmanLoading, setChairmanLoading] = useState(false);
   
   // State for inline AFE actions (Approve, Reject, Delegate)
   const [activeActionId, setActiveActionId] = useState<number | null>(null);
@@ -175,10 +232,39 @@ export function ExecutiveDashboard() {
     }
   };
 
+  const fetchChairmanData = async () => {
+    if (!canSeeChairmanView) return;
+    setChairmanLoading(true);
+    try {
+      const [con, comp, corr, tsk, dec] = await Promise.all([
+        contractsApi.getAll(),
+        complianceApi.getAll(),
+        correspondenceApi.getAll(),
+        tasksApi.getAll(),
+        decisionsApi.getAll(),
+      ]);
+      setContracts(Array.isArray(con) ? con : []);
+      setCompliance(Array.isArray(comp) ? comp : []);
+      setCorrespondence(Array.isArray(corr) ? corr : []);
+      setTasks(Array.isArray(tsk) ? tsk : []);
+      setDecisions(Array.isArray(dec) ? dec : []);
+      setChairmanGeneratedAt(new Date());
+    } catch (err) {
+      console.error('Error loading Chairman View data:', err);
+    } finally {
+      setChairmanLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchBlocks();
     fetchSearchData();
   }, []);
+
+  useEffect(() => {
+    fetchChairmanData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canSeeChairmanView]);
 
   useEffect(() => {
     const handler = (e: any) => setSearchQuery(e?.detail?.query || "");
@@ -186,10 +272,152 @@ export function ExecutiveDashboard() {
     return () => window.removeEventListener('globalSearch', handler as EventListener);
   }, []);
 
+  function daysUntil(date: string | null | undefined): number | null {
+    if (!date) return null;
+    const diff = new Date(date).getTime() - Date.now();
+    return Math.ceil(diff / (1000 * 60 * 60 * 24));
+  }
+
+  // ------------------------------------------------------------------
+  // Chairman View (§6) — Block A: Countdown & Deadlines
+  // ------------------------------------------------------------------
+  const chairmanDeadlines = (() => {
+    type Urgency = "red" | "amber" | "green";
+    const items: { id: string; module: string; title: string; date: string | null; daysLeft: number | null; urgency: Urgency; link: string }[] = [];
+
+    licences
+      .filter((l) => l.status === "Active" && l.expiryDate)
+      .forEach((l) => {
+        const d = daysUntil(l.expiryDate);
+        if (d === null) return;
+        items.push({
+          id: `licence-${l.id}`,
+          module: "Licence",
+          title: `${l.licenceType || "Licence"} ${l.licenceNumber || ""} expiry`,
+          date: l.expiryDate,
+          daysLeft: d,
+          urgency: d < 30 ? "red" : d < 90 ? "amber" : "green",
+          link: "/licences",
+        });
+      });
+
+    contracts
+      .filter((c) => !["Expired", "Terminated"].includes(c.status) && c.expiryDate)
+      .forEach((c) => {
+        const d = daysUntil(c.expiryDate);
+        if (d === null) return;
+        items.push({
+          id: `contract-${c.id}`,
+          module: "Contract",
+          title: `${c.title} expiry`,
+          date: c.expiryDate,
+          daysLeft: d,
+          urgency: d < 30 ? "red" : d < 90 ? "amber" : "green",
+          link: "/contracts",
+        });
+      });
+
+    compliance
+      .filter((o) => o.status !== "Closed" && o.dueDate)
+      .forEach((o) => {
+        const d = daysUntil(o.dueDate);
+        if (d === null) return;
+        items.push({
+          id: `compliance-${o.id}`,
+          module: "Compliance",
+          title: o.description,
+          date: o.dueDate,
+          daysLeft: d,
+          urgency: d < 0 || d <= 7 ? "red" : d <= 30 ? "amber" : "green",
+          link: "/compliance",
+        });
+      });
+
+    correspondence
+      .filter((c) => c.awaitingResponse && c.status === "Open" && c.responseDueDate)
+      .forEach((c) => {
+        const d = daysUntil(c.responseDueDate);
+        if (d === null) return;
+        items.push({
+          id: `correspondence-${c.id}`,
+          module: "Correspondence",
+          title: `${c.subject} — response due`,
+          date: c.responseDueDate,
+          daysLeft: d,
+          urgency: d < 0 || d <= 3 ? "red" : d <= 14 ? "amber" : "green",
+          link: "/correspondence",
+        });
+      });
+
+    return items.sort((a, b) => (a.daysLeft ?? 0) - (b.daysLeft ?? 0));
+  })();
+
+  const chairmanRedCount = chairmanDeadlines.filter((d) => d.urgency === "red").length;
+  const chairmanAmberCount = chairmanDeadlines.filter((d) => d.urgency === "amber").length;
+
+  // ------------------------------------------------------------------
+  // Chairman View — Block B: Progress & Status
+  // ------------------------------------------------------------------
+  const chairmanTotalBudget = projects.reduce((sum, p) => sum + Number(p.budget || 0), 0);
+  const chairmanTotalSpent = projects.reduce((sum, p) => sum + Number(p.spent || 0), 0);
+  const chairmanBudgetUtilisation = chairmanTotalBudget > 0 ? Math.round((chairmanTotalSpent / chairmanTotalBudget) * 100) : 0;
+  const chairmanAvgCompletion = projects.length > 0
+    ? Math.round(projects.reduce((sum, p) => sum + Number(p.completion || 0), 0) / projects.length)
+    : 0;
+
+  const chairmanTaskTotal = tasks.length;
+  const chairmanTaskCompleted = tasks.filter((t) => t.status === "Completed").length;
+  const chairmanTaskCompletionPct = chairmanTaskTotal > 0 ? Math.round((chairmanTaskCompleted / chairmanTaskTotal) * 100) : 0;
+
+  const chairmanOpenRisks = risks.filter((r) => r.status !== "Closed" && r.status !== "Mitigated");
+  const chairmanHighRisks = chairmanOpenRisks.filter((r) => r.severity === "High");
+  const chairmanPendingDecisions = decisions.filter((d) => d.status !== "Closed");
+  const chairmanOverdueCompliance = compliance.filter((o) => o.status !== "Closed" && (daysUntil(o.dueDate) ?? 1) < 0);
+
+  // Block C: auto-generated executive summary — no manual compilation
+  const chairmanSummaryText = `As of ${chairmanGeneratedAt ? chairmanGeneratedAt.toLocaleString() : "now"}: ${projects.length} project(s) tracked at ${chairmanAvgCompletion}% average completion with budget utilisation at ${chairmanBudgetUtilisation}% ($${chairmanTotalSpent.toLocaleString()} of $${chairmanTotalBudget.toLocaleString()}). ${chairmanRedCount} deadline(s) are within their critical window and ${chairmanAmberCount} are approaching. ${chairmanOverdueCompliance.length} compliance obligation(s) are overdue. ${chairmanOpenRisks.length} risk(s) remain open (${chairmanHighRisks.length} high-severity). ${chairmanPendingDecisions.length} decision(s) are pending closure. Task completion stands at ${chairmanTaskCompletionPct}% (${chairmanTaskCompleted}/${chairmanTaskTotal}).`;
+
+  const handleChairmanExport = () => {
+    window.print();
+  };
+
+  // ------------------------------------------------------------------
+  // §5.8 Filter bar application — Block / Project / Status / Date range.
+  // Blocks and Projects carry their own blockId/status directly; Risks
+  // and AFEs are linked one hop away (Risk.projectId, Finance.activityId
+  // → Activity.projectId), so we resolve those via lookup maps.
+  // ------------------------------------------------------------------
+  const projectIdToBlockId: Record<string, any> = {};
+  projects.forEach((p) => { projectIdToBlockId[String(p.id)] = p.blockId; });
+  const activityIdToProjectId: Record<string, any> = {};
+  activities.forEach((a) => { activityIdToProjectId[String(a.id)] = a.projectId; });
+
+  const matchesBlock = (blockId: any) => filterBlockId === "all" || String(blockId ?? "") === filterBlockId;
+  const matchesProject = (projectId: any) => filterProjectId === "all" || String(projectId ?? "") === filterProjectId;
+  const matchesStatus = (status: any) => filterStatus === "all" || String(status ?? "").toLowerCase() === filterStatus.toLowerCase();
+  const matchesDateRange = (dateStr: any) => {
+    if (!filterDateFrom && !filterDateTo) return true;
+    if (!dateStr) return false;
+    const time = new Date(dateStr).getTime();
+    if (Number.isNaN(time)) return false;
+    if (filterDateFrom && time < new Date(filterDateFrom).getTime()) return false;
+    if (filterDateTo && time > new Date(filterDateTo).getTime() + 24 * 60 * 60 * 1000 - 1) return false;
+    return true;
+  };
+
+  const filterBarActiveOnBlocks = blocks.filter((b) => matchesBlock(b.id) && matchesStatus(b.status));
+  const filterBarActiveOnProjects = projects.filter((p) => matchesBlock(p.blockId) && matchesProject(p.id) && matchesStatus(p.status));
+
   const criticalRisks = risks
+    .filter((r) => matchesProject(r.projectId) && matchesBlock(projectIdToBlockId[String(r.projectId)]) && matchesStatus(r.status))
     .filter(r => r.severity === 'High' || r.severity === 'Critical')
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 5);
+
+  const filterBarActiveOnAFEs = pendingAFEs.filter((afe) => {
+    const projectId = activityIdToProjectId[String(afe.activityId)];
+    return matchesProject(projectId) && matchesBlock(projectIdToBlockId[String(projectId)]);
+  });
 
   const topExpiringLicence = licences
     .filter(lic => lic.expiryDate && lic.status === 'Active')
@@ -235,21 +463,23 @@ export function ExecutiveDashboard() {
         )
     : [];
 
-  const filteredCountdownCards = normalizedSearch
-    ? liveCountdownCards.filter((card) => [card.title, card.block, card.date]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-        .includes(normalizedSearch))
-    : liveCountdownCards;
+  const filteredCountdownCards = (
+    normalizedSearch
+      ? liveCountdownCards.filter((card) => [card.title, card.block, card.date]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+          .includes(normalizedSearch))
+      : liveCountdownCards
+  ).filter((card) => matchesDateRange(card.date));
 
   const filteredBlocks = normalizedSearch
-    ? blocks.filter((block) => [block.name, block.operator, block.location, block.area, block.description]
+    ? filterBarActiveOnBlocks.filter((block) => [block.name, block.operator, block.location, block.area, block.description]
         .filter(Boolean)
         .join(' ')
         .toLowerCase()
         .includes(normalizedSearch))
-    : blocks;
+    : filterBarActiveOnBlocks;
 
   const filteredRisks = normalizedSearch
     ? criticalRisks.filter((risk) => [risk.title, risk.description, risk.severity]
@@ -260,12 +490,31 @@ export function ExecutiveDashboard() {
     : criticalRisks;
 
   const filteredPendingAFEs = normalizedSearch
-    ? pendingAFEs.filter((afe) => [afe.afeNumber, afe.item, afe.amount?.toString(), afe.delegatedTo]
+    ? filterBarActiveOnAFEs.filter((afe) => [afe.afeNumber, afe.item, afe.amount?.toString(), afe.delegatedTo]
         .filter(Boolean)
         .join(' ')
         .toLowerCase()
         .includes(normalizedSearch))
-    : pendingAFEs;
+    : filterBarActiveOnAFEs;
+
+  const exportBlocksCsv = () => {
+    const header = ['Block', 'Status', 'Operator', 'Area', 'Location'];
+    const rows = filteredBlocks.map((b) => [b.name, b.status, b.operator, b.area, b.location]);
+    const csv = [header, ...rows]
+      .map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `dashboard-blocks-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const statusFilterOptions = Array.from(
+    new Set([...blocks, ...projects, ...risks].map((item) => item?.status).filter(Boolean))
+  ).sort();
 
   return (
     <div className="space-y-6">
@@ -280,6 +529,220 @@ export function ExecutiveDashboard() {
           </Link>
         )}
       </div>
+
+      {/* §5.8 Filter bar — Block / Project / Status / Date range, synced to the
+          URL so the current view can be bookmarked or shared as a link. */}
+      <Card className="p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Filter className="h-4 w-4 text-gray-500" />
+          <h2 className="text-sm font-semibold text-gray-700">Filters</h2>
+          {hasActiveFilters && (
+            <Button variant="ghost" size="sm" onClick={clearFilters} className="ml-auto gap-1 text-gray-500">
+              <X className="h-3.5 w-3.5" />
+              Clear filters
+            </Button>
+          )}
+          <Button variant="outline" size="sm" onClick={exportBlocksCsv} className={`gap-1 ${hasActiveFilters ? '' : 'ml-auto'}`}>
+            <Download className="h-3.5 w-3.5" />
+            Export blocks (CSV)
+          </Button>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">Block</label>
+            <Select value={filterBlockId} onValueChange={(value) => updateFilter("blockId", value)}>
+              <SelectTrigger><SelectValue placeholder="All Blocks" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Blocks</SelectItem>
+                {blocks.map((b) => (
+                  <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">Project</label>
+            <Select value={filterProjectId} onValueChange={(value) => updateFilter("projectId", value)}>
+              <SelectTrigger><SelectValue placeholder="All Projects" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Projects</SelectItem>
+                {projects
+                  .filter((p) => matchesBlock(p.blockId))
+                  .map((p) => (
+                    <SelectItem key={p.id} value={String(p.id)}>{p.name || p.title}</SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">Status</label>
+            <Select value={filterStatus} onValueChange={(value) => updateFilter("status", value)}>
+              <SelectTrigger><SelectValue placeholder="All Statuses" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                {statusFilterOptions.map((status) => (
+                  <SelectItem key={status} value={status}>{status}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">Date from</label>
+            <input
+              type="date"
+              className="w-full rounded-md border bg-input-background px-3 py-2 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              value={filterDateFrom}
+              onChange={(e) => updateFilter("dateFrom", e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">Date to</label>
+            <input
+              type="date"
+              className="w-full rounded-md border bg-input-background px-3 py-2 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              value={filterDateTo}
+              onChange={(e) => updateFilter("dateTo", e.target.value)}
+            />
+          </div>
+        </div>
+      </Card>
+
+      {/* Chairman View (§6) — dedicated three-block executive summary, restricted
+          to the Chairman/Board role and any explicitly delegated executives via
+          the configurable RBAC matrix (chairman_view.access). */}
+      {canSeeChairmanView && (
+        <Card className="p-6 border-2 border-amber-200 bg-amber-50/30 print:border-0 print:bg-white">
+          <div className="flex items-center justify-between mb-4 print:hidden">
+            <h2 className="text-2xl flex items-center gap-2">
+              <Crown className="h-6 w-6 text-amber-500" />
+              Chairman View
+            </h2>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={fetchChairmanData} className="gap-2" disabled={chairmanLoading}>
+                <RefreshCw className="h-4 w-4" />
+                Refresh
+              </Button>
+              <Button size="sm" onClick={handleChairmanExport} className="gap-2">
+                <Printer className="h-4 w-4" />
+                Export (Print/PDF)
+              </Button>
+            </div>
+          </div>
+
+          {chairmanGeneratedAt && (
+            <p className="text-xs text-gray-400 mb-4">
+              Data as of {chairmanGeneratedAt.toLocaleString()} — refresh for the latest figures
+            </p>
+          )}
+
+          {chairmanLoading ? (
+            <p className="text-sm text-gray-500">Loading Chairman View...</p>
+          ) : (
+            <div className="space-y-6">
+              {/* Block A — Countdown & Deadlines */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-semibold flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-orange-500" />
+                    Block A — Countdown &amp; Deadlines
+                  </h3>
+                  <div className="flex gap-2">
+                    <Badge className="bg-red-100 text-red-700 border border-red-300">{chairmanRedCount} Red</Badge>
+                    <Badge className="bg-amber-100 text-amber-700 border border-amber-300">{chairmanAmberCount} Amber</Badge>
+                  </div>
+                </div>
+                {chairmanDeadlines.length === 0 ? (
+                  <p className="text-sm text-gray-500">No upcoming licence, contract, compliance or correspondence deadlines.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {chairmanDeadlines.slice(0, 8).map((d) => (
+                      <Link
+                        key={d.id}
+                        to={d.link}
+                        className={`flex items-center justify-between p-2.5 rounded-md border text-sm ${
+                          d.urgency === "red"
+                            ? "bg-red-100 text-red-700 border-red-300"
+                            : d.urgency === "amber"
+                            ? "bg-amber-100 text-amber-700 border-amber-300"
+                            : "bg-green-100 text-green-700 border-green-300"
+                        } hover:opacity-90`}
+                      >
+                        <div>
+                          <span className="text-xs uppercase font-semibold mr-2">{d.module}</span>
+                          {d.title}
+                        </div>
+                        <div className="font-medium whitespace-nowrap">
+                          {d.daysLeft !== null && d.daysLeft < 0 ? `${Math.abs(d.daysLeft)}d overdue` : `${d.daysLeft}d left`}
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Block B — Progress & Status */}
+              <div>
+                <h3 className="font-semibold flex items-center gap-2 mb-3">
+                  <ListChecks className="h-4 w-4 text-blue-500" />
+                  Block B — Progress &amp; Status
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Link to={`/projects${drillDownParams()}`} className="block p-3 rounded-md border bg-white hover:bg-gray-50">
+                    <p className="text-xs text-gray-500 mb-1">Work Programme Progress (avg. completion)</p>
+                    <div className="flex items-center gap-3">
+                      <Progress value={chairmanAvgCompletion} className="flex-1" />
+                      <span className="text-sm font-semibold">{chairmanAvgCompletion}%</span>
+                    </div>
+                  </Link>
+                  <Link to={`/finance${drillDownParams()}`} className="block p-3 rounded-md border bg-white hover:bg-gray-50">
+                    <p className="text-xs text-gray-500 mb-1">Budget Utilisation</p>
+                    <div className="flex items-center gap-3">
+                      <Progress value={Math.min(chairmanBudgetUtilisation, 100)} className="flex-1" />
+                      <span className="text-sm font-semibold">{chairmanBudgetUtilisation}%</span>
+                    </div>
+                  </Link>
+                  <Link to={`/tasks${drillDownParams()}`} className="block p-3 rounded-md border bg-white hover:bg-gray-50">
+                    <p className="text-xs text-gray-500 mb-1">Task Completion (org-wide)</p>
+                    <div className="flex items-center gap-3">
+                      <Progress value={chairmanTaskCompletionPct} className="flex-1" />
+                      <span className="text-sm font-semibold">{chairmanTaskCompletionPct}%</span>
+                    </div>
+                  </Link>
+                  <div className="p-3 rounded-md border bg-white grid grid-cols-3 gap-2 text-center">
+                    <Link to="/registers">
+                      <p className="text-xl font-semibold">{chairmanOpenRisks.length}</p>
+                      <p className="text-xs text-gray-500">Open Risks</p>
+                    </Link>
+                    <Link to={`/decisions${drillDownParams()}`}>
+                      <p className="text-xl font-semibold">{chairmanPendingDecisions.length}</p>
+                      <p className="text-xs text-gray-500">Pending Decisions</p>
+                    </Link>
+                    <Link to={`/compliance${drillDownParams({ status: 'Overdue' })}`}>
+                      <p className="text-xl font-semibold">{chairmanOverdueCompliance.length}</p>
+                      <p className="text-xs text-gray-500">Overdue Compliance</p>
+                    </Link>
+                  </div>
+                </div>
+              </div>
+
+              {/* Block C — One-Click Summary */}
+              <div>
+                <h3 className="font-semibold flex items-center gap-2 mb-2">
+                  <CheckCircle className="h-4 w-4 text-emerald-500" />
+                  Block C — One-Click Summary
+                </h3>
+                <p className="text-sm leading-relaxed text-gray-700">{chairmanSummaryText}</p>
+                {chairmanHighRisks.length > 0 && (
+                  <div className="mt-3 flex items-center gap-2 text-sm text-red-600">
+                    <AlertTriangle className="h-4 w-4" />
+                    {chairmanHighRisks.length} high-severity risk(s) require attention.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
 
       {normalizedSearch && (
         <Card className="p-4">

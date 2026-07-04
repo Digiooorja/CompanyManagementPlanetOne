@@ -23,6 +23,7 @@ import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { useAuth } from "../contexts/AuthContext";
+import { NotificationPopupEngine } from "./NotificationPopupEngine";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -73,7 +74,7 @@ export function Layout() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Top Bar */}
-      <header className="bg-white border-b border-gray-200 fixed top-0 left-0 right-0 z-40">
+      <header className="bg-white border-b border-gray-200 fixed top-0 left-0 right-0 z-40 print:hidden">
         <div className="flex items-center justify-between h-16 px-4">
           <div className="flex items-center gap-4">
             <Button
@@ -153,7 +154,7 @@ export function Layout() {
         </div>
       </header>
       <aside
-        className={`fixed top-16 left-0 bottom-0 w-64 bg-white border-r border-gray-200 transition-transform duration-300 z-30 ${
+        className={`fixed top-16 left-0 bottom-0 w-64 bg-white border-r border-gray-200 transition-transform duration-300 z-30 print:hidden ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         } lg:translate-x-0`}
       >
@@ -180,8 +181,8 @@ export function Layout() {
       </aside>
 
       {/* Main Content */}
-      <main className={`pt-16 transition-all duration-300 ${sidebarOpen ? "lg:pl-64" : ""}`}>
-        <div className="p-6">
+      <main className={`pt-16 transition-all duration-300 print:pt-0 ${sidebarOpen ? "lg:pl-64" : ""} print:pl-0`}>
+        <div className="p-6 print:p-0">
           <Outlet />
         </div>
       </main>
@@ -193,6 +194,9 @@ export function Layout() {
           onClick={() => setSidebarOpen(false)}
         />
       )}
+
+      {/* Recurring activity/compliance/licence pop-up reminders (§5.2) */}
+      <NotificationPopupEngine />
     </div>
   );
 }

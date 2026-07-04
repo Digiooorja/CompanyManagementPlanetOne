@@ -14,6 +14,7 @@ interface User {
     name: string;
   };
   role: string;
+  permissions?: string[];
 }
 
 interface AuthContextType {
@@ -26,6 +27,7 @@ interface AuthContextType {
   isStandardUser: boolean;
   canEdit: boolean;
   canUpload: boolean;
+  hasPermission: (key: string) => boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (data: any) => Promise<void>;
@@ -113,8 +115,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       const data = await response.json();
       setToken(data.token);
-      setUser(data.user);
       authStorage.saveSession(data.user.id, data.token, data.user);
+      // Re-fetch via /me so the resolved RBAC permission set is populated
+      // immediately, rather than only after the next page load.
+      await fetchCurrentUser(data.token);
     } catch (error) {
       throw error;
     } finally {
@@ -145,8 +149,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       const result = await response.json();
       setToken(result.token);
-      setUser(result.user);
       authStorage.saveSession(result.user.id, result.token, result.user);
+      await fetchCurrentUser(result.token);
     } catch (error) {
       throw error;
     } finally {
@@ -167,6 +171,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const canEdit = !isGuest && isManager;
   const canUpload = !isGuest;
 
+  // Fine-grained permission check backed by the RBAC matrix (§4) — use this
+  // for the newer role-gated modules instead of the coarse isManager/canEdit
+  // flags, so the business roles (Legal/Compliance Officer, Finance/Accounts,
+  // etc.) see the right affordances without needing 'Manager' or 'Admin'.
+  const hasPermission = (key: string) => {
+    if (isGuest) return false;
+    if (isAdmin) return true;
+    return !!user?.permissions?.includes(key);
+  };
+
   const value = {
     user,
     token,
@@ -177,6 +191,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     isStandardUser,
     canEdit,
     canUpload,
+    hasPermission,
     isLoading,
     login,
     register,

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, ChangeEvent, useRef } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -23,8 +23,12 @@ import { documentsApi, blocksApi, activitiesApi, projectsApi, departmentsApi, li
 import { formatDisplayDateOrDefault } from "../lib/date";
 
 export function Documents() {
-  const [filterBlock, setFilterBlock] = useState("all");
+  const [searchParams] = useSearchParams();
+  // §5.8 guaranteed drill-down: pre-apply the block filter forwarded via
+  // query params from the Executive Dashboard's filter bar.
+  const [filterBlock, setFilterBlock] = useState(searchParams.get("blockId") || "all");
   const [filterType, setFilterType] = useState("all");
+  const [filterStatus, setFilterStatus] = useState(searchParams.get("status") || "all");
   const [searchQuery, setSearchQuery] = useState("");
   const [documents, setDocuments] = useState<any[]>([]);
   const [blocks, setBlocks] = useState<any[]>([]);
@@ -42,7 +46,12 @@ export function Documents() {
     title: "",
     author: "",
     documentType: "Technical",
-    status: "Review",
+    status: "Draft",
+    category: "Other",
+    confidentialityLevel: "Public",
+    awaitingResponseFrom: "",
+    responseDueDate: "",
+    tags: "",
     blockId: "",
     projectId: "",
     activityIds: [] as string[],
@@ -214,6 +223,23 @@ export function Documents() {
       );
       formData.append('documentType', uploadForm.documentType);
       formData.append('status', uploadForm.status);
+      formData.append('category', uploadForm.category);
+      formData.append('confidentialityLevel', uploadForm.confidentialityLevel);
+      if (uploadForm.awaitingResponseFrom) {
+        formData.append('awaitingResponseFrom', uploadForm.awaitingResponseFrom);
+      }
+      if (uploadForm.responseDueDate) {
+        formData.append('responseDueDate', uploadForm.responseDueDate);
+      }
+      if (uploadForm.tags) {
+        formData.append(
+          'tags',
+          JSON.stringify(uploadForm.tags.split(',').map((tag) => tag.trim()).filter(Boolean))
+        );
+      }
+      if (uploadForm.blockId) {
+        formData.append('blockId', uploadForm.blockId);
+      }
       if (uploadForm.projectId) {
         formData.append('projectId', uploadForm.projectId);
       }
@@ -237,7 +263,12 @@ export function Documents() {
         title: '',
         author: '',
         documentType: 'Technical',
-        status: 'Review',
+        status: 'Draft',
+        category: 'Other',
+        confidentialityLevel: 'Public',
+        awaitingResponseFrom: '',
+        responseDueDate: '',
+        tags: '',
         blockId: '',
         projectId: '',
         activityIds: [],
@@ -373,6 +404,12 @@ export function Documents() {
         }
       }
 
+      if (filterStatus !== 'all' && filterStatus) {
+        if (String(doc.status || '').toLowerCase() !== String(filterStatus).toLowerCase()) {
+          return false;
+        }
+      }
+
       if (!normalizedSearch) {
         return true;
       }
@@ -395,7 +432,7 @@ export function Documents() {
 
       return searchableText.includes(normalizedSearch);
     });
-  }, [documents, searchQuery, filterBlock, filterType, blocks, projects]);
+  }, [documents, searchQuery, filterBlock, filterType, filterStatus, blocks, projects]);
 
   const getActiveUserName = () => {
     if (!user) return '-';
@@ -404,13 +441,13 @@ export function Documents() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "Approved":
+      case "Final":
         return "default";
       case "Under Review":
         return "secondary";
-      case "Pending Review":
+      case "Superseded":
         return "outline";
-      case "Pending Approval":
+      case "Draft":
         return "outline";
       default:
         return "outline";
@@ -556,11 +593,70 @@ export function Documents() {
                     value={uploadForm.status}
                     onChange={(event: ChangeEvent<HTMLSelectElement>) => handleUploadChange('status', event.target.value)}
                   >
-                    <option value="Review">Review</option>
-                    <option value="Approved">Approved</option>
-                    <option value="Rejected">Rejected</option>
+                    <option value="Draft">Draft</option>
+                    <option value="Under Review">Under Review</option>
+                    <option value="Final">Final</option>
                   </select>
                 </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="document-category">Category</Label>
+                  <select
+                    id="document-category"
+                    className="mt-1 block w-full rounded-md border bg-input-background px-3 py-2 text-sm text-foreground shadow-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                    value={uploadForm.category}
+                    onChange={(event) => handleUploadChange('category', event.target.value)}
+                  >
+                    <option value="Contract">Contract</option>
+                    <option value="Letter">Letter</option>
+                    <option value="Notice">Notice</option>
+                    <option value="Report">Report</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <Label htmlFor="document-confidentiality">Confidentiality Level</Label>
+                  <select
+                    id="document-confidentiality"
+                    className="mt-1 block w-full rounded-md border bg-input-background px-3 py-2 text-sm text-foreground shadow-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                    value={uploadForm.confidentialityLevel}
+                    onChange={(event) => handleUploadChange('confidentialityLevel', event.target.value)}
+                  >
+                    <option value="Public">Public</option>
+                    <option value="Internal">Internal</option>
+                    <option value="Confidential">Confidential</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="document-awaiting-response">Awaiting Response From</Label>
+                  <Input
+                    id="document-awaiting-response"
+                    placeholder="e.g. NOC, Ministry of Energy"
+                    value={uploadForm.awaitingResponseFrom}
+                    onChange={(event) => handleUploadChange('awaitingResponseFrom', event.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="document-response-due">Response Due Date</Label>
+                  <Input
+                    id="document-response-due"
+                    type="date"
+                    value={uploadForm.responseDueDate}
+                    onChange={(event) => handleUploadChange('responseDueDate', event.target.value)}
+                  />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="document-tags">Tags (comma-separated)</Label>
+                <Input
+                  id="document-tags"
+                  placeholder="e.g. drilling, phase-2, urgent"
+                  value={uploadForm.tags}
+                  onChange={(event) => handleUploadChange('tags', event.target.value)}
+                />
               </div>
               {/* Licence selector — only shown when document type is 'Licence' */}
               {uploadForm.documentType === 'Licence' && (
@@ -667,6 +763,18 @@ export function Documents() {
                   {typeOption}
                 </SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+          <Select value={filterStatus} onValueChange={setFilterStatus}>
+            <SelectTrigger className="w-full md:w-[180px]">
+              <SelectValue placeholder="Filter by status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Statuses</SelectItem>
+              <SelectItem value="Draft">Draft</SelectItem>
+              <SelectItem value="Under Review">Under Review</SelectItem>
+              <SelectItem value="Final">Final</SelectItem>
+              <SelectItem value="Superseded">Superseded</SelectItem>
             </SelectContent>
           </Select>
         </div>

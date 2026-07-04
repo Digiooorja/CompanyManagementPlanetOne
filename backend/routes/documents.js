@@ -22,10 +22,21 @@ function sanitizeSegment(name) {
   return String(name).trim().replace(/\s+/g, '-').replace(/[^a-zA-Z0-9\-_.]/g, '').toLowerCase();
 }
 
+// Confidential documents are restricted to named roles only (Requirements
+// §5.5 business rule). Admin and the document owner always have access.
+function canViewDocument(user, doc) {
+  if (doc.confidentialityLevel !== 'Confidential') return true;
+  if (!user) return false;
+  if (user.role === 'Admin') return true;
+  if (doc.ownerId && user.id === doc.ownerId) return true;
+  const allowedRoles = Array.isArray(doc.allowedRoles) ? doc.allowedRoles : [];
+  return allowedRoles.includes(user.role);
+}
+
 // GET all documents
 router.get('/', async (req, res) => {
   try {
-    const { projectId, activityId, licenceId } = req.query;
+    const { projectId, activityId, licenceId, taskId, category, blockId } = req.query;
     const where = {};
 
     if (projectId) {
@@ -37,9 +48,20 @@ router.get('/', async (req, res) => {
     if (licenceId) {
       where.licenceId = licenceId;
     }
+    if (taskId) {
+      where.taskId = taskId;
+    }
+    if (category) {
+      where.category = category;
+    }
+    if (blockId) {
+      where.blockId = blockId;
+    }
 
     const documents = await Document.findAll({ where });
-    let documentData = documents.map((doc) => doc.toJSON());
+    let documentData = documents
+      .filter((doc) => canViewDocument(req.user, doc))
+      .map((doc) => doc.toJSON());
 
     if (activityId) {
       documentData = documentData.filter((doc) => {
@@ -143,6 +165,10 @@ router.get('/:id', async (req, res) => {
   try {
     const document = await Document.findByPk(req.params.id);
     if (!document) return res.status(404).json({ message: 'Document not found' });
+
+    if (!canViewDocument(req.user, document)) {
+      return res.status(403).json({ message: 'This document is Confidential and restricted to named roles only' });
+    }
 
     const documentData = document.toJSON();
 
@@ -254,7 +280,10 @@ router.get('/:id/presigned', async (req, res) => {
 // POST new document with file upload (field: file). Accepts activityId, projectId, or licenceId.
 router.post('/', upload.single('file'), async (req, res) => {
   try {
-    let { title, author, projectId, activityId, activityIds, licenceId, documentType, status } = req.body;
+    let {
+      title, author, projectId, activityId, activityIds, licenceId, taskId, blockId, documentType, status,
+      category, tags, awaitingResponseFrom, responseDueDate, confidentialityLevel, allowedRoles
+    } = req.body;
 
     const parsedActivityIds = (() => {
       if (!activityIds) return [];
@@ -270,6 +299,19 @@ router.post('/', upload.single('file'), async (req, res) => {
     if (!activityId && parsedActivityIds.length > 0) {
       activityId = String(parsedActivityIds[0]);
     }
+
+    const parseStringArray = (value) => {
+      if (!value) return [];
+      if (Array.isArray(value)) return value;
+      try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : [String(value)];
+      } catch {
+        return String(value).split(',').map((v) => v.trim()).filter(Boolean);
+      }
+    };
+    const parsedTags = parseStringArray(tags);
+    const parsedAllowedRoles = parseStringArray(allowedRoles);
 
     if (!req.file) {
       return res.status(400).json({ message: 'File is required (multipart/form-data, field name "file")' });
@@ -328,13 +370,22 @@ router.post('/', upload.single('file'), async (req, res) => {
       title: title || originalName,
       content: req.body.content || '',
       author: author || 'system',
+      ownerId: req.user?.id || null,
       projectId: projectId || null,
       activityId: activityId || parsedActivityIds[0] || null,
       activityIds: parsedActivityIds.length > 0 ? parsedActivityIds : null,
       licenceId: licenceId || null,
+      taskId: taskId || null,
+      blockId: blockId || null,
       documentType: documentType || 'Report',
+      category: category || 'Other',
+      tags: parsedTags,
+      awaitingResponseFrom: awaitingResponseFrom || null,
+      responseDueDate: responseDueDate || null,
+      confidentialityLevel: confidentialityLevel || 'Public',
+      allowedRoles: parsedAllowedRoles,
       uploadDate: new Date(),
-      status: status || 'Review',
+      status: status || 'Draft',
       filename: originalName,
       s3Key,
       mimeType: req.file.mimetype,
@@ -412,13 +463,22 @@ router.post('/:id/versions', upload.single('file'), async (req, res) => {
       title: title || originalDocument.title,
       content: originalDocument.content || '',
       author: author || originalDocument.author || 'system',
+      ownerId: originalDocument.ownerId || req.user?.id || null,
       projectId: originalDocument.projectId || null,
       activityId: originalDocument.activityId || null,
       activityIds: Array.isArray(originalDocument.activityIds) ? originalDocument.activityIds : null,
       licenceId: originalDocument.licenceId || null,
+      taskId: originalDocument.taskId || null,
+      blockId: originalDocument.blockId || null,
+      category: originalDocument.category || 'Other',
+      tags: Array.isArray(originalDocument.tags) ? originalDocument.tags : [],
+      awaitingResponseFrom: originalDocument.awaitingResponseFrom || null,
+      responseDueDate: originalDocument.responseDueDate || null,
+      confidentialityLevel: originalDocument.confidentialityLevel || 'Public',
+      allowedRoles: Array.isArray(originalDocument.allowedRoles) ? originalDocument.allowedRoles : [],
       documentType: documentType || originalDocument.documentType || 'Report',
       uploadDate: new Date(),
-      status: status || originalDocument.status || 'Review',
+      status: status || 'Draft',
       filename: originalName,
       s3Key,
       mimeType: req.file.mimetype,
@@ -426,6 +486,14 @@ router.post('/:id/versions', upload.single('file'), async (req, res) => {
       rootDocumentId,
       versionNumber: nextVersion
     });
+
+    // Re-uploading creates a new version rather than overwriting the prior
+    // one, and every earlier version in the chain becomes Superseded (§5.5
+    // business rule / versioning semantics).
+    await Document.update(
+      { status: 'Superseded' },
+      { where: { id: { [Op.in]: [...versions.map((v) => v.id), originalDocument.id].filter((docId) => docId !== newVersion.id) } } }
+    );
 
     res.status(201).json(newVersion);
   } catch (err) {
@@ -440,6 +508,10 @@ router.put('/:id', async (req, res) => {
     const document = await Document.findByPk(req.params.id);
     if (!document) return res.status(404).json({ message: 'Document not found' });
 
+    if (!canViewDocument(req.user, document)) {
+      return res.status(403).json({ message: 'This document is Confidential and restricted to named roles only' });
+    }
+
     await document.update({
       title: req.body.title || document.title,
       content: req.body.content || document.content,
@@ -448,7 +520,15 @@ router.put('/:id', async (req, res) => {
       activityId: req.body.activityId !== undefined ? req.body.activityId : document.activityId,
       activityIds: req.body.activityIds !== undefined ? req.body.activityIds : document.activityIds,
       licenceId: req.body.licenceId !== undefined ? req.body.licenceId : document.licenceId,
+      taskId: req.body.taskId !== undefined ? req.body.taskId : document.taskId,
+      blockId: req.body.blockId !== undefined ? req.body.blockId : document.blockId,
       documentType: req.body.documentType || document.documentType,
+      category: req.body.category || document.category,
+      tags: req.body.tags !== undefined ? req.body.tags : document.tags,
+      awaitingResponseFrom: req.body.awaitingResponseFrom !== undefined ? req.body.awaitingResponseFrom : document.awaitingResponseFrom,
+      responseDueDate: req.body.responseDueDate !== undefined ? req.body.responseDueDate : document.responseDueDate,
+      confidentialityLevel: req.body.confidentialityLevel || document.confidentialityLevel,
+      allowedRoles: req.body.allowedRoles !== undefined ? req.body.allowedRoles : document.allowedRoles,
       uploadDate: req.body.uploadDate || document.uploadDate,
       status: req.body.status || document.status
     });
@@ -459,11 +539,18 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// DELETE document (also removes from S3 if present)
+// DELETE document (also removes from S3 if present). Only the document
+// owner or Admin may delete (Requirements §5.5 business rule).
 router.delete('/:id', async (req, res) => {
   try {
     const document = await Document.findByPk(req.params.id);
     if (!document) return res.status(404).json({ message: 'Document not found' });
+
+    const isOwner = document.ownerId && req.user?.id === document.ownerId;
+    const isAdmin = req.user?.role === 'Admin';
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ message: 'Only the document owner or an Admin may delete this document' });
+    }
 
     if (document.s3Key) {
       const params = {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, Fragment } from "react";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -28,13 +28,15 @@ import {
   RefreshCw,
   Loader2
 } from "lucide-react";
-import { adminApi, departmentsApi } from "../../services/api";
+import { adminApi, departmentsApi, rbacApi, orgChartApi } from "../../services/api";
 
 export function Admin() {
   const { user, isAdmin } = useAuth();
   const navigate = useNavigate();
   const [users, setUsers] = useState<any[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
+  const [roles, setRoles] = useState<any[]>([]);
+  const [permissions, setPermissions] = useState<any[]>([]);
   const [metrics, setMetrics] = useState({
     totalUsers: 0,
     activeUsers: 0,
@@ -45,6 +47,11 @@ export function Admin() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // New role creation form
+  const [newRoleName, setNewRoleName] = useState("");
+  const [newRoleDescription, setNewRoleDescription] = useState("");
+  const [creatingRole, setCreatingRole] = useState(false);
 
   // Dialog states
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -60,38 +67,36 @@ export function Admin() {
   const [formRole, setFormRole] = useState("User");
   const [formDepartmentId, setFormDepartmentId] = useState("");
   const [formActive, setFormActive] = useState(true);
+  const [formEmployeeId, setFormEmployeeId] = useState("");
+  const [formDesignation, setFormDesignation] = useState("");
+  const [formReportingManagerId, setFormReportingManagerId] = useState("");
+  const [formPhone, setFormPhone] = useState("");
+  const [formQualifications, setFormQualifications] = useState("");
+  const [formStartDate, setFormStartDate] = useState("");
 
-  // Hardcoded standard roles details for the Roles tab
-  const rolesInfo = [
-    { id: 1, name: "Admin", description: "Full system administration, security audits, database seed management, and user provisioning.", userCount: users.filter(u => u.role === "Admin").length },
-    { id: 2, name: "Manager", description: "Operational oversight. Allowed to create and edit blocks, projects, workflows, risks, and tasks.", userCount: users.filter(u => u.role === "Manager").length },
-    { id: 3, name: "User", description: "Standard business domain operations. Can view modules, upload documentation, and submit activity comments.", userCount: users.filter(u => u.role === "User").length },
-    { id: 4, name: "Guest", description: "Public view-only visitor access. Restricted from performing database mutations or edits.", userCount: users.filter(u => u.role === "Guest").length }
-  ];
-
-  const permissionsInfo = [
-    { module: "Dashboard Summary", Guest: "View Only", User: "View Only", Manager: "View Only", Admin: "Full Access" },
-    { module: "Blocks & Assets", Guest: "View Only", User: "View Only", Manager: "Create & Edit", Admin: "Full Access" },
-    { module: "Projects & Portfolios", Guest: "View Only", User: "View Only", Manager: "Create & Edit", Admin: "Full Access" },
-    { module: "Project Tasks & Activities", Guest: "View Only", User: "View Only", Manager: "Create & Edit", Admin: "Full Access" },
-    { module: "Finance & AFE Approvals", Guest: "No Access", User: "Departmental Only", Manager: "View & Approve", Admin: "Full Access" },
-    { module: "Document Uploads", Guest: "No Access", User: "Create & Comment", Manager: "Full Access", Admin: "Full Access" },
-    { module: "Risk & Mitigation Logs", Guest: "View Only", User: "View Only", Manager: "Create & Edit", Admin: "Full Access" },
-    { module: "System Gating & Users", Guest: "No Access", User: "No Access", Manager: "No Access", Admin: "Full Access" }
-  ];
+  // Org chart + profile history
+  const [orgChart, setOrgChart] = useState<any[]>([]);
+  const [orgChartLoading, setOrgChartLoading] = useState(false);
+  const [historyUser, setHistoryUser] = useState<any | null>(null);
+  const [userHistory, setUserHistory] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   const loadData = async () => {
     setIsLoading(true);
     setErrorMsg(null);
     try {
-      const [usersData, dashboardMetrics, departmentsData] = await Promise.all([
+      const [usersData, dashboardMetrics, departmentsData, rolesData, permissionsData] = await Promise.all([
         adminApi.getUsers(),
         adminApi.getDashboard(),
-        departmentsApi.getAll()
+        departmentsApi.getAll(),
+        rbacApi.getRoles(),
+        rbacApi.getPermissions()
       ]);
       setUsers(usersData);
       setMetrics(dashboardMetrics);
       setDepartments(departmentsData);
+      setRoles(Array.isArray(rolesData) ? rolesData : []);
+      setPermissions(Array.isArray(permissionsData) ? permissionsData : []);
     } catch (err: any) {
       console.error("Failed to load admin data:", err);
       setErrorMsg(err.message || "An error occurred while loading administrative records.");
@@ -105,6 +110,47 @@ export function Admin() {
       loadData();
     }
   }, [isAdmin]);
+
+  const handleCreateRole = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newRoleName.trim()) return;
+    setCreatingRole(true);
+    try {
+      await rbacApi.createRole({ name: newRoleName.trim(), description: newRoleDescription.trim() || undefined });
+      setNewRoleName("");
+      setNewRoleDescription("");
+      loadData();
+    } catch (err: any) {
+      alert(err.message || "Failed to create role.");
+    } finally {
+      setCreatingRole(false);
+    }
+  };
+
+  const handleDeleteRole = async (role: any) => {
+    if (!confirm(`Delete role "${role.name}"? This cannot be undone.`)) return;
+    try {
+      await rbacApi.deleteRole(role.id);
+      loadData();
+    } catch (err: any) {
+      alert(err.message || "Failed to delete role.");
+    }
+  };
+
+  const handleTogglePermission = async (role: any, permissionKey: string, checked: boolean) => {
+    if (role.name === "Admin") return; // Admin is a technical superuser — matrix has no effect on it
+    const newKeys = checked
+      ? [...role.permissionKeys, permissionKey]
+      : role.permissionKeys.filter((k: string) => k !== permissionKey);
+
+    setRoles((prev) => prev.map((r) => (r.id === role.id ? { ...r, permissionKeys: newKeys } : r)));
+    try {
+      await rbacApi.updateRolePermissions(role.id, newKeys);
+    } catch (err: any) {
+      alert(err.message || "Failed to update permission — reverting.");
+      loadData();
+    }
+  };
 
   // Listen for navigation-level global search requests
   useEffect(() => {
@@ -122,6 +168,12 @@ export function Admin() {
     setFormRole("User");
     setFormDepartmentId(departments[0]?.id?.toString() || "");
     setFormActive(true);
+    setFormEmployeeId("");
+    setFormDesignation("");
+    setFormReportingManagerId("");
+    setFormPhone("");
+    setFormQualifications("");
+    setFormStartDate("");
     setIsAddOpen(true);
   };
 
@@ -135,8 +187,60 @@ export function Admin() {
     setFormRole(user.role || "User");
     setFormDepartmentId(user.departmentId?.toString() || "");
     setFormActive(user.active !== false);
+    setFormEmployeeId(user.employeeId || "");
+    setFormDesignation(user.designation || "");
+    setFormReportingManagerId(user.reportingManagerId?.toString() || "");
+    setFormPhone(user.phone || "");
+    setFormQualifications(user.qualifications || "");
+    setFormStartDate(user.startDate ? String(user.startDate).slice(0, 10) : "");
     setIsEditOpen(true);
   };
+
+  const loadOrgChart = async () => {
+    setOrgChartLoading(true);
+    try {
+      const data = await orgChartApi.getTree();
+      setOrgChart(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Failed to load org chart", err);
+    } finally {
+      setOrgChartLoading(false);
+    }
+  };
+
+  const openHistory = async (user: any) => {
+    setHistoryUser(user);
+    setHistoryLoading(true);
+    try {
+      const data = await adminApi.getUserHistory(user.id);
+      setUserHistory(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Failed to load user history", err);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const renderOrgNode = (node: any, depth = 0) => (
+    <div key={node.id} style={{ marginLeft: depth * 24 }} className="mb-2">
+      <div className="flex items-center gap-3 p-3 rounded-lg border bg-white hover:shadow-sm">
+        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center text-white text-sm font-semibold shrink-0">
+          {node.name?.[0]?.toUpperCase() || "?"}
+        </div>
+        <div>
+          <p className="font-semibold text-slate-900 text-sm">{node.name}</p>
+          <p className="text-xs text-slate-500">
+            {node.designation || node.role}{node.department ? ` \u2022 ${node.department}` : ""}
+          </p>
+        </div>
+      </div>
+      {node.reports?.length > 0 && (
+        <div className="mt-2 border-l-2 border-slate-100 pl-2">
+          {node.reports.map((child: any) => renderOrgNode(child, depth + 1))}
+        </div>
+      )}
+    </div>
+  );
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -150,7 +254,13 @@ export function Admin() {
         lastName: formLastName,
         role: formRole,
         departmentId: formDepartmentId ? parseInt(formDepartmentId) : null,
-        active: formActive
+        active: formActive,
+        employeeId: formEmployeeId || null,
+        designation: formDesignation || null,
+        reportingManagerId: formReportingManagerId ? parseInt(formReportingManagerId) : null,
+        phone: formPhone || null,
+        qualifications: formQualifications || null,
+        startDate: formStartDate || null
       });
       setIsAddOpen(false);
       loadData();
@@ -172,7 +282,13 @@ export function Admin() {
         lastName: formLastName,
         role: formRole,
         departmentId: formDepartmentId ? parseInt(formDepartmentId) : null,
-        active: formActive
+        active: formActive,
+        employeeId: formEmployeeId || null,
+        designation: formDesignation || null,
+        reportingManagerId: formReportingManagerId ? parseInt(formReportingManagerId) : null,
+        phone: formPhone || null,
+        qualifications: formQualifications || null,
+        startDate: formStartDate || null
       });
       setIsEditOpen(false);
       loadData();
@@ -323,7 +439,7 @@ export function Admin() {
             </div>
             <div>
               <p className="text-xs text-slate-600 font-medium uppercase tracking-wider">Total Roles</p>
-              <p className="text-2xl font-bold text-slate-900">{rolesInfo.length}</p>
+              <p className="text-2xl font-bold text-slate-900">{roles.length}</p>
             </div>
           </div>
         </Card>
@@ -344,6 +460,7 @@ export function Admin() {
       <Tabs defaultValue="users" className="w-full">
         <TabsList className="bg-slate-100 p-1 rounded-md">
           <TabsTrigger value="users" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">Users & Staff</TabsTrigger>
+          <TabsTrigger value="org-chart" className="data-[state=active]:bg-white data-[state=active]:shadow-sm" onClick={() => { if (orgChart.length === 0) loadOrgChart(); }}>Org Chart</TabsTrigger>
           <TabsTrigger value="roles" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">System Roles</TabsTrigger>
           <TabsTrigger value="permissions" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">RBAC Matrix</TabsTrigger>
         </TabsList>
@@ -432,6 +549,15 @@ export function Admin() {
                               size="sm" 
                               variant="outline" 
                               className="text-slate-700 border-slate-200 hover:bg-slate-100 hover:text-slate-950 inline-flex items-center gap-1.5"
+                              onClick={() => openHistory(userItem)}
+                            >
+                              <RefreshCw className="h-3.5 w-3.5" />
+                              History
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              className="text-slate-700 border-slate-200 hover:bg-slate-100 hover:text-slate-950 inline-flex items-center gap-1.5"
                               onClick={() => openEditDialog(userItem)}
                             >
                               <Edit3 className="h-3.5 w-3.5" />
@@ -457,22 +583,69 @@ export function Admin() {
           </Card>
         </TabsContent>
 
+        <TabsContent value="org-chart" className="space-y-4 mt-6">
+          <Card className="p-6">
+            <div className="mb-4">
+              <h3 className="text-xl font-bold text-slate-900">Organisation Chart</h3>
+              <p className="text-sm text-slate-500 mt-1">
+                Auto-generated from each employee's reporting manager — re-renders automatically whenever a reporting line changes (§5.1).
+              </p>
+            </div>
+            {orgChartLoading ? (
+              <p className="text-sm text-slate-500">Loading org chart...</p>
+            ) : orgChart.length === 0 ? (
+              <p className="text-sm text-slate-500">No active employees found, or no reporting lines have been set yet.</p>
+            ) : (
+              <div>{orgChart.map((root) => renderOrgNode(root))}</div>
+            )}
+          </Card>
+        </TabsContent>
+
         <TabsContent value="roles" className="space-y-4 mt-6">
+          <Card className="p-6">
+            <h3 className="text-lg font-bold text-slate-900 mb-3">Add a New Role</h3>
+            <p className="text-sm text-slate-500 mb-4">
+              New roles are immediately available for assignment to users and in the RBAC Matrix tab — no code change required.
+            </p>
+            <form onSubmit={handleCreateRole} className="flex flex-col sm:flex-row gap-3">
+              <Input
+                placeholder="Role name, e.g. Warehouse Supervisor"
+                value={newRoleName}
+                onChange={(e) => setNewRoleName(e.target.value)}
+                className="sm:max-w-xs"
+              />
+              <Input
+                placeholder="Description (optional)"
+                value={newRoleDescription}
+                onChange={(e) => setNewRoleDescription(e.target.value)}
+                className="flex-1"
+              />
+              <Button type="submit" disabled={creatingRole || !newRoleName.trim()}>
+                {creatingRole ? "Adding..." : "Add Role"}
+              </Button>
+            </form>
+          </Card>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {rolesInfo.map((role) => (
+            {roles.map((role) => (
               <Card key={role.id} className="p-6 hover:shadow-md transition-shadow">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <Shield className="h-5 w-5 text-indigo-600" />
-                    <h3 className="font-bold text-slate-800 text-lg">{role.name} Role</h3>
+                    <h3 className="font-bold text-slate-800 text-lg">{role.name}</h3>
                   </div>
                   <Badge className="bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-100">{role.userCount} users active</Badge>
                 </div>
-                <p className="text-sm text-slate-600 leading-relaxed mb-4">{role.description}</p>
-                <div className="flex gap-2">
-                  <Badge variant="outline" className="border-indigo-100 text-indigo-700 bg-indigo-50/50">
-                    System Pre-configured Static Access
+                <p className="text-sm text-slate-600 leading-relaxed mb-4">{role.description || "No description set."}</p>
+                <div className="flex items-center justify-between">
+                  <Badge variant="outline" className={role.isSystem ? "border-indigo-100 text-indigo-700 bg-indigo-50/50" : "border-emerald-100 text-emerald-700 bg-emerald-50/50"}>
+                    {role.isSystem ? "System Role" : `${role.permissionKeys?.length || 0} permission(s)`}
                   </Badge>
+                  {!role.isSystem && (
+                    <Button size="sm" variant="ghost" onClick={() => handleDeleteRole(role)}>
+                      <Trash2 className="h-4 w-4 text-red-500" />
+                    </Button>
+                  )}
                 </div>
               </Card>
             ))}
@@ -482,47 +655,61 @@ export function Admin() {
         <TabsContent value="permissions" className="mt-6">
           <Card className="p-6">
             <div className="mb-6">
-              <h3 className="text-xl font-bold text-slate-900">Departmental & Role Gating Matrix</h3>
+              <h3 className="text-xl font-bold text-slate-900">RBAC Matrix</h3>
               <p className="text-sm text-slate-500 mt-1">
-                Visualizing static Role-Based Access Controls (RBAC) configured across backend routes and React interfaces.
+                Toggle a checkbox to grant or revoke a permission for a role — takes effect immediately, no code change or deployment required (§4).
+                The <strong>Admin</strong> role is always a full-access superuser and is not governed by this matrix.
               </p>
             </div>
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-slate-50">
-                    <TableHead className="font-semibold text-slate-800">Platform Asset / Module</TableHead>
-                    <TableHead className="font-semibold text-slate-800">Guest Visitor</TableHead>
-                    <TableHead className="font-semibold text-slate-800">Standard Employee</TableHead>
-                    <TableHead className="font-semibold text-slate-800">Department Manager</TableHead>
-                    <TableHead className="font-semibold text-slate-800">System Admin</TableHead>
+                    <TableHead className="font-semibold text-slate-800 sticky left-0 bg-slate-50">Permission</TableHead>
+                    {roles.map((role) => (
+                      <TableHead key={role.id} className="font-semibold text-slate-800 text-center whitespace-nowrap">
+                        {role.name}
+                      </TableHead>
+                    ))}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {permissionsInfo.map((perm, index) => (
-                    <TableRow key={index} className="hover:bg-slate-50/30">
-                      <TableCell className="font-semibold text-slate-900">{perm.module}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={perm.Guest === "No Access" ? "border-rose-100 text-rose-700 bg-rose-50" : "border-slate-100 text-slate-500"}>
-                          {perm.Guest}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={perm.User === "No Access" ? "border-rose-100 text-rose-700 bg-rose-50" : "border-blue-100 text-blue-700 bg-blue-50/30"}>
-                          {perm.User}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="border-amber-200 text-amber-700 bg-amber-50">
-                          {perm.Manager}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="default" className="bg-emerald-600 hover:bg-emerald-600 text-white border-0 font-medium">
-                          {perm.Admin}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
+                  {Object.entries(
+                    permissions.reduce((acc: Record<string, any[]>, p) => {
+                      acc[p.module] = acc[p.module] || [];
+                      acc[p.module].push(p);
+                      return acc;
+                    }, {})
+                  ).map(([module, modulePermissions]) => (
+                    <Fragment key={module}>
+                      <TableRow key={`module-${module}`} className="bg-slate-100/70">
+                        <TableCell colSpan={roles.length + 1} className="font-semibold text-slate-700 text-xs uppercase tracking-wider">
+                          {module}
+                        </TableCell>
+                      </TableRow>
+                      {modulePermissions.map((perm) => (
+                        <TableRow key={perm.id} className="hover:bg-slate-50/30">
+                          <TableCell className="text-sm text-slate-700 sticky left-0 bg-white">
+                            {perm.description || perm.key}
+                          </TableCell>
+                          {roles.map((role) => {
+                            const isAdminRole = role.name === "Admin";
+                            const checked = isAdminRole || (role.permissionKeys || []).includes(perm.key);
+                            return (
+                              <TableCell key={role.id} className="text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  disabled={isAdminRole}
+                                  onChange={(e) => handleTogglePermission(role, perm.key, e.target.checked)}
+                                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+                                />
+                              </TableCell>
+                            );
+                          })}
+                        </TableRow>
+                      ))}
+                    </Fragment>
                   ))}
                 </TableBody>
               </Table>
@@ -592,15 +779,57 @@ export function Admin() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Employee ID</label>
+                <Input placeholder="e.g. EMP-0042" value={formEmployeeId} onChange={(e) => setFormEmployeeId(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Designation</label>
+                <Input placeholder="e.g. Senior Geologist" value={formDesignation} onChange={(e) => setFormDesignation(e.target.value)} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Reporting Manager</label>
+                <select
+                  className="w-full h-10 px-3 bg-white border border-slate-200 rounded-md text-sm font-medium text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                  value={formReportingManagerId}
+                  onChange={(e) => setFormReportingManagerId(e.target.value)}
+                >
+                  <option value="">None</option>
+                  {users.map((u) => (
+                    <option key={u.id} value={u.id}>{u.firstName} {u.lastName} ({u.username})</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Phone</label>
+                <Input placeholder="e.g. +233 20 000 0000" value={formPhone} onChange={(e) => setFormPhone(e.target.value)} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Date Joined</label>
+                <Input type="date" value={formStartDate} onChange={(e) => setFormStartDate(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Qualifications</label>
+                <Input placeholder="e.g. MSc Petroleum Engineering" value={formQualifications} onChange={(e) => setFormQualifications(e.target.value)} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">System Role</label>
                 <select 
                   className="w-full h-10 px-3 bg-white border border-slate-200 rounded-md text-sm font-medium text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                   value={formRole}
                   onChange={(e) => setFormRole(e.target.value)}
                 >
-                  <option value="User">User</option>
-                  <option value="Manager">Manager</option>
-                  <option value="Admin">Admin</option>
+                  {roles.map((role) => (
+                    <option key={role.id} value={role.name}>{role.name}</option>
+                  ))}
                 </select>
               </div>
 
@@ -704,15 +933,57 @@ export function Admin() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Employee ID</label>
+                <Input placeholder="e.g. EMP-0042" value={formEmployeeId} onChange={(e) => setFormEmployeeId(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Designation</label>
+                <Input placeholder="e.g. Senior Geologist" value={formDesignation} onChange={(e) => setFormDesignation(e.target.value)} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Reporting Manager</label>
+                <select
+                  className="w-full h-10 px-3 bg-white border border-slate-200 rounded-md text-sm font-medium text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                  value={formReportingManagerId}
+                  onChange={(e) => setFormReportingManagerId(e.target.value)}
+                >
+                  <option value="">None</option>
+                  {users.filter((u) => u.id !== selectedUser?.id).map((u) => (
+                    <option key={u.id} value={u.id}>{u.firstName} {u.lastName} ({u.username})</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Phone</label>
+                <Input placeholder="e.g. +233 20 000 0000" value={formPhone} onChange={(e) => setFormPhone(e.target.value)} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Date Joined</label>
+                <Input type="date" value={formStartDate} onChange={(e) => setFormStartDate(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Qualifications</label>
+                <Input placeholder="e.g. MSc Petroleum Engineering" value={formQualifications} onChange={(e) => setFormQualifications(e.target.value)} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">System Role</label>
                 <select 
                   className="w-full h-10 px-3 bg-white border border-slate-200 rounded-md text-sm font-medium text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                   value={formRole}
                   onChange={(e) => setFormRole(e.target.value)}
                 >
-                  <option value="User">User</option>
-                  <option value="Manager">Manager</option>
-                  <option value="Admin">Admin</option>
+                  {roles.map((role) => (
+                    <option key={role.id} value={role.name}>{role.name}</option>
+                  ))}
                 </select>
               </div>
 
@@ -752,6 +1023,37 @@ export function Admin() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* PROFILE HISTORY DIALOG — reuses the central Audit Log (§5.1 acceptance criteria + §5.4) */}
+      <Dialog open={!!historyUser} onOpenChange={(open) => { if (!open) setHistoryUser(null); }}>
+        <DialogContent className="max-w-lg bg-white border border-slate-200 shadow-xl rounded-lg p-6">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-slate-900">
+              Profile History — {historyUser?.firstName} {historyUser?.lastName}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="mt-2 max-h-[60vh] overflow-y-auto space-y-2">
+            {historyLoading ? (
+              <p className="text-sm text-slate-500">Loading history...</p>
+            ) : userHistory.length === 0 ? (
+              <p className="text-sm text-slate-500">No changes recorded for this profile yet.</p>
+            ) : (
+              userHistory.map((entry) => (
+                <div key={entry.id} className="p-3 rounded-md border text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">{entry.action}</span>
+                    <span className="text-xs text-slate-400">{new Date(entry.createdAt).toLocaleString()}</span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">by {entry.userEmail || "system"}</p>
+                  {entry.newValue && (
+                    <pre className="text-xs bg-slate-50 rounded p-2 mt-2 overflow-x-auto">{JSON.stringify(entry.newValue, null, 2)}</pre>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

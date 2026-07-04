@@ -7,6 +7,7 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
 import { Separator } from "../components/ui/separator";
+import { Progress } from "../components/ui/progress";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog";
 import { ArrowLeft, FileText, Download, Trash2, Upload, File, Clock } from "lucide-react";
 import { financeApi, documentsApi } from "../../services/api";
@@ -33,6 +34,14 @@ export function AfeDetail() {
     description: "",
   });
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Supplementary AFE + reconciliation-closure workflow (§5.10)
+  const [showSupplementModal, setShowSupplementModal] = useState(false);
+  const [supplementAmount, setSupplementAmount] = useState("");
+  const [supplementSaving, setSupplementSaving] = useState(false);
+  const [showCloseModal, setShowCloseModal] = useState(false);
+  const [closeComment, setCloseComment] = useState("");
+  const [closeSaving, setCloseSaving] = useState(false);
 
   const loadAfe = async () => {
     if (!id) return;
@@ -188,6 +197,42 @@ export function AfeDetail() {
     }
   };
 
+  const handleCreateSupplement = async () => {
+    if (!afe || !supplementAmount) return;
+    setSupplementSaving(true);
+    setError(null);
+    try {
+      await financeApi.createSupplement(afe.id, { additionalAmount: Number(supplementAmount) });
+      setSuccessMessage('Supplementary AFE created successfully');
+      setShowSupplementModal(false);
+      setSupplementAmount("");
+      loadAfe();
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err: any) {
+      setError(err.message || 'Failed to create supplementary AFE');
+    } finally {
+      setSupplementSaving(false);
+    }
+  };
+
+  const handleCloseAfe = async () => {
+    if (!afe) return;
+    setCloseSaving(true);
+    setError(null);
+    try {
+      await financeApi.closeAfe(afe.id, { reconciliationConfirmed: true, comment: closeComment || undefined });
+      setSuccessMessage('AFE closed with reconciliation sign-off');
+      setShowCloseModal(false);
+      setCloseComment("");
+      loadAfe();
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err: any) {
+      setError(err.message || 'Failed to close AFE');
+    } finally {
+      setCloseSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -319,7 +364,7 @@ export function AfeDetail() {
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
-            <p className="text-sm text-gray-600">Amount</p>
+            <p className="text-sm text-gray-600">Authorised Amount</p>
             <p className="text-xl font-semibold">${Number(afe.amount || 0).toLocaleString()}</p>
           </div>
           <div>
@@ -355,6 +400,122 @@ export function AfeDetail() {
           <p className="text-lg">{afe.approvalDepartment || 'Finance'}</p>
         </div>
       </Card>
+
+      {/* AFE Tracking — Actuals vs. Authorised (§5.10) */}
+      <Card className="p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold">AFE Tracking — Actuals vs. Authorised</h2>
+          {afe.status !== 'Closed' && (
+            <div className="flex gap-2">
+              {canEdit && (
+                <Button variant="outline" size="sm" onClick={() => setShowSupplementModal(true)}>
+                  Create Supplementary AFE
+                </Button>
+              )}
+              {canEdit && (afe.status === 'Approved' || afe.status === 'Paid') && (
+                <Button size="sm" onClick={() => setShowCloseModal(true)}>
+                  Close (Reconciliation Sign-off)
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+          <div>
+            <p className="text-sm text-gray-600">Committed</p>
+            <p className="text-lg font-semibold">${Number(afe.committedAmount || 0).toLocaleString()}</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-600">Actual to Date</p>
+            <p className="text-lg font-semibold">${Number(afe.actualToDate || 0).toLocaleString()}</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-600">Variance</p>
+            <p className={`text-lg font-semibold ${Math.abs(Number(afe.variancePercent || 0)) > 10 ? 'text-red-600' : ''}`}>
+              {Number(afe.variancePercent || 0).toFixed(1)}%
+            </p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-600">Supplement No.</p>
+            <p className="text-lg font-semibold">{afe.supplementNumber || 0}</p>
+          </div>
+        </div>
+
+        <div className="mb-2">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-sm text-gray-600">Utilisation</p>
+            <span className="text-sm font-medium">
+              {afe.amount > 0
+                ? Math.round(((Number(afe.committedAmount || 0) + Number(afe.actualToDate || 0)) / Number(afe.amount)) * 100)
+                : 0}
+              %
+            </span>
+          </div>
+          <Progress
+            value={Math.min(
+              afe.amount > 0
+                ? Math.round(((Number(afe.committedAmount || 0) + Number(afe.actualToDate || 0)) / Number(afe.amount)) * 100)
+                : 0,
+              100
+            )}
+          />
+        </div>
+
+        {afe.reconciledAt && (
+          <p className="text-sm text-gray-500 mt-3">
+            Reconciled and closed on {formatDisplayDateOrDefault(afe.reconciledAt)}
+          </p>
+        )}
+      </Card>
+
+      {/* Create Supplementary AFE modal */}
+      <Dialog open={showSupplementModal} onOpenChange={setShowSupplementModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Supplementary AFE</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-500">
+              Required when projected spend (committed + actual) exceeds the authorised amount. Creates a new linked AFE record for approval.
+            </p>
+            <div>
+              <Label>Additional Amount Requested</Label>
+              <Input type="number" value={supplementAmount} onChange={(e) => setSupplementAmount(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowSupplementModal(false)}>Cancel</Button>
+            <Button onClick={handleCreateSupplement} disabled={supplementSaving || !supplementAmount}>
+              {supplementSaving ? 'Submitting...' : 'Submit for Approval'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Close AFE (reconciliation sign-off) modal */}
+      <Dialog open={showCloseModal} onOpenChange={setShowCloseModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Close AFE — Reconciliation Sign-off</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-500">
+              Closing an AFE requires confirming that its actuals have been reconciled against the financial ledger.
+            </p>
+            <div>
+              <Label>Reconciliation Notes (optional)</Label>
+              <Textarea value={closeComment} onChange={(e) => setCloseComment(e.target.value)} rows={3} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCloseModal(false)}>Cancel</Button>
+            <Button onClick={handleCloseAfe} disabled={closeSaving}>
+              {closeSaving ? 'Closing...' : 'Confirm Reconciliation & Close'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Card className="p-6">
         <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
