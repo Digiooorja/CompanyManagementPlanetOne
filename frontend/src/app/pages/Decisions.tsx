@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -27,6 +28,10 @@ function emptyForm() {
 export function Decisions() {
   const { hasPermission } = useAuth();
   const canEdit = hasPermission("decisions.manage");
+  const [searchParams] = useSearchParams();
+  // §5.8 guaranteed drill-down: pre-apply the status filter forwarded via
+  // query params from the Executive Dashboard's filter bar.
+  const [statusFilter, setStatusFilter] = useState(searchParams.get("status") || "all");
   const [decisions, setDecisions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -108,6 +113,10 @@ export function Decisions() {
 
   const openCount = decisions.filter((d) => d.status !== "Closed").length;
 
+  const filteredDecisions = statusFilter === "all"
+    ? decisions
+    : decisions.filter((d) => String(d.status).toLowerCase() === statusFilter.toLowerCase());
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -146,8 +155,8 @@ export function Decisions() {
             </div>
           </div>
         </Card>
-        <Card className="p-4 flex items-center">
-          <div className="relative w-full">
+        <Card className="p-4 flex items-center gap-3">
+          <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
               placeholder="Search decisions, rationale, context..."
@@ -156,6 +165,17 @@ export function Decisions() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Statuses</SelectItem>
+              {STATUSES.map((s) => (
+                <SelectItem key={s} value={s}>{s}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </Card>
       </div>
 
@@ -166,6 +186,8 @@ export function Decisions() {
           <div className="text-sm text-red-600">{error}</div>
         ) : decisions.length === 0 ? (
           <div className="text-sm text-gray-600">No decisions recorded yet.</div>
+        ) : filteredDecisions.length === 0 ? (
+          <div className="text-sm text-gray-600">No decisions match the current filters.</div>
         ) : (
           <Table>
             <TableHeader>
@@ -179,7 +201,7 @@ export function Decisions() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {decisions.map((d) => (
+              {filteredDecisions.map((d) => (
                 <TableRow key={d.id}>
                   <TableCell>{formatDisplayDateOrDefault(d.date)}</TableCell>
                   <TableCell className="text-sm text-gray-600">{d.meetingContext || "-"}</TableCell>

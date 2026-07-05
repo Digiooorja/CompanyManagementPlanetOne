@@ -20,6 +20,7 @@ require('./models/NotificationRule');
 require('./models/Register');
 require('./models/Report');
 require('./models/Risk');
+require('./models/RiskMatrixSetting');
 require('./models/User');
 require('./models/Workflow');
 require('./models/Department');
@@ -291,6 +292,14 @@ const startServer = async () => {
     await sequelize.sync();
     console.log('Database synchronized');
 
+    // Load the Admin-configurable Risk Register scoring matrix (§5.15) into
+    // the in-process cache so Risk.riskScore/riskBand VIRTUAL getters — which
+    // must be synchronous — can read it without a DB round-trip per access.
+    const RiskMatrixSetting = require('./models/RiskMatrixSetting');
+    const { setRiskMatrixConfig } = require('./config/riskMatrix');
+    const [riskMatrixSettings] = await RiskMatrixSetting.findOrCreate({ where: { id: 1 } });
+    setRiskMatrixConfig(riskMatrixSettings.toJSON());
+
     const departmentNames = [
       'Executive Management',
       'Procurement',
@@ -453,6 +462,36 @@ const startServer = async () => {
         recurrenceIntervalHours: 24,
         escalationGraceHours: 72,
         priority: 'Medium',
+        channels: ['InApp', 'Email']
+      },
+      {
+        name: 'Risk review-date reminders',
+        module: 'Risk',
+        triggerType: 'DateBased',
+        dateField: 'reviewDate',
+        leadTimeDays: [14, 7, 1],
+        recurrenceIntervalHours: 24,
+        escalationGraceHours: 72,
+        priority: 'Medium',
+        channels: ['InApp']
+      },
+      {
+        // §5.15 "high-band escalation" — riskScore is a VIRTUAL field (not a
+        // real column), so this only works because evaluateThresholdBased()
+        // evaluates thresholds in application code via `record.get(field)`
+        // rather than in the SQL WHERE clause (see notificationEngine.js).
+        // Note: [7] mirrors the *default* highThreshold in
+        // backend/config/riskMatrix.js — if an Admin retunes the matrix via
+        // PUT /api/risks/matrix-config, also update this rule's
+        // thresholdValues via PUT /api/notification-rules to match.
+        name: 'Risk high-band escalation',
+        module: 'Risk',
+        triggerType: 'ThresholdBased',
+        thresholdField: 'riskScore',
+        thresholdValues: [7],
+        recurrenceIntervalHours: 24,
+        escalationGraceHours: null,
+        priority: 'Critical',
         channels: ['InApp', 'Email']
       }
     ];

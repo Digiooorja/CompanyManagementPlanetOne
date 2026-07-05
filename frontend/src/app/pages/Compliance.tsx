@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -40,6 +41,11 @@ function isOverdue(dueDate: string | null, status: string) {
 export function Compliance() {
   const { hasPermission } = useAuth();
   const canEdit = hasPermission("compliance.manage");
+  const [searchParams] = useSearchParams();
+  // §5.8 guaranteed drill-down: pre-apply block/status filters forwarded via
+  // query params from the Executive Dashboard's filter bar.
+  const [blockFilter, setBlockFilter] = useState(searchParams.get("blockId") || "all");
+  const [statusFilter, setStatusFilter] = useState(searchParams.get("status") || "all");
   const [obligations, setObligations] = useState<any[]>([]);
   const [blocks, setBlocks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -137,6 +143,12 @@ export function Compliance() {
     return days >= 0 && days <= 30;
   }).length;
 
+  const filteredObligations = obligations.filter((o) => {
+    if (blockFilter !== "all" && String(o.blockId) !== String(blockFilter)) return false;
+    if (statusFilter !== "all" && String(o.status).toLowerCase() !== statusFilter.toLowerCase()) return false;
+    return true;
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -188,6 +200,33 @@ export function Compliance() {
         </Card>
       </div>
 
+      <Card className="p-4">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <Select value={blockFilter} onValueChange={setBlockFilter}>
+            <SelectTrigger className="w-full sm:w-[200px]">
+              <SelectValue placeholder="Block" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Blocks</SelectItem>
+              {blocks.map((b) => (
+                <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-full sm:w-[200px]">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Statuses</SelectItem>
+              {STATUSES.map((s) => (
+                <SelectItem key={s} value={s}>{s}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </Card>
+
       <Card className="p-6">
         {loading ? (
           <div className="text-sm text-gray-600">Loading obligations...</div>
@@ -195,6 +234,8 @@ export function Compliance() {
           <div className="text-sm text-red-600">{error}</div>
         ) : obligations.length === 0 ? (
           <div className="text-sm text-gray-600">No compliance obligations recorded yet.</div>
+        ) : filteredObligations.length === 0 ? (
+          <div className="text-sm text-gray-600">No obligations match the current filters.</div>
         ) : (
           <Table>
             <TableHeader>
@@ -211,7 +252,7 @@ export function Compliance() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {obligations.map((o) => {
+              {filteredObligations.map((o) => {
                 const overdue = isOverdue(o.dueDate, o.status);
                 return (
                   <TableRow key={o.id}>

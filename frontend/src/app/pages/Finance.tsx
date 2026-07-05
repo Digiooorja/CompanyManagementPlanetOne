@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, type MouseEvent } from 'react';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '../components/ui/table';
 import { Progress } from '../components/ui/progress';
@@ -18,6 +18,12 @@ import { financeApi, activitiesApi, projectsApi, departmentsApi, documentsApi } 
 
 export function Finance() {
   const { user, canEdit: isAuthenticatedUser } = useAuth();
+  const [searchParams] = useSearchParams();
+  // §5.8 guaranteed drill-down: pre-apply block/project/status filters forwarded
+  // via query params from the Executive Dashboard's filter bar.
+  const filterBlockId = searchParams.get("blockId") || "all";
+  const filterProjectId = searchParams.get("projectId") || "all";
+  const filterStatus = searchParams.get("status") || "all";
   const [financeItems, setFinanceItems] = useState<any[]>([]);
   const [activities, setActivities] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
@@ -116,6 +122,30 @@ export function Finance() {
     return map;
   }, [activities]);
 
+  const projectMap = useMemo(() => {
+    const map = new Map<string, any>();
+    projects.forEach((project) => map.set(String(project.id), project));
+    return map;
+  }, [projects]);
+
+  // Resolves a finance record's project/block by hopping through its linked
+  // activity (Finance has no direct projectId/blockId of its own).
+  const resolveFinanceScope = (item: any) => {
+    const activity = item.activityId ? activityMap.get(item.activityId) : undefined;
+    const projectId = activity?.projectId ?? activity?.project?.id;
+    const project = projectId !== undefined && projectId !== null ? projectMap.get(String(projectId)) : undefined;
+    return { projectId, blockId: project?.blockId };
+  };
+
+  const matchesDrillDownFilters = (item: any) => {
+    if (filterBlockId === 'all' && filterProjectId === 'all' && filterStatus === 'all') return true;
+    const { projectId, blockId } = resolveFinanceScope(item);
+    if (filterProjectId !== 'all' && String(projectId) !== String(filterProjectId)) return false;
+    if (filterBlockId !== 'all' && String(blockId) !== String(filterBlockId)) return false;
+    if (filterStatus !== 'all' && String(item.status).toLowerCase() !== String(filterStatus).toLowerCase()) return false;
+    return true;
+  };
+
   const invoiceItems = useMemo(
     () => financeItems.filter((item) => item.recordType === 'Invoice'),
     [financeItems]
@@ -127,25 +157,29 @@ export function Finance() {
   );
 
   const filteredAfeItems = useMemo(() => {
-    if (!searchQuery.trim()) return afeItems;
+    const items = afeItems.filter(matchesDrillDownFilters);
+    if (!searchQuery.trim()) return items;
     const q = searchQuery.toLowerCase();
-    return afeItems.filter(afe =>
+    return items.filter(afe =>
       (afe.afeNumber && String(afe.afeNumber).toLowerCase().includes(q)) ||
       (afe.item && String(afe.item).toLowerCase().includes(q)) ||
       (afe.category && String(afe.category).toLowerCase().includes(q)) ||
       (afe.approvalDepartment && String(afe.approvalDepartment).toLowerCase().includes(q))
     );
-  }, [afeItems, searchQuery]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [afeItems, searchQuery, filterBlockId, filterProjectId, filterStatus, activityMap, projectMap]);
 
   const filteredInvoiceItems = useMemo(() => {
-    if (!searchQuery.trim()) return invoiceItems;
+    const items = invoiceItems.filter(matchesDrillDownFilters);
+    if (!searchQuery.trim()) return items;
     const q = searchQuery.toLowerCase();
-    return invoiceItems.filter(invoice =>
+    return items.filter(invoice =>
       (invoice.invoiceNumber && String(invoice.invoiceNumber).toLowerCase().includes(q)) ||
       (invoice.item && String(invoice.item).toLowerCase().includes(q)) ||
       (invoice.approvalDepartment && String(invoice.approvalDepartment).toLowerCase().includes(q))
     );
-  }, [invoiceItems, searchQuery]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invoiceItems, searchQuery, filterBlockId, filterProjectId, filterStatus, activityMap, projectMap]);
 
   // Request next AFE number from backend when project/activity changes
   useEffect(() => {

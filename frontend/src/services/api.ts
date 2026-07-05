@@ -251,6 +251,9 @@ export const risksApi = {
   create: (data: any) => apiCall('/risks', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: number, data: any) => apiCall(`/risks/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: number) => apiCall(`/risks/${id}`, { method: 'DELETE' }),
+  // §5.15 configurable risk-scoring matrix (Low/Medium/High weights + score thresholds)
+  getMatrixConfig: () => apiCall<any>('/risks/matrix-config'),
+  updateMatrixConfig: (data: any) => apiCall<any>('/risks/matrix-config', { method: 'PUT', body: JSON.stringify(data) }),
 };
 // Workflows API
 export const workflowsApi = {

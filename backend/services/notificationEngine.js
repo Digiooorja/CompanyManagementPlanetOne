@@ -11,6 +11,7 @@ const Correspondence = require('../models/Correspondence');
 const BudgetLine = require('../models/BudgetLine');
 const Finance = require('../models/Finance');
 const Document = require('../models/Document');
+const Risk = require('../models/Risk');
 
 // ---------------------------------------------------------------------------
 // Module registry — the ONLY place that needs to change when a new source
@@ -84,6 +85,13 @@ const MODULE_REGISTRY = {
     priorityField: null,
     label: (record) => `AFE "${record.afeNumber || record.item}"`,
     ownerResolver: (record) => resolveUserByName(record.approvingAuthority)
+  },
+  Risk: {
+    model: Risk,
+    openWhere: { status: { [Op.ne]: 'Closed' } },
+    priorityField: null,
+    label: (record) => `Risk "${record.title}" (${record.severity} severity / ${record.probability} probability)`,
+    ownerResolver: (record) => resolveUserByName(record.owner)
   }
 };
 

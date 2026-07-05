@@ -1,5 +1,6 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../database');
+const { computeScore, computeBand } = require('../config/riskMatrix');
 
 const Risk = sequelize.define('Risk', {
   id: {
@@ -45,6 +46,31 @@ const Risk = sequelize.define('Risk', {
     type: DataTypes.TEXT,
     allowNull: true,
     comment: 'Mitigation strategy'
+  },
+  reviewDate: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    comment: 'Next scheduled review date — drives the review-date reminder (§5.15)'
+  },
+  // riskScore/riskBand are Sequelize VIRTUAL attributes (not real columns),
+  // computed from severity × probability against the Admin-configurable
+  // matrix (backend/config/riskMatrix.js). Exposing them as VIRTUAL fields
+  // means the generic Notification Engine's ThresholdBased evaluator — which
+  // reads values via `record.get(field)` — can alert on high-band risks
+  // without any engine code changes, mirroring the existing
+  // utilisationPercent/absVariancePercent pattern on Finance (§10.4).
+  riskScore: {
+    type: DataTypes.VIRTUAL,
+    get() {
+      return computeScore(this.getDataValue('severity'), this.getDataValue('probability'));
+    }
+  },
+  riskBand: {
+    type: DataTypes.VIRTUAL,
+    get() {
+      const score = computeScore(this.getDataValue('severity'), this.getDataValue('probability'));
+      return computeBand(score);
+    }
   }
 }, {
   tableName: 'risks',

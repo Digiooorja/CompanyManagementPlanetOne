@@ -7,6 +7,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { formatDisplayDateOrDefault } from "../lib/date";
 import { Progress } from "../components/ui/progress";
 import {
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  Legend,
+  ResponsiveContainer,
+  RadialBarChart,
+  RadialBar,
+} from "recharts";
+import {
   Search,
   Calendar,
   AlertCircle,
@@ -25,8 +40,15 @@ import {
   Filter,
   Download,
   X,
+  BarChart3,
+  Wallet,
+  ShieldAlert,
+  Users,
+  Bell,
+  History,
+  Grid3x3,
 } from "lucide-react";
-import { blocksApi, documentsApi, activitiesApi, projectsApi, financeApi, licencesApi, risksApi, contractsApi, complianceApi, correspondenceApi, tasksApi, decisionsApi } from "../../services/api";
+import { blocksApi, documentsApi, activitiesApi, projectsApi, financeApi, licencesApi, risksApi, contractsApi, complianceApi, correspondenceApi, tasksApi, decisionsApi, budgetLinesApi, auditApi, notificationsApi } from "../../services/api";
 import { useAuth } from "../contexts/AuthContext";
 
 export function ExecutiveDashboard() {
@@ -39,6 +61,11 @@ export function ExecutiveDashboard() {
   const [pendingAFEs, setPendingAFEs] = useState<any[]>([]);
   const [licences, setLicences] = useState<any[]>([]);
   const [risks, setRisks] = useState<any[]>([]);
+  const [budgetSummary, setBudgetSummary] = useState<any[]>([]);
+  const [allAfes, setAllAfes] = useState<any[]>([]);
+  const [workload, setWorkload] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [auditFeed, setAuditFeed] = useState<any[]>([]);
   const [loadingBlocks, setLoadingBlocks] = useState(true);
   const [blockError, setBlockError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -181,13 +208,17 @@ export function ExecutiveDashboard() {
 
   const fetchSearchData = async () => {
     try {
-      const [docs, acts, projs, afes, lics, rks] = await Promise.all([
+      const [docs, acts, projs, afes, lics, rks, budSummary, finAll, wl, notifs] = await Promise.all([
         documentsApi.getAll(),
         activitiesApi.getAll(),
         projectsApi.getAll(),
         financeApi.getPending(),
         licencesApi.getAll(),
         risksApi.getAll(),
+        budgetLinesApi.getSummary().catch(() => []),
+        financeApi.getAll().catch(() => []),
+        tasksApi.getWorkload().catch(() => []),
+        notificationsApi.getAll().catch(() => []),
       ]);
       setDocuments(Array.isArray(docs) ? docs : []);
       setActivities(Array.isArray(acts) ? acts : []);
@@ -195,6 +226,21 @@ export function ExecutiveDashboard() {
       setPendingAFEs(Array.isArray(afes) ? afes : []);
       setLicences(Array.isArray(lics) ? lics : []);
       setRisks(Array.isArray(rks) ? rks : []);
+      setBudgetSummary(Array.isArray(budSummary) ? budSummary : []);
+      setAllAfes(Array.isArray(finAll) ? finAll.filter((f: any) => f.recordType === 'AFE') : []);
+      setWorkload(Array.isArray(wl) ? wl : []);
+      setNotifications(Array.isArray(notifs) ? notifs : []);
+
+      // Recent-activity feed comes from the immutable Audit Log, which is
+      // Admin-only at the API layer — fetch it only for Admins.
+      if (isAdmin) {
+        try {
+          const audit = await auditApi.getAll({ pageSize: 8, page: 1 });
+          setAuditFeed(Array.isArray(audit?.data) ? audit.data : []);
+        } catch {
+          setAuditFeed([]);
+        }
+      }
     } catch (err) {
       console.error('Error loading dashboard search data:', err);
       setDocuments([]);
@@ -203,6 +249,11 @@ export function ExecutiveDashboard() {
       setPendingAFEs([]);
       setLicences([]);
       setRisks([]);
+      setBudgetSummary([]);
+      setAllAfes([]);
+      setWorkload([]);
+      setNotifications([]);
+      setAuditFeed([]);
     }
   };
 
@@ -515,6 +566,120 @@ export function ExecutiveDashboard() {
   const statusFilterOptions = Array.from(
     new Set([...blocks, ...projects, ...risks].map((item) => item?.status).filter(Boolean))
   ).sort();
+
+  // ------------------------------------------------------------------
+  // §5.8 Analytics & Insights — chart datasets derived from data already
+  // fetched, respecting the active Block/Project filters where applicable.
+  // ------------------------------------------------------------------
+  const CHART_COLORS = ["#2563eb", "#16a34a", "#f59e0b", "#dc2626", "#7c3aed", "#0891b2", "#db2777"];
+  const SEVERITY_COLORS: Record<string, string> = { Critical: "#dc2626", High: "#f97316", Medium: "#f59e0b", Low: "#16a34a" };
+  const STATUS_COLORS: Record<string, string> = { Completed: "#16a34a", "In Progress": "#2563eb", "To Do": "#94a3b8", Open: "#f59e0b", Closed: "#16a34a", Overdue: "#dc2626", Paid: "#16a34a" };
+
+  const currencyFmt = (n: number) => {
+    if (Math.abs(n) >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+    if (Math.abs(n) >= 1_000) return `${(n / 1_000).toFixed(0)}k`;
+    return String(Math.round(n));
+  };
+
+  // Budget vs Actual per block+currency (currencies kept separate — never summed).
+  const budgetChartData = budgetSummary
+    .filter((row) => filterBlockId === "all" || String(row.blockId) === filterBlockId)
+    .map((row) => ({
+      name: `${row.blockName} (${row.currency})`,
+      Approved: Math.round(Number(row.approvedBudget || 0)),
+      Committed: Math.round(Number(row.committed || 0)),
+      Actual: Math.round(Number(row.actualSpend || 0)),
+    }));
+
+  // Risks scoped by the active filter, for the severity donut.
+  const risksInScope = risks.filter(
+    (r) => matchesProject(r.projectId) && matchesBlock(projectIdToBlockId[String(r.projectId)]) && matchesStatus(r.status)
+  );
+  const riskSeverityData = ["Critical", "High", "Medium", "Low"]
+    .map((sev) => ({ name: sev, value: risksInScope.filter((r) => String(r.severity) === sev).length }))
+    .filter((d) => d.value > 0);
+
+  // Compliance obligations by status.
+  const complianceStatusData = Object.entries(
+    compliance.reduce((acc: Record<string, number>, o) => {
+      const key = o.status || "Unknown";
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {})
+  ).map(([name, value]) => ({ name, value: value as number }));
+
+  // Activity status funnel.
+  const activityStatusData = ["To Do", "In Progress", "Completed"]
+    .map((st) => ({ name: st, value: activities.filter((a) => String(a.status) === st).length }))
+    .filter((d) => d.value > 0);
+
+  // AFE portfolio roll-up (authorised vs committed vs actual + utilisation gauge).
+  const afePortfolio = allAfes.reduce(
+    (acc, afe) => {
+      acc.authorised += Number(afe.amount || 0);
+      acc.committed += Number(afe.committedAmount || 0);
+      acc.actual += Number(afe.actualToDate || 0);
+      return acc;
+    },
+    { authorised: 0, committed: 0, actual: 0 }
+  );
+  const afeUtilisation = afePortfolio.authorised > 0 ? Math.round((afePortfolio.actual / afePortfolio.authorised) * 100) : 0;
+  const afeGaugeData = [{ name: "Utilisation", value: Math.min(afeUtilisation, 100), fill: afeUtilisation >= 100 ? "#dc2626" : afeUtilisation >= 80 ? "#f59e0b" : "#16a34a" }];
+
+  const hasAnalytics = budgetChartData.length > 0 || riskSeverityData.length > 0 || complianceStatusData.length > 0 || activityStatusData.length > 0 || allAfes.length > 0;
+
+  // Document status breakdown donut.
+  const documentStatusData = Object.entries(
+    documents.reduce((acc: Record<string, number>, d) => {
+      const key = d.status || "Unknown";
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {})
+  ).map(([name, value]) => ({ name, value: value as number }));
+  const DOC_STATUS_COLORS: Record<string, string> = { Draft: "#94a3b8", "Under Review": "#f59e0b", Final: "#16a34a", Superseded: "#cbd5e1" };
+
+  // Team workload — top people by open task count (heatmap-style bar list).
+  const workloadTop = [...workload]
+    .filter((w) => w.name && w.name !== "Unassigned")
+    .sort((a, b) => (b.openTasks || 0) - (a.openTasks || 0))
+    .slice(0, 8);
+  const workloadMax = workloadTop.reduce((m, w) => Math.max(m, w.openTasks || 0), 0) || 1;
+  const workloadColor = (open: number) => {
+    const ratio = open / workloadMax;
+    if (ratio > 0.66) return "#dc2626";
+    if (ratio > 0.33) return "#f59e0b";
+    return "#16a34a";
+  };
+
+  // Risk heat-map: severity (rows, High→Low) × probability (cols, Low→High).
+  const RISK_LEVELS = ["High", "Medium", "Low"];
+  const riskWeight: Record<string, number> = { Low: 1, Medium: 2, High: 3 };
+  const riskHeatCell = (severity: string, probability: string) =>
+    risksInScope.filter((r) => r.severity === severity && r.probability === probability).length;
+  const riskBandColor = (severity: string, probability: string) => {
+    const score = (riskWeight[severity] || 0) * (riskWeight[probability] || 0);
+    if (score >= 6) return "bg-red-100 text-red-800 border-red-200";
+    if (score >= 3) return "bg-amber-100 text-amber-800 border-amber-200";
+    return "bg-emerald-100 text-emerald-800 border-emerald-200";
+  };
+  const hasRiskData = risksInScope.length > 0;
+
+  // Alerts summary — counts by priority + overdue, from the notification engine.
+  const alertsByPriority = ["Critical", "High", "Medium", "Low"].map((p) => ({
+    priority: p,
+    count: notifications.filter((n) => n.priority === p && n.status !== "Acknowledged" && n.status !== "Resolved").length,
+  }));
+  const overdueAlerts = notifications.filter((n) => n.dueAt && new Date(n.dueAt).getTime() < Date.now() && n.status !== "Acknowledged" && n.status !== "Resolved").length;
+  const totalOpenAlerts = alertsByPriority.reduce((s, a) => s + a.count, 0);
+  const ALERT_COLORS: Record<string, string> = { Critical: "text-red-600", High: "text-orange-600", Medium: "text-amber-600", Low: "text-emerald-600" };
+
+  const auditActionColor = (action: string) => {
+    if (/create/i.test(action)) return "bg-emerald-100 text-emerald-700";
+    if (/delete/i.test(action)) return "bg-red-100 text-red-700";
+    return "bg-blue-100 text-blue-700";
+  };
+
+  const hasSecondaryAnalytics = workloadTop.length > 0 || documentStatusData.length > 0 || hasRiskData || totalOpenAlerts > 0 || (isAdmin && auditFeed.length > 0);
 
   return (
     <div className="space-y-6">
@@ -833,6 +998,305 @@ export function ExecutiveDashboard() {
           </Card>
         ))}
       </div>
+
+      {/* Analytics & Insights — recharts visualisations from live data (§5.8) */}
+      {hasAnalytics && (
+        <div>
+          <div className="flex items-center gap-2 mb-4">
+            <BarChart3 className="h-5 w-5 text-gray-500" />
+            <h2 className="text-xl font-bold">Analytics &amp; Insights</h2>
+            {hasActiveFilters && <Badge variant="outline" className="text-xs">filtered</Badge>}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Budget vs Actual by block/currency */}
+            {budgetChartData.length > 0 && (
+              <Card className="p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <Wallet className="h-4 w-4 text-blue-600" />
+                  <h3 className="font-semibold">Budget vs Actual by Block</h3>
+                </div>
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={budgetChartData} margin={{ top: 4, right: 8, left: 8, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef2f7" />
+                    <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-12} textAnchor="end" height={50} />
+                    <YAxis tick={{ fontSize: 11 }} tickFormatter={currencyFmt} />
+                    <RechartsTooltip formatter={(v: any) => Number(v).toLocaleString()} />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Bar dataKey="Approved" fill="#2563eb" radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="Committed" fill="#f59e0b" radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="Actual" fill="#16a34a" radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Card>
+            )}
+
+            {/* AFE portfolio — authorised vs committed vs actual + utilisation gauge */}
+            {allAfes.length > 0 && (
+              <Card className="p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <DollarSign className="h-4 w-4 text-emerald-600" />
+                  <h3 className="font-semibold">AFE Portfolio — Actuals vs Authorised</h3>
+                </div>
+                <div className="grid grid-cols-2 gap-4 items-center">
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-xs text-gray-500">Authorised</p>
+                      <p className="text-lg font-semibold">{afePortfolio.authorised.toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Committed</p>
+                      <p className="text-lg font-semibold text-amber-600">{afePortfolio.committed.toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Actual to Date</p>
+                      <p className="text-lg font-semibold text-emerald-600">{afePortfolio.actual.toLocaleString()}</p>
+                    </div>
+                  </div>
+                  <div className="relative">
+                    <ResponsiveContainer width="100%" height={180}>
+                      <RadialBarChart innerRadius="70%" outerRadius="100%" data={afeGaugeData} startAngle={90} endAngle={-270}>
+                        <RadialBar background dataKey="value" cornerRadius={8} />
+                      </RadialBarChart>
+                    </ResponsiveContainer>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                      <span className="text-2xl font-bold">{afeUtilisation}%</span>
+                      <span className="text-xs text-gray-500">utilisation</span>
+                    </div>
+                  </div>
+                </div>
+                <Link to="/finance" className="mt-2 inline-block text-sm text-blue-600 hover:underline">View AFE register →</Link>
+              </Card>
+            )}
+
+            {/* Risk distribution by severity */}
+            {riskSeverityData.length > 0 && (
+              <Card className="p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <ShieldAlert className="h-4 w-4 text-red-600" />
+                  <h3 className="font-semibold">Risk Distribution by Severity</h3>
+                </div>
+                <ResponsiveContainer width="100%" height={260}>
+                  <PieChart>
+                    <Pie data={riskSeverityData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={55} outerRadius={90} paddingAngle={2}>
+                      {riskSeverityData.map((entry) => (
+                        <Cell key={entry.name} fill={SEVERITY_COLORS[entry.name] || "#94a3b8"} />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </Card>
+            )}
+
+            {/* Compliance status donut */}
+            {complianceStatusData.length > 0 && (
+              <Card className="p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <CheckCircle className="h-4 w-4 text-emerald-600" />
+                  <h3 className="font-semibold">Compliance Obligations by Status</h3>
+                </div>
+                <ResponsiveContainer width="100%" height={260}>
+                  <PieChart>
+                    <Pie data={complianceStatusData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={55} outerRadius={90} paddingAngle={2}>
+                      {complianceStatusData.map((entry, i) => (
+                        <Cell key={entry.name} fill={STATUS_COLORS[entry.name] || CHART_COLORS[i % CHART_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </Card>
+            )}
+
+            {/* Activity status funnel */}
+            {activityStatusData.length > 0 && (
+              <Card className="p-5 lg:col-span-2">
+                <div className="flex items-center gap-2 mb-4">
+                  <ListChecks className="h-4 w-4 text-blue-600" />
+                  <h3 className="font-semibold">Activity Status Breakdown</h3>
+                </div>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={activityStatusData} layout="vertical" margin={{ top: 4, right: 16, left: 24, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#eef2f7" />
+                    <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+                    <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={90} />
+                    <RechartsTooltip />
+                    <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                      {activityStatusData.map((entry) => (
+                        <Cell key={entry.name} fill={STATUS_COLORS[entry.name] || "#2563eb"} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </Card>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Operational Insights — workload, risk heat-map, document status,
+          alerts and the audit activity feed (§5.8 catalogue quick-wins). */}
+      {hasSecondaryAnalytics && (
+        <div>
+          <div className="flex items-center gap-2 mb-4">
+            <Grid3x3 className="h-5 w-5 text-gray-500" />
+            <h2 className="text-xl font-bold">Operational Insights</h2>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Team workload heatmap */}
+            {workloadTop.length > 0 && (
+              <Card className="p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Users className="h-4 w-4 text-blue-600" />
+                    <h3 className="font-semibold">Team Workload (open tasks)</h3>
+                  </div>
+                  <Link to="/tasks" className="text-sm text-blue-600 hover:underline">View →</Link>
+                </div>
+                <div className="space-y-2.5">
+                  {workloadTop.map((w) => (
+                    <div key={w.userId ?? w.name} className="flex items-center gap-3">
+                      <span className="w-32 truncate text-sm" title={w.name}>{w.name}</span>
+                      <div className="flex-1 h-5 rounded bg-gray-100 overflow-hidden">
+                        <div
+                          className="h-full rounded flex items-center justify-end pr-2"
+                          style={{ width: `${Math.max((w.openTasks / workloadMax) * 100, 8)}%`, backgroundColor: workloadColor(w.openTasks) }}
+                        >
+                          <span className="text-[11px] font-semibold text-white">{w.openTasks}</span>
+                        </div>
+                      </div>
+                      {w.overdueTasks > 0 && (
+                        <Badge className="bg-red-100 text-red-700 border border-red-200 text-[11px]">{w.overdueTasks} overdue</Badge>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+
+            {/* Risk heat-map (severity × probability) */}
+            {hasRiskData && (
+              <Card className="p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <ShieldAlert className="h-4 w-4 text-red-600" />
+                  <h3 className="font-semibold">Risk Heat-Map (severity × probability)</h3>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full border-separate border-spacing-1 text-center text-sm">
+                    <thead>
+                      <tr>
+                        <th className="text-xs text-gray-400 font-normal"></th>
+                        {RISK_LEVELS.slice().reverse().map((p) => (
+                          <th key={p} className="text-xs text-gray-500 font-medium px-2 py-1">P: {p}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {RISK_LEVELS.map((sev) => (
+                        <tr key={sev}>
+                          <td className="text-xs text-gray-500 font-medium pr-2 text-right whitespace-nowrap">S: {sev}</td>
+                          {RISK_LEVELS.slice().reverse().map((prob) => {
+                            const count = riskHeatCell(sev, prob);
+                            return (
+                              <td key={prob} className="p-0">
+                                <Link
+                                  to="/registers"
+                                  className={`flex items-center justify-center h-12 rounded border font-semibold ${riskBandColor(sev, prob)} ${count === 0 ? "opacity-40" : "hover:opacity-80"}`}
+                                >
+                                  {count}
+                                </Link>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-xs text-gray-400 mt-3">Green = low band · Amber = medium · Red = high (severity × probability). Click a cell to open the register.</p>
+              </Card>
+            )}
+
+            {/* Document status donut */}
+            {documentStatusData.length > 0 && (
+              <Card className="p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <FileText className="h-4 w-4 text-blue-600" />
+                  <h3 className="font-semibold">Documents by Status</h3>
+                </div>
+                <ResponsiveContainer width="100%" height={240}>
+                  <PieChart>
+                    <Pie data={documentStatusData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={85} paddingAngle={2}>
+                      {documentStatusData.map((entry, i) => (
+                        <Cell key={entry.name} fill={DOC_STATUS_COLORS[entry.name] || CHART_COLORS[i % CHART_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </Card>
+            )}
+
+            {/* Alerts summary */}
+            {totalOpenAlerts > 0 && (
+              <Card className="p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Bell className="h-4 w-4 text-amber-600" />
+                    <h3 className="font-semibold">Open Alerts</h3>
+                  </div>
+                  <Link to="/notifications" className="text-sm text-blue-600 hover:underline">View all →</Link>
+                </div>
+                <div className="grid grid-cols-4 gap-3 text-center mb-4">
+                  {alertsByPriority.map((a) => (
+                    <div key={a.priority} className="rounded-lg border p-3">
+                      <p className={`text-2xl font-bold ${ALERT_COLORS[a.priority]}`}>{a.count}</p>
+                      <p className="text-xs text-gray-500">{a.priority}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center justify-between text-sm rounded-lg bg-red-50 border border-red-100 px-3 py-2">
+                  <span className="flex items-center gap-2 text-red-700"><Clock className="h-4 w-4" /> Overdue alerts</span>
+                  <span className="font-semibold text-red-700">{overdueAlerts}</span>
+                </div>
+              </Card>
+            )}
+
+            {/* Recent activity feed (Admin only — sourced from the audit log) */}
+            {isAdmin && auditFeed.length > 0 && (
+              <Card className="p-5 lg:col-span-2">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <History className="h-4 w-4 text-gray-600" />
+                    <h3 className="font-semibold">Recent Activity</h3>
+                  </div>
+                  <Link to="/admin" className="text-sm text-blue-600 hover:underline">Audit log →</Link>
+                </div>
+                <div className="space-y-2">
+                  {auditFeed.map((log) => (
+                    <div key={log.id} className="flex items-center gap-3 text-sm border-b last:border-0 pb-2 last:pb-0">
+                      <Badge className={`text-[11px] ${auditActionColor(log.action || "")}`}>{log.action || "update"}</Badge>
+                      <span className="flex-1 truncate">
+                        <span className="font-medium">{log.module || log.entityType}</span>
+                        {log.entityId ? <span className="text-gray-400"> #{log.entityId}</span> : null}
+                        <span className="text-gray-500"> — {log.userEmail || `user ${log.userId ?? "system"}`}</span>
+                      </span>
+                      <span className="text-xs text-gray-400 whitespace-nowrap">
+                        {log.createdAt ? new Date(log.createdAt).toLocaleString() : ""}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Sleek Asset Health Matrix */}
       <div>
