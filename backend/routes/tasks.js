@@ -4,7 +4,7 @@ const Task = require('../models/Task');
 const User = require('../models/User');
 const AuditLog = require('../models/AuditLog');
 const { Op } = require('sequelize');
-const { syncAllOverdueTasks, recalcParentTaskProgress } = require('../services/taskStatusSync');
+const { syncAllOverdueTasks, recalcParentTaskProgress, recalcProjectCompletionForTask } = require('../services/taskStatusSync');
 
 const ASSIGNEE_ATTRS = ['id', 'username', 'firstName', 'lastName'];
 const taskIncludes = [
@@ -183,7 +183,10 @@ router.post('/', async (req, res) => {
 
     if (parentTaskId) {
       await recalcParentTaskProgress(parentTaskId);
+      const parentTask = await Task.findByPk(parentTaskId);
+      await recalcProjectCompletionForTask(parentTask);
     }
+    await recalcProjectCompletionForTask(newTask);
 
     const createdTask = await Task.findByPk(newTask.id, { include: taskIncludes });
     res.status(201).json(createdTask);
@@ -217,6 +220,8 @@ router.put('/:id', async (req, res) => {
     }
 
     const oldParentTaskId = task.parentTaskId;
+    const oldRelatedType = task.relatedType;
+    const oldRelatedId = task.relatedId;
 
     await task.update({
       title: title !== undefined ? title : task.title,
@@ -237,6 +242,19 @@ router.put('/:id', async (req, res) => {
     if (task.parentTaskId) await recalcParentTaskProgress(task.parentTaskId);
     if (oldParentTaskId && oldParentTaskId !== task.parentTaskId) await recalcParentTaskProgress(oldParentTaskId);
 
+    // Roll up progress to the Project (§5.3 task -> project roll-up), for both
+    // this task's current project and its previous one if it was reassigned.
+    await recalcProjectCompletionForTask(task);
+    if (oldRelatedType !== task.relatedType || oldRelatedId !== task.relatedId) {
+      await recalcProjectCompletionForTask({ relatedType: oldRelatedType, relatedId: oldRelatedId });
+    }
+    if (task.parentTaskId) {
+      await recalcProjectCompletionForTask(await Task.findByPk(task.parentTaskId));
+    }
+    if (oldParentTaskId && oldParentTaskId !== task.parentTaskId) {
+      await recalcProjectCompletionForTask(await Task.findByPk(oldParentTaskId));
+    }
+
     // Re-run the overdue sweep so a status/progress edit is reflected immediately.
     await syncAllOverdueTasks();
 
@@ -255,9 +273,15 @@ router.delete('/:id', async (req, res) => {
     if (!task) return res.status(404).json({ error: 'Task not found' });
 
     const parentTaskId = task.parentTaskId;
+    const relatedType = task.relatedType;
+    const relatedId = task.relatedId;
     await task.destroy();
 
-    if (parentTaskId) await recalcParentTaskProgress(parentTaskId);
+    if (parentTaskId) {
+      await recalcParentTaskProgress(parentTaskId);
+      await recalcProjectCompletionForTask(await Task.findByPk(parentTaskId));
+    }
+    await recalcProjectCompletionForTask({ relatedType, relatedId });
 
     res.json({ message: 'Task deleted successfully' });
   } catch (err) {

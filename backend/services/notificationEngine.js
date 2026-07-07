@@ -2,6 +2,7 @@ const { Op } = require('sequelize');
 const Notification = require('../models/Notification');
 const NotificationRule = require('../models/NotificationRule');
 const User = require('../models/User');
+const { sendEmail } = require('./emailService');
 const Activity = require('../models/Activity');
 const Task = require('../models/Task');
 const Licence = require('../models/Licence');
@@ -194,6 +195,20 @@ async function resolveUserByName(name) {
   return match ? match.id : null;
 }
 
+// Delivers the Email channel for a notification, when the rule/notification
+// requests it (`channels` includes 'Email') and the recipient has a real
+// email on file. Best-effort — failures/missing config never block the
+// always-on InApp channel (see emailService.sendEmail()).
+async function deliverEmailChannel(channels, userId, subject, message) {
+  if (!Array.isArray(channels) || !channels.includes('Email')) return;
+  if (!userId) return;
+
+  const user = await User.findByPk(userId, { attributes: ['id', 'email', 'firstName', 'lastName'] });
+  if (!user || !user.email) return;
+
+  await sendEmail({ to: user.email, subject, text: message });
+}
+
 // Falls back to notifying Admins/Managers when no specific owner can be
 // resolved for a record (e.g. Licence has no responsible-person field yet).
 async function resolveRecipients(recipientId) {
@@ -212,6 +227,8 @@ async function armNotification({ rule, module, entityId, bucket, dueAt, message,
   const recipients = await resolveRecipients(recipientId);
   const effectivePriority = priority || rule.priority;
   const now = new Date();
+
+  const emailSubject = `[PlanetOne] ${effectivePriority} priority alert — ${module}`;
 
   for (const userId of recipients) {
     const dedupeKey = `${module}|${module}|${entityId}|${rule.triggerType}|${bucket}|${userId}`;
@@ -234,6 +251,7 @@ async function armNotification({ rule, module, entityId, bucket, dueAt, message,
         recurrenceIntervalHours: rule.recurrenceIntervalHours,
         lastSentAt: now
       });
+      await deliverEmailChannel(rule.channels, userId, emailSubject, message);
       continue;
     }
 
@@ -254,6 +272,7 @@ async function armNotification({ rule, module, entityId, bucket, dueAt, message,
         priority: effectivePriority,
         lastSentAt: now
       });
+      await deliverEmailChannel(rule.channels, userId, emailSubject, message);
     }
   }
 }
@@ -418,8 +437,9 @@ async function escalateOverdue() {
     await notif.update({ status: 'Escalated', escalatedAt: now, escalatedToUserId: escalateToId });
 
     if (escalateToId && escalateToId !== notif.userId) {
+      const escalationMessage = `ESCALATION: ${notif.message} (unacknowledged past grace period)`;
       await Notification.create({
-        message: `ESCALATION: ${notif.message} (unacknowledged past grace period)`,
+        message: escalationMessage,
         type: 'Error',
         userId: escalateToId,
         module: notif.module,
@@ -433,6 +453,12 @@ async function escalateOverdue() {
         dedupeKey: `${notif.dedupeKey}|escalation`,
         lastSentAt: now
       });
+      await deliverEmailChannel(
+        notif.channels,
+        escalateToId,
+        `[PlanetOne] ESCALATION — ${notif.module}`,
+        escalationMessage
+      );
     }
   }
 }

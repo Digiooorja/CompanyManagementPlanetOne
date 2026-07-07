@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -25,6 +26,7 @@ function emptyForm() {
 export function OperationsUpdates() {
   const { hasPermission } = useAuth();
   const canEdit = hasPermission("operations_updates.manage");
+  const [searchParams, setSearchParams] = useSearchParams();
   const [updates, setUpdates] = useState<any[]>([]);
   const [blocks, setBlocks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,6 +35,7 @@ export function OperationsUpdates() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState(emptyForm());
   const [saving, setSaving] = useState(false);
+  const [blockFilter, setBlockFilter] = useState(searchParams.get("blockId") || "all");
 
   const loadData = async () => {
     setLoading(true);
@@ -53,6 +56,16 @@ export function OperationsUpdates() {
   }, []);
 
   const blockName = (id: number | null) => blocks.find((b) => b.id === id)?.name || "-";
+
+  const handleBlockFilterChange = (value: string) => {
+    setBlockFilter(value);
+    const next = new URLSearchParams(searchParams);
+    if (value === "all") next.delete("blockId");
+    else next.set("blockId", value);
+    setSearchParams(next, { replace: true });
+  };
+
+  const filteredUpdates = updates.filter((u) => blockFilter === "all" || String(u.blockId) === String(blockFilter));
 
   const openCreate = () => {
     setEditingId(null);
@@ -130,15 +143,29 @@ export function OperationsUpdates() {
         </div>
       </Card>
 
+      <Card className="p-4">
+        <Select value={blockFilter} onValueChange={handleBlockFilterChange}>
+          <SelectTrigger className="w-full sm:w-[220px]">
+            <SelectValue placeholder="Block" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Blocks</SelectItem>
+            {blocks.map((b) => (
+              <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Card>
+
       {loading ? (
         <div className="text-sm text-gray-600">Loading updates...</div>
       ) : error ? (
         <div className="text-sm text-red-600">{error}</div>
-      ) : updates.length === 0 ? (
+      ) : filteredUpdates.length === 0 ? (
         <div className="text-sm text-gray-600">No operations updates recorded yet.</div>
       ) : (
         <div className="space-y-4">
-          {updates.map((u) => (
+          {filteredUpdates.map((u) => (
             <Card key={u.id} className="p-5">
               <div className="flex items-start justify-between">
                 <div>

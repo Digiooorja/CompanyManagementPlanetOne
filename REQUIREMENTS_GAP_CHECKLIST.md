@@ -20,7 +20,7 @@ Status keys per item: ✅ implemented · ⚠️ partial · ❌ missing
 | New register modules — Contract, Compliance, Correspondence, Decision, Operations Update (§5.7, §5.11–§5.14) | ✅ Done — models, routes, alert rules, functional CRUD pages |
 | RBAC role matrix (§4) | ✅ Done — 12 roles, configurable `Role`/`Permission`/`RolePermission` matrix, admin-editable UI; all 11 mutation-gated modules migrated off the legacy Admin/Manager array onto `requirePermission()` |
 | Chairman View (§6) | ✅ Done — three-block layout embedded in the existing `ExecutiveDashboard.tsx` (not a separate page), drill-down links, RBAC-gated section; ⚠️ export is print-to-PDF (not native PPT), no auto-refresh cadence. **See §4 for the full dashboard content catalogue / build backlog** |
-| Task Status, Progress & Accountability (§5.3) | ✅ Done — % complete, subtasks with roll-up, owner-confirmed completion, automatic Overdue flag, workload view, comments/attachments, status history (via Audit Log); ⚠️ no Gantt view, no task→project roll-up |
+| Task Status, Progress & Accountability (§5.3) | ✅ Done — % complete, subtasks with roll-up, owner-confirmed completion, automatic Overdue flag, workload view, comments/attachments, status history (via Audit Log), task→project completion roll-up (2026-07-07); ⚠️ no Gantt view |
 | Organisation Structure & Team Profiles (§5.1) | ✅ Done — extended profile fields, auto-generated org chart, team allocation view, profile history (via Audit Log), onboarding/offboarding notifications, photo upload; ⚠️ no dedicated HR role (Admin-only), no formal 500-employee load test |
 | Work Programme & Budget Tracker (§5.6) | ✅ Done — `BudgetLine` model, multi-currency, variance/utilisation alerts via the Notification Engine, enforced maker-checker revision workflow, block/currency roll-up with drill-down, CSV export; ⚠️ threshold values are fixed (10%/90%/100%), no settings UI to change them |
 | AFE Tracking (§5.10) | ✅ Done — authorised/committed/actual-to-date/variance on the existing `Finance` AFE records, automatic aggregation from linked payments, supplementary AFE chain, 80%/100% utilisation alerts, enforced reconciliation sign-off on closure |
@@ -33,8 +33,8 @@ Status keys per item: ✅ implemented · ⚠️ partial · ❌ missing
 **Biggest remaining gaps, roughly in priority order:**
 1. Email/SMS transport for the notification engine (§10.2) — currently in-app only.
 2. True native PDF/PowerPoint export + versioned archive for Chairman View (§6) — currently browser print-to-PDF.
-3. Remaining Phase 1 partial: Licence phase/countdown fields (§5.9); Task→Project progress roll-up (§5.3) is a smaller residual gap within an otherwise-complete module.
-4. Fold `documents`/`comments`/`tasks`/`licences`/`finance` routes into the RBAC matrix too (currently simpler `authMiddleware`-only or bespoke gates — lower priority since there's no coarse array to retire there).
+3. Remaining Phase 1 partial: Licence phase/countdown fields (§5.9) is the only substantial residual gap; Task→Project progress roll-up (§5.3) was closed 2026-07-07.
+4. ~~Fold `documents`/`comments`/`tasks`/`licences`/`finance` routes into the RBAC matrix too~~ ✅ done 2026-07-07.
 5. OCR + full-text search and recoverable soft-delete/subscriber notifications for the Document Repository (§5.5) — explicitly deferred, not yet started.
 6. Phase 2 add-on modules (§7) and non-functional hardening (§8/§12/§13) — out of Phase 1 scope, deferred by design.
 
@@ -58,18 +58,31 @@ Status keys per item: ✅ implemented · ⚠️ partial · ❌ missing
         seeded in `backend/models/Role.js` / `server.js` startup seed
 - [x] ✅ Configurable role/permission matrix (Admin-editable, no code change) — `Role`, `Permission`, `RolePermission` models +
       `backend/middleware/rbac.js` (`requirePermission()`) + `backend/routes/rbac.js` (CRUD) + live editable matrix UI in `Admin.tsx` ("RBAC Matrix" tab)
-- [x] ✅ Enforce RBAC on all mutation-gated routes — all 11 modules (blocks/projects/activities/risks/workflows/registers +
-      contracts/compliance/correspondence/decisions/operations-updates) now go through `requirePermission()` off a single
-      `permissionProtectedRoutes` list in `server.js`; the legacy `managerMiddleware` array-based gate has been fully retired.
-      `Manager` keeps identical behavior (all 11 `.manage` permissions seeded for it), and `Project/Operations Manager` gained
+- [x] ✅ Enforce RBAC on all mutation-gated routes — 23 modules (blocks/projects/activities/risks/workflows/registers +
+      contracts/compliance/correspondence/decisions/operations-updates/budget-lines/insurance/environmental-permits/ndas/
+      vendor-payments/forex/local-content/hse + **documents/comments/tasks/licences/finance, folded in 2026-07-07**) now go
+      through `requirePermission()` off a single `permissionProtectedRoutes` list in `server.js`; the legacy
+      `managerMiddleware` array-based gate has been fully retired everywhere, including the last holdout (`licences.js`'s
+      inline `authMiddleware, managerMiddleware`/`adminMiddleware` checks, now removed in favour of the mount-level gate).
+      `Manager` keeps identical (or broader) behavior (all `.manage` permissions seeded for it, including the 3 new ones:
+      `documents.manage`, `comments.manage`, `finance.manage`), and `Project/Operations Manager` gained
       `blocks.manage`/`projects.manage` to match its "day-to-day project & operations delivery" scope in §4
 - [x] Legacy `'Admin'` role remains a technical superuser (bypasses the matrix entirely) for backward compatibility with the rest of the
       app; all other roles, including the new business roles, are governed purely by the configurable matrix
 - [x] Frontend: `AuthContext.hasPermission(key)` added for fine-grained UI gating (used by the 5 new register pages) alongside the
       existing coarse `canEdit`/`isManager` flags (left untouched for older pages — those still work unchanged since `Manager`'s
       permission set exactly mirrors its old blanket access)
-- [ ] Still open: `documents`/`comments`/`tasks`/`licences` routes use simpler `authMiddleware`-only or bespoke per-route gates,
-      not yet folded into the matrix (lower priority — no coarse Admin/Manager array to retire there)
+- [x] ✅ `documents`/`comments`/`tasks`/`licences`/`finance` folded into the matrix (2026-07-07) — new `documents.manage`,
+      `comments.manage`, `tasks.manage`, `licences.manage`, `finance.manage` permissions gate all mutating verbs on those 5
+      routes at the `server.js` mount level, exactly like the other 18 modules. `Tasks`' GET endpoints also now allow guest/
+      optional-auth read access like every other module (previously required a full login even to view). Ownership-level
+      checks that sit on top of the coarse permission (document owner-or-Admin delete, own-comment-or-Admin edit/delete,
+      task-owner-confirms-100%) were left untouched — they're a complementary, finer-grained layer, not a replacement for
+      the RBAC gate. `defaultMatrix` was extended additively (no permissions removed) so day-to-day roles (`Manager`, `User`,
+      `Team Member/Staff`, `Project/Operations Manager`, `Finance/Accounts`, `Legal/Compliance Officer`, `HSE Officer`,
+      `Geologist/Drilling Engineer`, `CEO/Country Manager`) keep the ability to create/edit tasks, documents and comments
+      they need day-to-day, while the two explicitly read-only roles (`Chairman/Board`, `External Partner`) correctly lose
+      the blanket ability to mutate these records that the old `authMiddleware`-only gate accidentally gave them.
 
 ---
 
@@ -97,7 +110,8 @@ Status keys per item: ✅ implemented · ⚠️ partial · ❌ missing
 
 ### 5.3 Task Status, Progress & Accountability
 - [x] ✅ `progress` (%), `startDate`, `parentTaskId` (subtasks), `dependencyTaskIds` added to `Task` — `backend/models/Task.js`
-- [x] ✅ Subtask → parent progress roll-up (`recalcParentTaskProgress` in `services/taskStatusSync.js`, called on subtask create/update/delete); **task → project roll-up not implemented** (Project.completion is currently driven by Activities, not Tasks — mixing both needs a product decision, tracked as a follow-up)
+- [x] ✅ Subtask → parent progress roll-up (`recalcParentTaskProgress` in `services/taskStatusSync.js`, called on subtask create/update/delete)
+- [x] ✅ Task → project progress roll-up (added 2026-07-07) — `recalcProjectCompletion()`/`recalcProjectCompletionForTask()` in `services/taskStatusSync.js` average the `progress` of a project's top-level tasks (linked directly via `relatedType='Project'` or transitively via `relatedType='Activity'` → `Activity.projectId`) into `Project.completion`, recalculated on every task create/update/delete in `routes/tasks.js` and from `autoAssignActivityTask()` in `routes/activities.js`. Only overwrites `completion` when at least one relevant task exists, so a project with zero tasks keeps whatever value was set manually via the Projects.tsx Edit dialog.
 - [x] ✅ Automatic "Overdue" status flag — `status` ENUM extended, `syncAllOverdueTasks()` runs on every task list fetch and every notification-engine sweep (bulk update with `individualHooks: true` so each transition is still Audit-Logged)
 - [x] ✅ Workload view — `GET /api/tasks/workload` (per-person open/overdue counts) + a "Workload" tab on the Tasks page
 - [x] ✅ Single accountable owner — already structurally enforced (one `assignedToId` FK per task)
@@ -142,7 +156,8 @@ Status keys per item: ✅ implemented · ⚠️ partial · ❌ missing
 - [x] ✅ `ComplianceObligation` model (regulator, category, frequency, due/paid, reference, evidence, status) — `backend/models/ComplianceObligation.js`
 - [x] ✅ Recurring auto-regeneration on completion (`routes/compliance.js` PUT handler)
 - [x] ✅ Mandatory evidence attachment before close if overdue (enforced server-side)
-- [x] ✅ Escalating reminders via `NotificationRule` (30/14/7/1 days, then daily while overdue); **not yet surfaced on Chairman View** (§6 still pending)
+- [x] ✅ Escalating reminders via `NotificationRule` (30/14/7/1 days, then daily while overdue)
+- [x] ✅ Surfaced on Chairman View — Compliance due dates are included in the Block A "Upcoming Deadlines" unified countdown (`ExecutiveDashboard.tsx`'s `chairmanDeadlines`)
 - [x] ✅ Frontend page: `pages/Compliance.tsx`, linked from the Registers hub
 
 ### 5.8 Dashboards, Charts, Filters & Drill-down
@@ -176,12 +191,12 @@ Status keys per item: ✅ implemented · ⚠️ partial · ❌ missing
 ### 5.11 Contract Register with Expiry/Renewal Alerts
 - [x] ✅ `Contract` model (counterparty, type, effective/expiry, value, renewal notice period, auto-renew, owner, `Document.contractId` link) — `backend/models/Contract.js`
 - [x] ✅ Configurable lead-time alerts 90/60/30 days via `NotificationRule`
-- [ ] Surface expiring contracts on dashboards + Chairman View (Executive Dashboard already reads licences; Contract not yet wired in)
+- [x] ✅ Surfaced on Chairman View — Contract expiries are included in the Block A "Upcoming Deadlines" unified countdown alongside Licence/Compliance/Correspondence/Insurance (`ExecutiveDashboard.tsx`'s `chairmanDeadlines`)
 - [x] ✅ Frontend page: `pages/Contracts.tsx`, linked from the Registers hub
 
 ### 5.12 Operations Update
 - [x] ✅ `OperationsUpdate` model (date, block/well, author, summary, key issues, next steps, attachments) — `backend/models/OperationsUpdate.js`
-- [ ] Latest update surfacing automatically on the block summary page (`BlockDetail.tsx` not yet wired to `operationsUpdatesApi`)
+- [x] ✅ Latest update surfacing automatically on the block summary page (added 2026-07-07) — `BlockDetail.tsx` Overview tab now fetches `operationsUpdatesApi.getAll({ blockId, limit: 3 })` and shows the most recent entries with a "View All Updates" link; `OperationsUpdates.tsx` gained a URL-synced `blockId` filter (mirroring the Compliance/Decisions drill-down pattern) so that link pre-filters correctly
 - [x] ✅ Frontend page: `pages/OperationsUpdates.tsx`, linked from the Registers hub
 
 ### 5.13 Decision Log
@@ -193,7 +208,7 @@ Status keys per item: ✅ implemented · ⚠️ partial · ❌ missing
 ### 5.14 PC/GNPC Correspondence Log
 - [x] ✅ `Correspondence` model (direction, from/to, subject, reference, summary, block, awaiting response, response due, linked doc, regulator-agnostic) — `backend/models/Correspondence.js`
 - [x] ✅ Full-text-style search (`LIKE` across subject/summary/reference); response-due reminders via `NotificationRule`
-- [ ] Surface overdue responses on Chairman View (§6 still pending)
+- [x] ✅ Surfaced on Chairman View — Correspondence responses awaiting reply are included in the Block A "Upcoming Deadlines" unified countdown (`ExecutiveDashboard.tsx`'s `chairmanDeadlines`)
 - [x] ✅ Frontend page: `pages/Correspondence.tsx`, linked from the Registers hub
 
 ### 5.15 Risk Register (Basic)

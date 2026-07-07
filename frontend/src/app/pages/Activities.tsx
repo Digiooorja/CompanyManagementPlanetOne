@@ -155,9 +155,9 @@ export function Activities() {
     switch (status) {
       case "Completed":
         return "default";
-      case "In Progress":
+      case "Active":
         return "secondary";
-      case "To Do":
+      case "Inactive":
         return "outline";
       default:
         return "outline";
@@ -167,8 +167,12 @@ export function Activities() {
   const parentActivities = filteredActivities
     .filter(a => !a.parentActivityId)
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  const todoActivities = parentActivities.filter((a) => a.status === "To Do");
-  const inProgressActivities = parentActivities.filter((a) => a.status === "In Progress");
+  // Kanban columns use the real Activity.status enum ('Active' | 'Inactive' |
+  // 'Completed' — see backend/models/Activity.js) rather than 'To Do'/'In
+  // Progress' strings that no create/edit form or API path ever sets (bug
+  // fixed 2026-07-07 — those two columns were permanently empty before).
+  const inactiveActivities = parentActivities.filter((a) => a.status === "Inactive");
+  const activeActivities = parentActivities.filter((a) => a.status === "Active");
   const completedActivities = parentActivities.filter((a) => a.status === "Completed");
 
   return (
@@ -477,14 +481,14 @@ export function Activities() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* To Do Column */}
+          {/* Inactive Column */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="font-medium">To Do</h3>
-              <Badge variant="outline">{todoActivities.length}</Badge>
+              <h3 className="font-medium">Inactive</h3>
+              <Badge variant="outline">{inactiveActivities.length}</Badge>
             </div>
             <div className="space-y-3">
-              {todoActivities.map((activity) => (
+              {inactiveActivities.map((activity) => (
                 <Card key={activity.id} className="p-4">
                   <div className="space-y-3">
                     <div>
@@ -531,14 +535,14 @@ export function Activities() {
             </div>
           </div>
 
-          {/* In Progress Column */}
+          {/* Active Column */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="font-medium">In Progress</h3>
-              <Badge variant="outline">{inProgressActivities.length}</Badge>
+              <h3 className="font-medium">Active</h3>
+              <Badge variant="outline">{activeActivities.length}</Badge>
             </div>
             <div className="space-y-3">
-              {inProgressActivities.map((activity) => (
+              {activeActivities.map((activity) => (
                 <Card key={activity.id} className="p-4">
                   <div className="space-y-3">
                     <div>

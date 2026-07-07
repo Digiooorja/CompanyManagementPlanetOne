@@ -252,7 +252,6 @@ function ProjectDetail() {
     });
 
     const activeRisks = risks.filter((risk) => risk.status?.toLowerCase() === 'active').length;
-    const completion = activities.length > 0 ? Math.round((completed / activities.length) * 100) : 0;
 
     return {
       completed,
@@ -265,9 +264,17 @@ function ProjectDetail() {
       overBudget,
       totalVariance: overBudget - underBudget,
       activeRisks,
-      completion,
     };
   }, [activities, risks]);
+
+  // Authoritative completion % — same value shown on the Projects table and
+  // Executive Dashboard (backend `project.completion`, kept in sync by
+  // `recalcProjectCompletion()` from top-level Activity progress + directly-
+  // linked Task progress). Deliberately NOT recomputed client-side from a
+  // simple "completed activities / total activities" count, which undercounts
+  // partially-progressed activities and ignores Tasks entirely — that mismatch
+  // was the cause of this page showing a different % than the Projects page.
+  const projectCompletion = Math.round(Number(project?.completion ?? 0));
 
   const mainActivities = useMemo(
     () => activities.filter((item) => !item.parentActivityId),
@@ -405,8 +412,8 @@ function ProjectDetail() {
         </Card>
         <Card className="p-4">
           <p className="text-sm text-muted-foreground">Completion</p>
-          <p className="text-3xl font-bold mt-2">{statistics.completion}%</p>
-          <Progress value={statistics.completion} className="h-2 mt-2" />
+          <p className="text-3xl font-bold mt-2">{projectCompletion}%</p>
+          <Progress value={projectCompletion} className="h-2 mt-2" />
         </Card>
         <Card className="p-4">
           <p className="text-sm text-muted-foreground">Active Risks</p>

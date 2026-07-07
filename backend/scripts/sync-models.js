@@ -58,6 +58,7 @@ require('../models/ForexTransaction');
 require('../models/LocalContentRecord');
 require('../models/HseIncident');
 require('../models/HseExposureRecord');
+require('../models/Licence');
 
 async function main() {
   console.log(`Syncing models against ${process.env.DATABASE_URL.replace(/:[^:@]*@/, ':****@')} ...`);

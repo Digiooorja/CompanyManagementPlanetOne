@@ -5,8 +5,8 @@ import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
 import { Separator } from "../components/ui/separator";
-import { ArrowLeft, CheckCircle, XCircle, MessageSquare, Clock } from "lucide-react";
-import { workflowsApi, financeApi } from "../../services/api";
+import { ArrowLeft, CheckCircle, XCircle, MessageSquare, Clock, FileText } from "lucide-react";
+import { workflowsApi, financeApi, documentsApi } from "../../services/api";
 import { formatDisplayDateOrDefault } from "../lib/date";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -18,12 +18,14 @@ export function WorkflowDetail() {
   const [error, setError] = useState<string | null>(null);
   const [actionComment, setActionComment] = useState("");
   const [actionSaving, setActionSaving] = useState(false);
+  const [relatedDocuments, setRelatedDocuments] = useState<any[]>([]);
 
   const loadWorkflow = async () => {
     if (!id) return;
     try {
       setLoading(true);
       setError(null);
+      setRelatedDocuments([]);
 
       // Handle finance AFE items (ids like "finance-123")
       if (String(id).startsWith('finance-')) {
@@ -50,11 +52,26 @@ export function WorkflowDetail() {
           original: f,
         };
         setWorkflow(mapped);
+
+        // Real "related documents" for an AFE = documents tagged to the same
+        // activity (Document.activityId), the only actual FK this record has
+        // to hang evidence off of — Workflow/Finance have no direct document
+        // link in the schema (fixed 2026-07-07, previously a hardcoded fake list).
+        if (f.activityId) {
+          try {
+            const docs = await documentsApi.getByActivityId(f.activityId);
+            setRelatedDocuments(Array.isArray(docs) ? docs : []);
+          } catch (docErr) {
+            console.warn('Failed to load related documents:', docErr);
+          }
+        }
         return;
       }
 
       const data = await workflowsApi.getById(Number(id));
       setWorkflow(data);
+      // Plain Workflow records have no document-linking field in the schema
+      // yet, so there are genuinely no "related documents" to show for them.
     } catch (err) {
       console.error('Error loading workflow:', err);
       setError('Unable to load workflow details.');
@@ -178,6 +195,12 @@ export function WorkflowDetail() {
 
   const currentWorkflow = workflow;
 
+  const daysRemaining = (() => {
+    if (!currentWorkflow?.dueDate) return null;
+    const diff = new Date(currentWorkflow.dueDate).getTime() - Date.now();
+    return Math.ceil(diff / (1000 * 60 * 60 * 24));
+  })();
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -283,7 +306,9 @@ export function WorkflowDetail() {
           </div>
           <div>
             <p className="text-sm text-gray-600">Days Remaining</p>
-            <p className="text-xl mt-1">4</p>
+            <p className="text-xl mt-1">
+              {daysRemaining === null ? '-' : daysRemaining < 0 ? `${Math.abs(daysRemaining)}d overdue` : daysRemaining}
+            </p>
           </div>
         </div>
       </Card>
@@ -455,17 +480,20 @@ export function WorkflowDetail() {
 
           <Card className="p-4">
             <h4 className="font-medium mb-3">Related Documents</h4>
-            <div className="space-y-2">
-              <Button variant="outline" className="w-full justify-start text-sm">
-                AFE Amendment Form.pdf
-              </Button>
-              <Button variant="outline" className="w-full justify-start text-sm">
-                Budget Analysis.xlsx
-              </Button>
-              <Button variant="outline" className="w-full justify-start text-sm">
-                Geological Report.pdf
-              </Button>
-            </div>
+            {relatedDocuments.length === 0 ? (
+              <p className="text-sm text-gray-500">No linked documents.</p>
+            ) : (
+              <div className="space-y-2">
+                {relatedDocuments.map((doc) => (
+                  <Link key={doc.id} to={`/documents/${doc.id}`}>
+                    <Button variant="outline" className="w-full justify-start text-sm gap-2">
+                      <FileText className="h-4 w-4 shrink-0" />
+                      <span className="truncate">{doc.title || doc.name}</span>
+                    </Button>
+                  </Link>
+                ))}
+              </div>
+            )}
           </Card>
         </div>
       </div>

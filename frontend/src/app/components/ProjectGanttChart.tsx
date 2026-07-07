@@ -57,6 +57,13 @@ export function ProjectGanttChart({ activities, projectStartDate, projectEndDate
     return Number.isNaN(parsed.getTime()) ? null : parsed;
   };
 
+  // An activity that has actually started but hasn't actually finished yet
+  // (actualStartDate set, actualEndDate not) is still "in progress" - the
+  // actual bar should still plot, running from actualStartDate through
+  // today, rather than not rendering at all until an end date exists.
+  const todayIso = new Date().toISOString();
+  const getEffectiveActualEnd = (activity: Activity) => activity.actualEndDate || (activity.actualStartDate ? todayIso : undefined);
+
   const flattenAllActivities = (activities: Activity[]): Activity[] =>
     activities.flatMap((activity) => [
       activity,
@@ -68,7 +75,7 @@ export function ProjectGanttChart({ activities, projectStartDate, projectEndDate
     .map((activity) => parseDate(activity.plannedStartDate) || parseDate(activity.actualStartDate))
     .filter((date): date is Date => date !== null);
   const activityEndDates = allActivities
-    .map((activity) => parseDate(activity.plannedEndDate) || parseDate(activity.actualEndDate))
+    .map((activity) => parseDate(activity.plannedEndDate) || parseDate(getEffectiveActualEnd(activity)))
     .filter((date): date is Date => date !== null);
 
   const projectStart = parseDate(projectStartDate);
@@ -331,13 +338,15 @@ export function ProjectGanttChart({ activities, projectStartDate, projectEndDate
                 </>
               ) : null}
 
-              {/* Actual bar (if exists) */}
-              {activity.actualStartDate && activity.actualEndDate && (
+              {/* Actual bar (if exists) - plots as soon as actualStartDate is
+                  set, even without actualEndDate yet (still in progress,
+                  runs through today) */}
+              {activity.actualStartDate && (
                 <>
                   <rect
                     x={getXPosition(activity.actualStartDate)}
                     y={y + (activity.level === 0 ? 34 : 30)}
-                    width={getBarWidth(activity.actualStartDate, activity.actualEndDate)}
+                    width={getBarWidth(activity.actualStartDate, getEffectiveActualEnd(activity))}
                     height={activity.level === 0 ? 16 : 12}
                     fill="#007bff"
                     rx="2"
@@ -347,21 +356,21 @@ export function ProjectGanttChart({ activities, projectStartDate, projectEndDate
                   <rect
                     x={getXPosition(activity.actualStartDate)}
                     y={y + (activity.level === 0 ? 34 : 30)}
-                    width={getBarWidth(activity.actualStartDate, activity.actualEndDate) * ((activity.progress ?? 0) / 100)}
+                    width={getBarWidth(activity.actualStartDate, getEffectiveActualEnd(activity)) * ((activity.progress ?? 0) / 100)}
                     height={activity.level === 0 ? 16 : 12}
                     fill="#0056b3"
                     rx="2"
                   />
 
                   {/* Actual bar label */}
-                  {getBarWidth(activity.actualStartDate, activity.actualEndDate) > 60 && (
+                  {getBarWidth(activity.actualStartDate, getEffectiveActualEnd(activity)) > 60 && (
                     <text
                       x={getXPosition(activity.actualStartDate) + 5}
                       y={y + (activity.level === 0 ? 48 : 42)}
                       fontSize="11"
                       fill="white"
                     >
-                      Actual ({activity.progress ?? 0}%)
+                      {activity.actualEndDate ? `Actual (${activity.progress ?? 0}%)` : `Actual - In Progress (${activity.progress ?? 0}%)`}
                     </text>
                   )}
                 </>

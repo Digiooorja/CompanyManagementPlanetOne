@@ -5,7 +5,6 @@ const Activity = require('../models/Activity');
 const Task = require('../models/Task');
 const Department = require('../models/Department');
 const User = require('../models/User');
-const { authMiddleware } = require('../middleware/auth');
 
 // GET comments, optionally filtered by activityId or taskId
 router.get('/', async (req, res) => {
@@ -39,8 +38,9 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Create a new comment for an activity or a task
-router.post('/', authMiddleware, async (req, res) => {
+// Create a new comment for an activity or a task — gated by the
+// `comments.manage` RBAC permission at the mount level in server.js
+router.post('/', async (req, res) => {
   try {
     const { activityId, taskId, content, departmentId } = req.body;
 
@@ -97,8 +97,9 @@ router.post('/', authMiddleware, async (req, res) => {
   }
 });
 
-// Update comment
-router.put('/:id', authMiddleware, async (req, res) => {
+// Update comment — gated by the `comments.manage` RBAC permission at the
+// mount level in server.js; own-comment-or-Admin check enforced below
+router.put('/:id', async (req, res) => {
   try {
     const comment = await Comment.findByPk(req.params.id);
     if (!comment) return res.status(404).json({ message: 'Comment not found' });
@@ -141,8 +142,9 @@ router.put('/:id', authMiddleware, async (req, res) => {
   }
 });
 
-// Delete comment
-router.delete('/:id', authMiddleware, async (req, res) => {
+// Delete comment — gated by the `comments.manage` RBAC permission at the
+// mount level in server.js; own-comment-or-Admin check enforced below
+router.delete('/:id', async (req, res) => {
   try {
     const comment = await Comment.findByPk(req.params.id);
     if (!comment) return res.status(404).json({ message: 'Comment not found' });

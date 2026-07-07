@@ -89,10 +89,15 @@ router.get('/', async (req, res) => {
       }, {});
 
       documentData = documentData.map((doc) => {
-        const allIds = Array.isArray(doc.activityIds) ? doc.activityIds.slice() : [];
-        if (doc.activityId) {
-          allIds.unshift(Number(doc.activityId));
-        }
+        // De-dupe: doc.activityId is always the primary tagged activity, and
+        // the frontend (Documents.tsx upload form, DocumentDetail.tsx edit
+        // form) always includes it as the first entry of doc.activityIds too
+        // - unconditionally prepending it again here duplicated its name in
+        // activityTags for every document with a tagged activity (found
+        // 2026-07-07: "whenever tagging an activity ... it is repeating the
+        // name").
+        const tagged = Array.isArray(doc.activityIds) ? doc.activityIds.map(Number) : [];
+        const allIds = Array.from(new Set(doc.activityId ? [Number(doc.activityId), ...tagged] : tagged));
         return {
           ...doc,
           activityTags: allIds.map((activityId) => activityMap[activityId] || `Activity ${activityId}`)
@@ -214,10 +219,13 @@ router.get('/:id', async (req, res) => {
         return map;
       }, {});
 
-      const allIds = Array.isArray(documentData.activityIds) ? documentData.activityIds.slice() : [];
-      if (documentData.activityId) {
-        allIds.unshift(Number(documentData.activityId));
-      }
+      const allIds = Array.from(
+        new Set(
+          documentData.activityId
+            ? [Number(documentData.activityId), ...taggedActivityIds.map(Number)]
+            : taggedActivityIds.map(Number)
+        )
+      );
 
       documentData.activityTags = allIds.map((activityId) => activityMap[activityId] || `Activity ${activityId}`);
     } else {

@@ -10,7 +10,8 @@
     "db:migrate": "node scripts/run-migrations.js",
     "seed": "node seed.js",
     "seed:blocks": "node scripts/seed-blocks.js",
-    "seed:demo": "node scripts/seed-demo-user.js"
+    "seed:demo": "node scripts/seed-demo-user.js",
+    "test": "jest --runInBand"
   },
   "dependencies": {
     "aws-sdk": "^2.1693.0",
@@ -22,9 +23,13 @@
     "jsonwebtoken": "^9.0.0",
     "multer": "^2.1.1",
     "mysql2": "^3.22.3",
+    "mysqldump": "^3.2.0",
+    "nodemailer": "^9.0.3",
     "sequelize": "^6.37.8"
   },
   "devDependencies": {
-    "nodemon": "^3.0.1"
+    "jest": "^30.4.2",
+    "nodemon": "^3.0.1",
+    "supertest": "^7.2.2"
   }
 }

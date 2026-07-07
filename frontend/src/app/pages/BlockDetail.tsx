@@ -6,7 +6,7 @@ import { Button } from "../components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "../components/ui/table";
 import { ArrowLeft, MapPin, Users, FileText } from "lucide-react";
-import { blocksApi, projectsApi, activitiesApi, documentsApi, registersApi, licencesApi } from "../../services/api";
+import { blocksApi, projectsApi, activitiesApi, documentsApi, registersApi, licencesApi, operationsUpdatesApi } from "../../services/api";
 import { formatDisplayDateOrDefault } from "../lib/date";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -16,6 +16,7 @@ export function BlockDetail() {
   const [block, setBlock] = useState<any | null>(null);
   const [projects, setProjects] = useState<any[]>([]);
   const [licences, setLicences] = useState<any[]>([]);
+  const [operationsUpdates, setOperationsUpdates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -69,6 +70,16 @@ export function BlockDetail() {
         } catch (docErr) {
           console.warn('Failed to load block documents:', docErr);
           setDocuments([]);
+        }
+
+        // Load latest Operations Updates for this block (§5.12 acceptance
+        // criteria: latest update surfaces automatically on the block summary page)
+        try {
+          const updates = await operationsUpdatesApi.getAll({ blockId: Number(id), limit: 3 });
+          setOperationsUpdates(Array.isArray(updates) ? updates : []);
+        } catch (opsErr) {
+          console.warn('Failed to load operations updates:', opsErr);
+          setOperationsUpdates([]);
         }
 
         // Load registers from backend
@@ -196,6 +207,39 @@ export function BlockDetail() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6 mt-6">
+          <Card className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Latest Operations Update
+              </h3>
+              <Link to={`/operations-updates?blockId=${id}`}>
+                <Button size="sm" variant="outline">View All Updates</Button>
+              </Link>
+            </div>
+            {operationsUpdates.length === 0 ? (
+              <p className="text-gray-500 text-center py-6">No operations updates logged for this block yet.</p>
+            ) : (
+              <div className="space-y-4">
+                {operationsUpdates.map((update) => (
+                  <div key={update.id} className="p-4 bg-gray-50 rounded border border-gray-100">
+                    <div className="flex items-center justify-between text-sm text-gray-500 mb-1">
+                      <span>{formatDisplayDateOrDefault(update.date)}{update.wellName ? ` · ${update.wellName}` : ''}</span>
+                      {update.author && <span>By {update.author}</span>}
+                    </div>
+                    <p className="text-gray-800">{update.summary}</p>
+                    {update.keyIssues && (
+                      <p className="text-sm text-amber-700 mt-2"><span className="font-medium">Key issues:</span> {update.keyIssues}</p>
+                    )}
+                    {update.nextSteps && (
+                      <p className="text-sm text-gray-600 mt-1"><span className="font-medium">Next steps:</span> {update.nextSteps}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+
           <Card className="p-6">
             <h3 className="text-lg mb-4 flex items-center gap-2">
               <Users className="h-5 w-5" />

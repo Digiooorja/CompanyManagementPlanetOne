@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  backend-tests:
+    name: Backend tests (Jest + Supertest)
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root_password
+          MYSQL_DATABASE: planetonedashboard_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot_password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      # Deliberately points at a *_test database only - see
+      # backend/tests/env.setup.js, which refuses to run against anything
+      # else. No secrets are committed; these are throwaway CI-only values.
+      DATABASE_URL: mysql://root:root_password@127.0.0.1:3306/planetonedashboard_test
+      JWT_SECRET: ci_test_jwt_secret_never_used_outside_ci
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Run backend test suite
+        working-directory: backend
+        run: npm test
+
+  frontend-tests:
+    name: Frontend tests (Vitest) + typecheck + lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies (workspace root)
+        run: npm ci
+
+      - name: Run frontend test suite
+        working-directory: frontend
+        run: npm test
+
+      - name: Type-check
+        working-directory: frontend
+        run: npx tsc --noEmit
+
+      # NOTE: `npm run lint` is not run here - there is no ESLint config file
+      # in this repo yet (pre-existing gap, unrelated to this test/CI setup),
+      # so it fails immediately on "ESLint couldn't find a configuration
+      # file" rather than reporting real lint issues. Add it back once an
+      # .eslintrc is in place.

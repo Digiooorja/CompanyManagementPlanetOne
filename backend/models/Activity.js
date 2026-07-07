@@ -109,7 +109,32 @@ const Activity = sequelize.define('Activity', {
   }
 }, {
   tableName: 'activities',
-  timestamps: true
+  timestamps: true,
+  hooks: {
+    // Requirements §5.2/§5.3 business rule: progress moving off 0% marks the
+    // activity as actually started (if not already recorded); reaching 100%
+    // marks it Completed with an actual end date (if not already recorded).
+    // Runs for every create/update, including the automatic parent-progress
+    // roll-up in routes/activities.js (bulk `Activity.update()` calls there
+    // pass `individualHooks: true` specifically so this still fires).
+    beforeSave: (activity) => {
+      if (!activity.changed('progress')) return;
+
+      const newProgress = Number(activity.progress) || 0;
+      const previousProgress = activity.isNewRecord ? 0 : Number(activity.previous('progress')) || 0;
+
+      if (previousProgress <= 0 && newProgress > 0 && !activity.actualStartDate) {
+        activity.actualStartDate = new Date();
+      }
+
+      if (newProgress >= 100) {
+        if (!activity.actualEndDate) {
+          activity.actualEndDate = new Date();
+        }
+        activity.status = 'Completed';
+      }
+    }
+  }
 });
 
 // Define associations

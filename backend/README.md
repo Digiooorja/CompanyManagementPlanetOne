@@ -92,6 +92,20 @@ All schema changes are managed through SQL migration files in the `migrations/` 
 | `npm run seed`     | Seed the database with sample data   |
 | `npm run seed:blocks` | Seed concession block data        |
 | `npm run seed:demo`   | Seed a demo user account           |
+| `npm test`         | Run the automated test suite (Jest + Supertest) |
+
+## Testing
+
+Automated tests live in `tests/` (Jest + Supertest), run against a dedicated database
+configured in `.env.test` (never the dev/production database). Run them with:
+```
+npm test
+```
+A safety guard (`tests/env.setup.js` + `tests/globalSetup.js`) refuses to run unless the
+resolved database name contains "test", and the test database is dropped and rebuilt from
+the current Sequelize models on every run for a clean slate. See `tests/globalSetup.js` for
+how the test schema is bootstrapped, and `tests/helpers/` for reusable fixtures (JWT signing,
+seeding a Role/Permission for RBAC tests, seeding a User for FK-constrained columns).
 
 ## Running the Server
 

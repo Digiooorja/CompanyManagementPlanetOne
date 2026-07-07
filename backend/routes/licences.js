@@ -3,7 +3,6 @@ const router = express.Router();
 const { Op } = require('sequelize');
 const Licence = require('../models/Licence');
 const Block = require('../models/Block');
-const { authMiddleware, managerMiddleware, adminMiddleware } = require('../middleware/auth');
 
 // Helper: enrich licence records with block names resolved from blockIds array
 async function enrichWithBlockNames(licences) {
@@ -46,8 +45,9 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// POST create new licence — Manager or Admin only
-router.post('/', authMiddleware, managerMiddleware, async (req, res) => {
+// POST create new licence — gated by the `licences.manage` RBAC permission
+// at the mount level in server.js (permissionProtectedRoutes)
+router.post('/', async (req, res) => {
   try {
     const licence = await Licence.create({
       licenceNumber: req.body.licenceNumber,
@@ -66,8 +66,9 @@ router.post('/', authMiddleware, managerMiddleware, async (req, res) => {
   }
 });
 
-// PUT update licence — Manager or Admin only
-router.put('/:id', authMiddleware, managerMiddleware, async (req, res) => {
+// PUT update licence — gated by the `licences.manage` RBAC permission
+// at the mount level in server.js (permissionProtectedRoutes)
+router.put('/:id', async (req, res) => {
   try {
     const licence = await Licence.findByPk(req.params.id);
     if (!licence) return res.status(404).json({ message: 'Licence not found' });
@@ -90,8 +91,9 @@ router.put('/:id', authMiddleware, managerMiddleware, async (req, res) => {
   }
 });
 
-// DELETE licence — Admin only
-router.delete('/:id', authMiddleware, adminMiddleware, async (req, res) => {
+// DELETE licence — gated by the `licences.manage` RBAC permission
+// at the mount level in server.js (permissionProtectedRoutes)
+router.delete('/:id', async (req, res) => {
   try {
     const licence = await Licence.findByPk(req.params.id);
     if (!licence) return res.status(404).json({ message: 'Licence not found' });

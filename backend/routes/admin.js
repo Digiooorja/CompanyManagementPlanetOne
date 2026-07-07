@@ -337,6 +337,30 @@ router.delete('/users/:id', async (req, res) => {
   }
 });
 
+// --- Automated DB backup management (Launch Readiness Checklist §1) ---
+// Lets an Admin verify the automated schedule is actually producing backups,
+// and trigger an on-demand backup before risky operations (e.g. a migration)
+// without needing shell/CLI access to the server.
+router.get('/backups', (req, res) => {
+  try {
+    const { listBackups } = require('../services/backupService');
+    res.json(listBackups());
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.post('/backups/run', async (req, res) => {
+  try {
+    const { runBackup } = require('../services/backupService');
+    const result = await runBackup();
+    if (!result.ok) return res.status(500).json({ message: result.reason || 'Backup failed' });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // Admin dashboard data
 router.get('/dashboard', async (req, res) => {
   try {

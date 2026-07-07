@@ -5,6 +5,7 @@ const { Op } = require('sequelize');
 const { optionalAuthMiddleware } = require('../middleware/auth');
 const Task = require('../models/Task');
 const User = require('../models/User');
+const { recalcProjectCompletionForTask, recalcProjectCompletion } = require('../services/taskStatusSync');
 
 async function autoAssignActivityTask(activity) {
   try {
@@ -49,6 +50,8 @@ async function autoAssignActivityTask(activity) {
           relatedId: activity.id
         });
       }
+
+      await recalcProjectCompletionForTask({ relatedType: 'Activity', relatedId: activity.id });
     }
   } catch (err) {
     console.error('Failed to auto-assign activity task:', err);
@@ -150,12 +153,12 @@ async function updateParentProgress(parentActivityId, resetWhenEmpty = false) {
 
     await Activity.update(
       { progress: weightedAverageProgress },
-      { where: { id: parentActivity.id } }
+      { where: { id: parentActivity.id }, individualHooks: true }
     );
   } else if (resetWhenEmpty) {
     await Activity.update(
       { progress: 0 },
-      { where: { id: parentActivity.id } }
+      { where: { id: parentActivity.id }, individualHooks: true }
     );
   }
 
@@ -375,6 +378,8 @@ router.post('/', async (req, res) => {
       dueDate: req.body.dueDate || null,
       plannedStartDate: req.body.plannedStartDate || null,
       plannedEndDate: req.body.plannedEndDate || null,
+      actualStartDate: req.body.actualStartDate || null,
+      actualEndDate: req.body.actualEndDate || null,
       progress: req.body.progress || 0,
       plannedCost,
       actualCost,
@@ -387,6 +392,7 @@ router.post('/', async (req, res) => {
     }
     
     await autoAssignActivityTask(activity);
+    await recalcProjectCompletion(activity.projectId);
 
     res.status(201).json(activity);
   } catch (err) {
@@ -478,6 +484,7 @@ router.put('/:id', async (req, res) => {
     if (!activity) return res.status(404).json({ message: 'Activity not found' });
 
     const oldParentActivityId = activity.parentActivityId;
+    const oldProjectId = activity.projectId;
     const newParentActivityId = req.body.parentActivityId !== undefined ? req.body.parentActivityId : oldParentActivityId;
     const plannedCost = req.body.plannedCost !== undefined ? parseFloat(req.body.plannedCost) || 0 : parseFloat(activity.plannedCost || 0);
     const actualCost = req.body.actualCost !== undefined ? parseFloat(req.body.actualCost) || 0 : parseFloat(activity.actualCost || 0);
@@ -568,6 +575,13 @@ router.put('/:id', async (req, res) => {
 
     await updateActivityActualCostFromChildren(activity.id);
 
+    // Roll up to the Project (§5.3 activity -> project roll-up), for both
+    // this activity's current project and its previous one if it moved.
+    await recalcProjectCompletion(updated.projectId);
+    if (req.body.projectId !== undefined && req.body.projectId !== oldProjectId) {
+      await recalcProjectCompletion(oldProjectId);
+    }
+
     const updatedActivity = await Activity.findByPk(activity.id, {
       include: [{
         association: 'subActivities',
@@ -594,12 +608,14 @@ router.delete('/:id', async (req, res) => {
     if (!activity) return res.status(404).json({ message: 'Activity not found' });
 
     const parentActivityId = activity.parentActivityId;
+    const projectId = activity.projectId;
     await activity.destroy();
 
     if (parentActivityId) {
       await updateParentActualCost(parentActivityId);
       await updateParentProgress(parentActivityId, true);
     }
+    await recalcProjectCompletion(projectId);
 
     res.json({ message: 'Activity deleted successfully' });
   } catch (err) {
@@ -631,6 +647,7 @@ router.post('/bulk/update', async (req, res) => {
           if (updatedActivity.parentActivityId) {
             await updateParentProgress(updatedActivity.parentActivityId);
           }
+          await recalcProjectCompletion(updatedActivity.projectId);
 
           return updatedActivity;
         }
