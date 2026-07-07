@@ -106,21 +106,19 @@ router.post('/:id/acknowledge', async (req, res) => {
   }
 });
 
-// POST /:id/snooze — snoozes the alert until a given time. A reason is
-// mandatory for Critical-priority items and is always logged (via the audit
-// hook on the update itself, since Notification is a tracked model).
+// POST /:id/snooze — snoozes the alert for a fixed 30-minute window (or an
+// explicit `snoozeUntil` if the caller supplies one) and re-arms it to
+// reappear afterwards. No reason/comment is required — snoozing is a quick
+// "remind me later" action for any alert regardless of priority; mandatory
+// justification only applies to marking an alert Done (see /acknowledge).
+const DEFAULT_SNOOZE_MS = 30 * 60 * 1000;
 router.post('/:id/snooze', async (req, res) => {
   try {
     const notification = await Notification.findByPk(req.params.id);
     if (!notification) return res.status(404).json({ message: 'Notification not found' });
 
     const { reason, snoozeUntil } = req.body;
-    if (notification.priority === 'Critical' && !reason) {
-      return res.status(400).json({ message: 'A reason is required to snooze a Critical alert' });
-    }
-
-    const defaultSnoozeMs = (notification.recurrenceIntervalHours || 24) * 3600 * 1000;
-    const resolvedSnoozeUntil = snoozeUntil ? new Date(snoozeUntil) : new Date(Date.now() + defaultSnoozeMs);
+    const resolvedSnoozeUntil = snoozeUntil ? new Date(snoozeUntil) : new Date(Date.now() + DEFAULT_SNOOZE_MS);
 
     await notification.update({
       status: 'Snoozed',

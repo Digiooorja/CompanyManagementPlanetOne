@@ -101,7 +101,10 @@ router.post('/', async (req, res) => {
       endDate: req.body.endDate,
       blockId: req.body.blockId,
       block: req.body.block,
-      manager: req.body.manager
+      manager: req.body.manager,
+      budget: req.body.budget !== undefined ? req.body.budget : undefined,
+      spent: req.body.spent !== undefined ? req.body.spent : undefined,
+      completion: req.body.completion !== undefined ? Math.max(0, Math.min(100, Number(req.body.completion))) : undefined
     });
     res.status(201).json(project);
   } catch (err) {
@@ -123,7 +126,10 @@ router.put('/:id', async (req, res) => {
       endDate: req.body.endDate || project.endDate,
       blockId: req.body.blockId || project.blockId,
       block: req.body.block || project.block,
-      manager: req.body.manager || project.manager
+      manager: req.body.manager || project.manager,
+      budget: req.body.budget !== undefined ? req.body.budget : project.budget,
+      spent: req.body.spent !== undefined ? req.body.spent : project.spent,
+      completion: req.body.completion !== undefined ? Math.max(0, Math.min(100, Number(req.body.completion))) : project.completion
     });
 
     res.json(project);

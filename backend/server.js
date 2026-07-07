@@ -19,6 +19,7 @@ require('./models/Notification');
 require('./models/NotificationRule');
 require('./models/Register');
 require('./models/Report');
+require('./models/ReportDefinition');
 require('./models/Risk');
 require('./models/RiskMatrixSetting');
 require('./models/User');
@@ -36,6 +37,15 @@ require('./models/BudgetLine');
 require('./models/Role');
 require('./models/Permission');
 require('./models/RolePermission');
+require('./models/InsurancePolicy');
+require('./models/EnvironmentalPermit');
+require('./models/Nda');
+require('./models/DataRoomGrant');
+require('./models/VendorInvoice');
+require('./models/ForexTransaction');
+require('./models/LocalContentRecord');
+require('./models/HseIncident');
+require('./models/HseExposureRecord');
 
 // Define associations after all models are loaded
 const Project = require('./models/Project');
@@ -193,6 +203,13 @@ const correspondenceRoutes = require('./routes/correspondence');
 const decisionsRoutes = require('./routes/decisions');
 const operationsUpdatesRoutes = require('./routes/operationsUpdates');
 const budgetLinesRoutes = require('./routes/budgetLines');
+const insuranceRoutes = require('./routes/insurance');
+const environmentalPermitsRoutes = require('./routes/environmentalPermits');
+const ndasRoutes = require('./routes/ndas');
+const vendorPaymentsRoutes = require('./routes/vendorPayments');
+const forexRoutes = require('./routes/forex');
+const localContentRoutes = require('./routes/localContent');
+const hseRoutes = require('./routes/hse');
 const rbacRoutes = require('./routes/rbac');
 const orgChartRoutes = require('./routes/orgChart');
 const { authMiddleware, optionalAuthMiddleware, adminMiddleware } = require('./middleware/auth');
@@ -215,7 +232,14 @@ const permissionProtectedRoutes = [
   { path: '/api/correspondence', permission: 'correspondence.manage' },
   { path: '/api/decisions', permission: 'decisions.manage' },
   { path: '/api/operations-updates', permission: 'operations_updates.manage' },
-  { path: '/api/budget-lines', permission: 'budget.manage' }
+  { path: '/api/budget-lines', permission: 'budget.manage' },
+  { path: '/api/insurance', permission: 'insurance.manage' },
+  { path: '/api/environmental-permits', permission: 'env_permits.manage' },
+  { path: '/api/ndas', permission: 'nda.manage' },
+  { path: '/api/vendor-payments', permission: 'vendor_payments.manage' },
+  { path: '/api/forex', permission: 'forex.manage' },
+  { path: '/api/local-content', permission: 'local_content.manage' },
+  { path: '/api/hse', permission: 'hse.manage' }
 ];
 
 const authProtectedRoutes = [
@@ -268,6 +292,13 @@ app.use('/api/correspondence', correspondenceRoutes);
 app.use('/api/decisions', decisionsRoutes);
 app.use('/api/operations-updates', operationsUpdatesRoutes);
 app.use('/api/budget-lines', budgetLinesRoutes);
+app.use('/api/insurance', insuranceRoutes);
+app.use('/api/environmental-permits', environmentalPermitsRoutes);
+app.use('/api/ndas', ndasRoutes);
+app.use('/api/vendor-payments', vendorPaymentsRoutes);
+app.use('/api/forex', forexRoutes);
+app.use('/api/local-content', localContentRoutes);
+app.use('/api/hse', hseRoutes);
 app.use('/api/admin', authMiddleware, adminMiddleware, adminRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/org-chart', authMiddleware, orgChartRoutes);
@@ -493,6 +524,99 @@ const startServer = async () => {
         escalationGraceHours: null,
         priority: 'Critical',
         channels: ['InApp', 'Email']
+      },
+      {
+        name: 'Insurance policy expiry',
+        module: 'InsurancePolicy',
+        triggerType: 'DateBased',
+        dateField: 'expiryDate',
+        leadTimeDays: [90, 60, 30, 7],
+        recurrenceIntervalHours: 24,
+        escalationGraceHours: null,
+        priority: 'High',
+        channels: ['InApp', 'Email']
+      },
+      {
+        name: 'Environmental permit expiry',
+        module: 'EnvironmentalPermit',
+        triggerType: 'DateBased',
+        dateField: 'expiryDate',
+        leadTimeDays: [180, 90, 30],
+        recurrenceIntervalHours: 24,
+        escalationGraceHours: null,
+        priority: 'High',
+        channels: ['InApp', 'Email']
+      },
+      {
+        name: 'NDA expiry reminder',
+        module: 'Nda',
+        triggerType: 'DateBased',
+        dateField: 'expiryDate',
+        leadTimeDays: [30, 7, 1],
+        recurrenceIntervalHours: 24,
+        escalationGraceHours: null,
+        priority: 'Medium',
+        channels: ['InApp']
+      },
+      {
+        name: 'Vendor payment aging',
+        module: 'VendorInvoice',
+        triggerType: 'ThresholdBased',
+        thresholdField: 'daysOutstanding',
+        thresholdValues: [30, 60, 90],
+        recurrenceIntervalHours: 24,
+        escalationGraceHours: null,
+        priority: 'High',
+        channels: ['InApp', 'Email']
+      },
+      {
+        name: 'Forex settlement due',
+        module: 'ForexTransaction',
+        triggerType: 'DateBased',
+        dateField: 'settlementDate',
+        leadTimeDays: [3, 1],
+        recurrenceIntervalHours: 24,
+        escalationGraceHours: null,
+        priority: 'High',
+        channels: ['InApp', 'Email']
+      },
+      {
+        name: 'Local content shortfall',
+        module: 'LocalContentRecord',
+        triggerType: 'ThresholdBased',
+        thresholdField: 'shortfallPercent',
+        thresholdValues: [5, 10],
+        recurrenceIntervalHours: 24,
+        escalationGraceHours: null,
+        priority: 'High',
+        channels: ['InApp', 'Email']
+      },
+      {
+        name: 'HSE incident action due',
+        module: 'HseIncident',
+        triggerType: 'DateBased',
+        dateField: 'actionDueDate',
+        leadTimeDays: [7, 3, 1],
+        recurrenceIntervalHours: 24,
+        escalationGraceHours: 48,
+        priority: 'High',
+        channels: ['InApp', 'Email']
+      },
+      {
+        // §7 "high-band escalation" analogue for HSE: daysOverdue is a
+        // VIRTUAL field (not a real column), so this only works because
+        // evaluateThresholdBased() evaluates thresholds in application code
+        // via `record.get(field)` rather than in the SQL WHERE clause (see
+        // notificationEngine.js) — same technique as Risk.riskScore.
+        name: 'HSE overdue-action escalation',
+        module: 'HseIncident',
+        triggerType: 'ThresholdBased',
+        thresholdField: 'daysOverdue',
+        thresholdValues: [1],
+        recurrenceIntervalHours: 24,
+        escalationGraceHours: null,
+        priority: 'Critical',
+        channels: ['InApp', 'Email']
       }
     ];
 
@@ -547,12 +671,20 @@ const startServer = async () => {
       { key: 'workflows.manage', module: 'Workflows', description: 'Create and edit workflows' },
       { key: 'registers.manage', module: 'Registers', description: 'Create and edit registers' },
       { key: 'reports.view', module: 'Reports', description: 'View reports' },
+      { key: 'reports.manage', module: 'Reports', description: 'Create, edit and delete report catalogue definitions' },
       { key: 'dashboards.view', module: 'Dashboards', description: 'View operational dashboards' },
       { key: 'chairman_view.access', module: 'Chairman View', description: 'Access the executive Chairman View' },
       { key: 'audit.view', module: 'Audit Log', description: 'View and export the audit log' },
       { key: 'admin.manage_users', module: 'Administration', description: 'Create, edit and deactivate user accounts' },
       { key: 'admin.manage_rbac', module: 'Administration', description: 'Configure roles and the permission matrix' },
-      { key: 'notifications.manage_rules', module: 'Notifications', description: 'Configure notification & alert engine rules' }
+      { key: 'notifications.manage_rules', module: 'Notifications', description: 'Configure notification & alert engine rules' },
+      { key: 'insurance.manage', module: 'Insurance Register', description: 'Create, edit and delete insurance policies' },
+      { key: 'env_permits.manage', module: 'Environmental Permit Tracker', description: 'Create, edit and delete environmental permits' },
+      { key: 'nda.manage', module: 'NDA & Data Room Tracker', description: 'Create, edit and delete NDAs and data-room grants' },
+      { key: 'vendor_payments.manage', module: 'Vendor Payment Aging', description: 'Create, edit and delete vendor invoices' },
+      { key: 'forex.manage', module: 'Forex & Banking Workflow', description: 'Create, edit and action forex transactions (request/approve/reject/settle)' },
+      { key: 'local_content.manage', module: 'Local Content Tracking', description: 'Create, edit and delete local-content tracking records' },
+      { key: 'hse.manage', module: 'HSE Register', description: 'Create, edit, close and delete HSE incidents' }
     ];
 
     const permissionRows = {};
@@ -566,19 +698,20 @@ const startServer = async () => {
         'blocks.manage', 'projects.manage', 'activities.manage', 'tasks.manage', 'risks.manage',
         'workflows.manage', 'registers.manage', 'contracts.manage', 'compliance.manage',
         'correspondence.manage', 'decisions.manage', 'operations_updates.manage', 'licences.manage',
-        'budget.manage', 'dashboards.view', 'reports.view'
+        'budget.manage', 'insurance.manage', 'env_permits.manage', 'nda.manage',
+        'vendor_payments.manage', 'forex.manage', 'local_content.manage', 'hse.manage', 'dashboards.view', 'reports.view'
       ],
       User: ['dashboards.view', 'reports.view'],
       'Chairman/Board': ['dashboards.view', 'chairman_view.access', 'reports.view'],
       'CEO/Country Manager': ['dashboards.view', 'chairman_view.access', 'reports.view', 'finance.approve', 'decisions.manage', 'activities.manage'],
       'Project/Operations Manager': ['blocks.manage', 'projects.manage', 'tasks.manage', 'activities.manage', 'operations_updates.manage', 'workflows.manage', 'budget.manage', 'dashboards.view', 'reports.view'],
-      'Legal/Compliance Officer': ['contracts.manage', 'compliance.manage', 'correspondence.manage', 'documents.manage', 'dashboards.view', 'reports.view'],
-      'Finance/Accounts': ['finance.manage', 'finance.approve', 'budget.manage', 'dashboards.view', 'reports.view'],
-      'HSE Officer': ['risks.manage', 'dashboards.view', 'reports.view'],
+      'Legal/Compliance Officer': ['contracts.manage', 'compliance.manage', 'correspondence.manage', 'documents.manage', 'nda.manage', 'insurance.manage', 'env_permits.manage', 'local_content.manage', 'dashboards.view', 'reports.view'],
+      'Finance/Accounts': ['finance.manage', 'finance.approve', 'budget.manage', 'insurance.manage', 'vendor_payments.manage', 'forex.manage', 'local_content.manage', 'dashboards.view', 'reports.view'],
+      'HSE Officer': ['risks.manage', 'env_permits.manage', 'hse.manage', 'dashboards.view', 'reports.view'],
       'Geologist/Drilling Engineer': ['dashboards.view', 'reports.view'],
       'Team Member/Staff': ['dashboards.view', 'reports.view'],
       'External Partner': ['reports.view'],
-      Admin: ['admin.manage_users', 'admin.manage_rbac', 'notifications.manage_rules', 'audit.view']
+      Admin: ['admin.manage_users', 'admin.manage_rbac', 'notifications.manage_rules', 'audit.view', 'reports.manage']
     };
 
     for (const [roleName, permissionKeys] of Object.entries(defaultMatrix)) {

@@ -19,62 +19,6 @@ export function WorkflowDetail() {
   const [actionComment, setActionComment] = useState("");
   const [actionSaving, setActionSaving] = useState(false);
 
-  const defaultWorkflow = {
-    id: 1,
-    title: "AFE Amendment - Block A",
-    type: "Finance Approval",
-    submittedBy: "Sarah Johnson",
-    submitDate: "2026-04-30 14:30",
-    currentStep: "Executive Approval",
-    status: "Awaiting Action",
-    priority: "High",
-    dueDate: "2026-05-05",
-    description: "Request for AFE amendment to increase budget allocation for Onshore drilling operations due to unexpected geological conditions.",
-    amount: 5200000,
-    steps: [
-      {
-        step: "Submitted",
-        status: "Completed",
-        date: "2026-04-30 14:30",
-        user: "Sarah Johnson",
-        action: "Submitted for approval",
-        comment: null,
-      },
-      {
-        step: "Manager Review",
-        status: "Completed",
-        date: "2026-04-30 16:45",
-        user: "Mike Chen",
-        action: "Approved",
-        comment: "Reviewed and approved. Budget justification is sound.",
-      },
-      {
-        step: "Finance Review",
-        status: "Completed",
-        date: "2026-05-01 10:15",
-        user: "Emma Davis",
-        action: "Approved",
-        comment: "Financial analysis completed. Funds available.",
-      },
-      {
-        step: "Executive Approval",
-        status: "Pending",
-        date: null,
-        user: "John Smith",
-        action: null,
-        comment: null,
-      },
-      {
-        step: "Final Processing",
-        status: "Not Started",
-        date: null,
-        user: "System",
-        action: null,
-        comment: null,
-      },
-    ],
-  };
-
   const loadWorkflow = async () => {
     if (!id) return;
     try {
@@ -114,7 +58,7 @@ export function WorkflowDetail() {
     } catch (err) {
       console.error('Error loading workflow:', err);
       setError('Unable to load workflow details.');
-      setWorkflow(defaultWorkflow);
+      setWorkflow(null);
     } finally {
       setLoading(false);
     }
@@ -154,8 +98,8 @@ export function WorkflowDetail() {
       ? workflow.steps
       : workflow?.financeId
         ? deriveFinanceSteps(workflow)
-        : defaultWorkflow.steps
-    : defaultWorkflow.steps;
+        : []
+    : [];
 
   const handleWorkflowAction = async (newStatus: 'Approved' | 'Rejected') => {
     if (!workflow) return;
@@ -232,7 +176,42 @@ export function WorkflowDetail() {
     }
   };
 
-  const currentWorkflow = workflow || defaultWorkflow;
+  const currentWorkflow = workflow;
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <Link to="/workflows">
+            <Button variant="ghost" size="sm">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Workflows
+            </Button>
+          </Link>
+        </div>
+        <Card className="p-8 text-center text-gray-500">Loading workflow...</Card>
+      </div>
+    );
+  }
+
+  if (error || !currentWorkflow) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <Link to="/workflows">
+            <Button variant="ghost" size="sm">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Workflows
+            </Button>
+          </Link>
+        </div>
+        <Card className="p-8 text-center border-red-200 bg-red-50">
+          <XCircle className="h-8 w-8 text-red-500 mx-auto mb-2" />
+          <p className="text-red-700">{error || 'Workflow not found.'}</p>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

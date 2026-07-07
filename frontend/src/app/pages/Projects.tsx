@@ -9,7 +9,7 @@ import { Textarea } from "../components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "../components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "../components/ui/table";
-import { Search, Plus, Filter } from "lucide-react";
+import { Search, Plus, Filter, Pencil } from "lucide-react";
 import { Progress } from "../components/ui/progress";
 import { blocksApi, projectsApi } from "../../services/api";
 import { formatDisplayDateOrDefault } from "../lib/date";
@@ -36,9 +36,81 @@ export function Projects() {
     blockId: '',
     manager: '',
     budget: '',
+    completion: '',
     plannedStartDate: '',
     plannedEndDate: ''
   });
+
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const [editingProjectId, setEditingProjectId] = useState<number | null>(null);
+  const [editProject, setEditProject] = useState({
+    name: '',
+    description: '',
+    status: 'In Progress',
+    blockId: '',
+    manager: '',
+    budget: '',
+    completion: '',
+    plannedStartDate: '',
+    plannedEndDate: ''
+  });
+
+  const handleEditClick = (project: any) => {
+    setEditingProjectId(project.id);
+    setEditProject({
+      name: project.name || '',
+      description: project.description || '',
+      status: project.status || 'In Progress',
+      blockId: project.blockId ? String(project.blockId) : '',
+      manager: project.manager || '',
+      budget: project.budget !== undefined && project.budget !== null ? String(project.budget) : '',
+      completion: project.completion !== undefined && project.completion !== null ? String(project.completion) : '',
+      plannedStartDate: project.startDate ? String(project.startDate).slice(0, 10) : '',
+      plannedEndDate: project.endDate ? String(project.endDate).slice(0, 10) : '',
+    });
+    setError(null);
+    setIsEditOpen(true);
+  };
+
+  const handleUpdateProject = async () => {
+    if (!editingProjectId) return;
+    if (!editProject.name.trim() || !editProject.description.trim()) {
+      setError('Project name and description are required.');
+      return;
+    }
+
+    try {
+      setUpdating(true);
+      setError(null);
+
+      const selectedBlock = blocks.find((block) => String(block.id) === editProject.blockId);
+
+      await projectsApi.update(editingProjectId, {
+        name: editProject.name,
+        description: editProject.description,
+        status: editProject.status,
+        blockId: editProject.blockId && editProject.blockId !== 'none' ? Number(editProject.blockId) : undefined,
+        block: selectedBlock?.name,
+        manager: editProject.manager || undefined,
+        budget: editProject.budget !== '' ? Number(editProject.budget) : undefined,
+        completion: editProject.completion !== '' ? Number(editProject.completion) : undefined,
+        startDate: editProject.plannedStartDate || undefined,
+        endDate: editProject.plannedEndDate || undefined,
+      });
+
+      setIsEditOpen(false);
+      setEditingProjectId(null);
+
+      const data = await projectsApi.getAll();
+      setProjects(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Update project error:', err);
+      setError('Unable to update project. Please try again.');
+    } finally {
+      setUpdating(false);
+    }
+  };
 
   const handleCreateProject = async () => {
     if (!newProject.name.trim() || !newProject.description.trim()) {
@@ -60,6 +132,7 @@ export function Projects() {
         block: selectedBlock?.name,
         manager: newProject.manager || undefined,
         budget: newProject.budget ? Number(newProject.budget) : undefined,
+        completion: newProject.completion !== '' ? Number(newProject.completion) : undefined,
         startDate: newProject.plannedStartDate || undefined,
         endDate: newProject.plannedEndDate || undefined,
       });
@@ -72,6 +145,7 @@ export function Projects() {
         blockId: '',
         manager: '',
         budget: '',
+        completion: '',
         plannedStartDate: '',
         plannedEndDate: ''
       });
@@ -256,6 +330,17 @@ export function Projects() {
                 />
               </div>
               <div>
+                <Label>Completion %</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={newProject.completion}
+                  onChange={(e) => setNewProject({ ...newProject, completion: e.target.value })}
+                  placeholder="0-100 (optional — leave blank to auto-calculate from activities)"
+                />
+              </div>
+              <div>
                 <Label>Description</Label>
                 <Textarea
                   value={newProject.description}
@@ -275,6 +360,125 @@ export function Projects() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Edit Project dialog — opened via the pencil icon on each row below. */}
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Project</DialogTitle>
+            <DialogDescription>Update the project's details.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            <div>
+              <Label>Project Name</Label>
+              <Input
+                value={editProject.name}
+                onChange={(e) => setEditProject({ ...editProject, name: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Block</Label>
+              <Select
+                value={editProject.blockId}
+                onValueChange={(value) => setEditProject({ ...editProject, blockId: value })}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select a block" />
+                </SelectTrigger>
+                <SelectContent>
+                  {blocks.length === 0 ? (
+                    <SelectItem value="none">No blocks available</SelectItem>
+                  ) : (
+                    blocks.map((block) => (
+                      <SelectItem key={block.id} value={String(block.id)}>
+                        {block.name}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Status</Label>
+              <select
+                className="w-full rounded-md border px-3 py-2"
+                value={editProject.status}
+                onChange={(e) => setEditProject({ ...editProject, status: e.target.value })}
+              >
+                <option value="In Progress">In Progress</option>
+                <option value="Active">Active</option>
+                <option value="Planning">Planning</option>
+                <option value="Completed">Completed</option>
+                <option value="On Hold">On Hold</option>
+                <option value="Cancelled">Cancelled</option>
+              </select>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label>Planned Start Date</Label>
+                <Input
+                  type="date"
+                  value={editProject.plannedStartDate}
+                  onChange={(e) => setEditProject({ ...editProject, plannedStartDate: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Planned End Date</Label>
+                <Input
+                  type="date"
+                  value={editProject.plannedEndDate}
+                  onChange={(e) => setEditProject({ ...editProject, plannedEndDate: e.target.value })}
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Manager</Label>
+              <Input
+                value={editProject.manager}
+                onChange={(e) => setEditProject({ ...editProject, manager: e.target.value })}
+                placeholder="Project manager"
+              />
+            </div>
+            <div>
+              <Label>Budget</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={editProject.budget}
+                onChange={(e) => setEditProject({ ...editProject, budget: e.target.value })}
+                placeholder="Budget amount"
+              />
+            </div>
+            <div>
+              <Label>Completion %</Label>
+              <Input
+                type="number"
+                min={0}
+                max={100}
+                value={editProject.completion}
+                onChange={(e) => setEditProject({ ...editProject, completion: e.target.value })}
+                placeholder="0-100"
+              />
+            </div>
+            <div>
+              <Label>Description</Label>
+              <Textarea
+                value={editProject.description}
+                onChange={(e) => setEditProject({ ...editProject, description: e.target.value })}
+                rows={4}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="ghost">Cancel</Button>
+            </DialogClose>
+            <Button onClick={handleUpdateProject} disabled={updating}>
+              {updating ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {error && (
         <Card className="p-4 bg-red-50 border-red-200">
@@ -397,11 +601,16 @@ export function Projects() {
                   {project.manager}
                 </TableCell>
                 <TableCell>
-                  <Link to={`/projects/${project.id}`}>
-                    <Button size="sm" variant="ghost">
-                      View
+                  <div className="flex items-center gap-1">
+                    <Button size="sm" variant="ghost" disabled={!canEdit} onClick={() => handleEditClick(project)}>
+                      <Pencil className="h-3.5 w-3.5" />
                     </Button>
-                  </Link>
+                    <Link to={`/projects/${project.id}`}>
+                      <Button size="sm" variant="ghost">
+                        View
+                      </Button>
+                    </Link>
+                  </div>
                 </TableCell>
               </TableRow>
             )))}

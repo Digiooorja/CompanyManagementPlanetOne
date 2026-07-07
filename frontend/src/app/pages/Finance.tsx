@@ -12,7 +12,6 @@ import { Textarea } from '../components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription, DialogClose } from '../components/ui/dialog';
 import { DollarSign, TrendingUp, TrendingDown, FileText, AlertCircle, CheckCircle, Download } from 'lucide-react';
-import { LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
 import { financeApi, activitiesApi, projectsApi, departmentsApi, documentsApi } from '../../services/api';
 
@@ -234,31 +233,6 @@ export function Finance() {
       pendingInvoices,
     };
   }, [financeItems, invoiceItems]);
-
-  const budgetData = [
-    { block: 'Block A', budget: 25000000, actual: 18500000, variance: 6500000 },
-    { block: 'Block B', budget: 42000000, actual: 38200000, variance: 3800000 },
-    { block: 'Block C', budget: 15000000, actual: 2100000, variance: 12900000 },
-  ];
-
-  const monthlySpend = [
-    { month: 'Nov', spend: 8500000 },
-    { month: 'Dec', spend: 9200000 },
-    { month: 'Jan', spend: 7800000 },
-    { month: 'Feb', spend: 8900000 },
-    { month: 'Mar', spend: 9500000 },
-    { month: 'Apr', spend: 8100000 },
-  ];
-
-  const categorySpend = [
-    { name: 'Drilling', value: 45000000 },
-    { name: 'Equipment', value: 18000000 },
-    { name: 'Personnel', value: 12000000 },
-    { name: 'Services', value: 8000000 },
-    { name: 'Other', value: 5000000 },
-  ];
-
-  const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
   const getStatusColor = (status: string) => {
     switch (status) {

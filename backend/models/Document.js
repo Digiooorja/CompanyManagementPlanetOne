@@ -122,6 +122,33 @@ const Document = sequelize.define('Document', {
     },
     comment: 'File attachment on a task (Requirements §5.3)'
   },
+  insurancePolicyId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'insurance_policies',
+      key: 'id'
+    },
+    comment: 'Link document to an insurance policy (Phase 2 §7 Insurance Register)'
+  },
+  environmentalPermitId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'environmental_permits',
+      key: 'id'
+    },
+    comment: 'Link document to an environmental permit (Phase 2 §7 Environmental Permit Tracker)'
+  },
+  hseIncidentId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'hse_incidents',
+      key: 'id'
+    },
+    comment: 'Link document to an HSE incident, e.g. evidence/photos (Phase 2 §7 HSE Register)'
+  },
   blockId: {
     type: DataTypes.INTEGER,
     allowNull: true,

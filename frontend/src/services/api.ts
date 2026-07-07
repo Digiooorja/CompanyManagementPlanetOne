@@ -242,6 +242,15 @@ export const reportsApi = {
   create: (data: any) => apiCall('/reports', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: number, data: any) => apiCall(`/reports/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: number) => apiCall(`/reports/${id}`, { method: 'DELETE' }),
+  // Report catalogue (name/category/frequency/format/block/last-generated),
+  // backed by the report_definitions table — see backend/routes/reports.js.
+  getDefinitions: () => apiCall<any[]>('/reports/definitions'),
+  getDefinitionById: (id: number) => apiCall<any>(`/reports/definitions/${id}`),
+  createDefinition: (data: any) => apiCall<any>('/reports/definitions', { method: 'POST', body: JSON.stringify(data) }),
+  updateDefinition: (id: number, data: any) => apiCall<any>(`/reports/definitions/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteDefinition: (id: number) => apiCall(`/reports/definitions/${id}`, { method: 'DELETE' }),
+  generate: (definitionId: number, format?: string) =>
+    apiCall<{ report: any; definition: any }>(`/reports/definitions/${definitionId}/generate`, { method: 'POST', body: JSON.stringify({ format }) }),
 };
 // Risks API
 export const risksApi = {
@@ -287,6 +296,145 @@ export const contractsApi = {
   create: (data: any) => apiCall('/contracts', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: number, data: any) => apiCall(`/contracts/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: number) => apiCall(`/contracts/${id}`, { method: 'DELETE' }),
+};
+
+// Insurance Register API — Phase 2 (§7), structurally a clone of contractsApi
+export const insuranceApi = {
+  getAll: (params?: { blockId?: number | string; status?: string; policyType?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.blockId !== undefined) qs.set('blockId', String(params.blockId));
+    if (params?.status) qs.set('status', params.status);
+    if (params?.policyType) qs.set('policyType', params.policyType);
+    const q = qs.toString() ? `?${qs.toString()}` : '';
+    return apiCall<any[]>(`/insurance${q}`);
+  },
+  getById: (id: number) => apiCall<any>(`/insurance/${id}`),
+  create: (data: any) => apiCall('/insurance', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: number, data: any) => apiCall(`/insurance/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: number) => apiCall(`/insurance/${id}`, { method: 'DELETE' }),
+};
+
+// Environmental Permit Tracker API — Phase 2 (§7)
+export const environmentalPermitsApi = {
+  getAll: (params?: { blockId?: number | string; status?: string; permitType?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.blockId !== undefined) qs.set('blockId', String(params.blockId));
+    if (params?.status) qs.set('status', params.status);
+    if (params?.permitType) qs.set('permitType', params.permitType);
+    const q = qs.toString() ? `?${qs.toString()}` : '';
+    return apiCall<any[]>(`/environmental-permits${q}`);
+  },
+  getById: (id: number) => apiCall<any>(`/environmental-permits/${id}`),
+  create: (data: any) => apiCall('/environmental-permits', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: number, data: any) => apiCall(`/environmental-permits/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: number) => apiCall(`/environmental-permits/${id}`, { method: 'DELETE' }),
+};
+
+// NDA & Data Room Tracker API — Phase 2 (§7)
+export const ndasApi = {
+  getAll: (params?: { blockId?: number | string; status?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.blockId !== undefined) qs.set('blockId', String(params.blockId));
+    if (params?.status) qs.set('status', params.status);
+    const q = qs.toString() ? `?${qs.toString()}` : '';
+    return apiCall<any[]>(`/ndas${q}`);
+  },
+  getById: (id: number) => apiCall<any>(`/ndas/${id}`),
+  create: (data: any) => apiCall('/ndas', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: number, data: any) => apiCall(`/ndas/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: number) => apiCall(`/ndas/${id}`, { method: 'DELETE' }),
+  getGrants: (ndaId: number) => apiCall<any[]>(`/ndas/${ndaId}/grants`),
+  createGrant: (ndaId: number, data: { documentId: number; accessLevel?: string }) =>
+    apiCall<any>(`/ndas/${ndaId}/grants`, { method: 'POST', body: JSON.stringify(data) }),
+  revokeGrant: (ndaId: number, grantId: number) =>
+    apiCall<any>(`/ndas/${ndaId}/grants/${grantId}/revoke`, { method: 'PUT' }),
+};
+
+// Vendor Payment Aging API — Phase 2 (§7)
+export const vendorPaymentsApi = {
+  getAll: (params?: { blockId?: number | string; status?: string; bucket?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.blockId !== undefined) qs.set('blockId', String(params.blockId));
+    if (params?.status) qs.set('status', params.status);
+    if (params?.bucket) qs.set('bucket', params.bucket);
+    const q = qs.toString() ? `?${qs.toString()}` : '';
+    return apiCall<any[]>(`/vendor-payments${q}`);
+  },
+  getAgingSummary: () => apiCall<any[]>('/vendor-payments/aging-summary'),
+  getById: (id: number) => apiCall<any>(`/vendor-payments/${id}`),
+  create: (data: any) => apiCall('/vendor-payments', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: number, data: any) => apiCall(`/vendor-payments/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: number) => apiCall(`/vendor-payments/${id}`, { method: 'DELETE' }),
+};
+
+// Forex & Banking Workflow API — Phase 2 (§7), maker-checker approval gate
+export const forexApi = {
+  getAll: (params?: { status?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.status) qs.set('status', params.status);
+    const q = qs.toString() ? `?${qs.toString()}` : '';
+    return apiCall<any[]>(`/forex${q}`);
+  },
+  getById: (id: number) => apiCall<any>(`/forex/${id}`),
+  create: (data: any) => apiCall('/forex', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: number, data: any) => apiCall(`/forex/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: number) => apiCall(`/forex/${id}`, { method: 'DELETE' }),
+  requestApproval: (id: number, comment?: string) => apiCall<any>(`/forex/${id}/request-approval`, { method: 'POST', body: JSON.stringify({ comment }) }),
+  approve: (id: number, comment?: string) => apiCall<any>(`/forex/${id}/approve`, { method: 'POST', body: JSON.stringify({ comment }) }),
+  reject: (id: number, comment?: string) => apiCall<any>(`/forex/${id}/reject`, { method: 'POST', body: JSON.stringify({ comment }) }),
+  settle: (id: number) => apiCall<any>(`/forex/${id}/settle`, { method: 'POST' }),
+};
+
+// Local Content Tracking API — Phase 2 (§7), Ghanaian local-content metrics
+export const localContentApi = {
+  getAll: (params?: { blockId?: number | string; period?: string; metric?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.blockId !== undefined) qs.set('blockId', String(params.blockId));
+    if (params?.period) qs.set('period', params.period);
+    if (params?.metric) qs.set('metric', params.metric);
+    const q = qs.toString() ? `?${qs.toString()}` : '';
+    return apiCall<any[]>(`/local-content${q}`);
+  },
+  getSummary: () => apiCall<any[]>('/local-content/summary'),
+  getById: (id: number) => apiCall<any>(`/local-content/${id}`),
+  create: (data: any) => apiCall('/local-content', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: number, data: any) => apiCall(`/local-content/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: number) => apiCall(`/local-content/${id}`, { method: 'DELETE' }),
+};
+
+// HSE Register API — Phase 2 (§7), incident lifecycle + TRIR/LTIF metrics
+export const hseApi = {
+  getAll: (params?: { blockId?: number | string; status?: string; severity?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.blockId !== undefined) qs.set('blockId', String(params.blockId));
+    if (params?.status) qs.set('status', params.status);
+    if (params?.severity) qs.set('severity', params.severity);
+    const q = qs.toString() ? `?${qs.toString()}` : '';
+    return apiCall<any[]>(`/hse${q}`);
+  },
+  getMetrics: (params?: { blockId?: number | string; totalManHours?: number | string }) => {
+    const qs = new URLSearchParams();
+    if (params?.blockId !== undefined) qs.set('blockId', String(params.blockId));
+    if (params?.totalManHours !== undefined) qs.set('totalManHours', String(params.totalManHours));
+    const q = qs.toString() ? `?${qs.toString()}` : '';
+    return apiCall<any>(`/hse/metrics${q}`);
+  },
+  getById: (id: number) => apiCall<any>(`/hse/${id}`),
+  create: (data: any) => apiCall('/hse', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: number, data: any) => apiCall(`/hse/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: number) => apiCall(`/hse/${id}`, { method: 'DELETE' }),
+  close: (id: number, data: { rootCause?: string; correctiveAction?: string }) =>
+    apiCall<any>(`/hse/${id}/close`, { method: 'POST', body: JSON.stringify(data) }),
+  // Recorded exposure (man-)hours, feeds TRIR/LTIF in getMetrics() above.
+  getExposureHours: (params?: { blockId?: number | string }) => {
+    const qs = new URLSearchParams();
+    if (params?.blockId !== undefined) qs.set('blockId', String(params.blockId));
+    const q = qs.toString() ? `?${qs.toString()}` : '';
+    return apiCall<any[]>(`/hse/exposure-hours${q}`);
+  },
+  createExposureHours: (data: any) => apiCall<any>('/hse/exposure-hours', { method: 'POST', body: JSON.stringify(data) }),
+  updateExposureHours: (id: number, data: any) => apiCall<any>(`/hse/exposure-hours/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteExposureHours: (id: number) => apiCall(`/hse/exposure-hours/${id}`, { method: 'DELETE' }),
 };
 
 // Compliance & Statutory Payments Tracker API (§5.7)

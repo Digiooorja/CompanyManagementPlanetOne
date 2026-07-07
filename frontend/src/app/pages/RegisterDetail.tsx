@@ -54,6 +54,7 @@ export function RegisterDetail() {
   const [projectFilter, setProjectFilter] = useState(searchParams.get("projectId") || "all");
   const [blockFilter, setBlockFilter] = useState(searchParams.get("blockId") || "all");
   const [statusFilter, setStatusFilter] = useState(searchParams.get("status") || "all");
+  const [severityFilter, setSeverityFilter] = useState(searchParams.get("severity") || "all");
 
   const [risks, setRisks] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
@@ -169,6 +170,7 @@ export function RegisterDetail() {
     if (projectFilter !== "all" && String(entry.projectId) !== String(projectFilter)) return false;
     if (blockFilter !== "all" && String(entry.blockId) !== String(blockFilter)) return false;
     if (statusFilter !== "all" && String(entry.status).toLowerCase() !== statusFilter.toLowerCase()) return false;
+    if (severityFilter !== "all" && String(entry.severity).toLowerCase() !== severityFilter.toLowerCase()) return false;
     if (!normalizedSearch) return true;
     return [entry.riskCode, entry.title, entry.owner, entry.projectName]
       .filter(Boolean)
@@ -414,6 +416,17 @@ export function RegisterDetail() {
             <SelectContent>
               <SelectItem value="all">All Statuses</SelectItem>
               {STATUSES.map((s) => (
+                <SelectItem key={s} value={s}>{s}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={severityFilter} onValueChange={setSeverityFilter}>
+            <SelectTrigger className="w-full md:w-[160px]">
+              <SelectValue placeholder="Severity" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Severities</SelectItem>
+              {SEVERITIES.map((s) => (
                 <SelectItem key={s} value={s}>{s}</SelectItem>
               ))}
             </SelectContent>

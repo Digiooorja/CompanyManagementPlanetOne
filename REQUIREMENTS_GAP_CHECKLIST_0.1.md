@@ -27,7 +27,7 @@ Status keys per item: ✅ implemented · ⚠️ partial · ❌ missing
 | Document Repository & Version Control (§5.5) | ✅ Done — category/tags/confidentiality (`allowedRoles`-gated), "Awaiting Response From" + due-date reminders via the Notification Engine, automatic `Superseded` status on new-version upload, owner-or-Admin delete restriction; ⚠️ OCR + full-text search and soft-delete/subscriber-notification explicitly deferred |
 | Dashboards, Charts, Filters & Drill-down (§5.8) | ✅ Done — URL-synced filter bar (Block/Project/Status/Date range) on the Executive Dashboard, filtered CSV export, drill-down query params forwarded and consumed by Projects/Documents/Tasks/Finance/Decisions/Compliance/RegisterDetail (Risk Register); real (no longer hardcoded) Quick Stats and Upcoming Deadlines on the Operational Dashboard; the Risk register (`RegisterDetail.tsx`) was also rewired off hardcoded demo data onto the real `Risk` API; ⚠️ no saved/named views or scheduled email/native Excel/PPT export |
 | Phase 1 modules overall (§5.1–§5.15) | 14 of 15 fully done, 1 partial, 0 untouched |
-| Phase 2 add-ons (§7) | ❌ Not started (expected — Phase 2 scope) |
+| Phase 2 add-ons (§7) | ⚠️ Wave 1 + 2 started (5 of 13) — Insurance Register, Environmental Permit Tracker, NDA & Data Room Tracker, Vendor Payment Aging, Forex & Banking Workflow done per `Phase2DevelopmentPlan.md`; rest not started |
 | Non-functional (§8, §12, §13) | ❌ Largely not started — MFA, multi-currency, integrations, exports, backup/DR |
 
 **Biggest remaining gaps, roughly in priority order:**
@@ -214,20 +214,23 @@ Status keys per item: ✅ implemented · ⚠️ partial · ❌ missing
 
 ---
 
-## 5. Phase 2 — Add-on Modules (§7)  — all ❌ not started
+## 5. Phase 2 — Add-on Modules (§7)
 
+See `Phase2DevelopmentPlan.md` for the full architecture/build plan. Wave 1 ("register clones") and Wave 2
+("finance family") are done:
+
+- [x] ✅ Insurance Register — `backend/models/InsurancePolicy.js`, `backend/routes/insurance.js`, expiry-countdown `NotificationRule`, `insurance.manage` permission, `frontend/src/app/pages/InsuranceRegister.tsx`
+- [x] ✅ Environmental Permit Tracker — `backend/models/EnvironmentalPermit.js`, `backend/routes/environmentalPermits.js`, expiry-countdown `NotificationRule`, `env_permits.manage` permission, `frontend/src/app/pages/EnvironmentalPermits.tsx`
+- [x] ✅ NDA & Data Room Tracker — `backend/models/Nda.js` + `backend/models/DataRoomGrant.js`, `backend/routes/ndas.js` (CRUD + nested grant/revoke endpoints), expiry `NotificationRule`, `nda.manage` permission, `frontend/src/app/pages/NdaTracker.tsx` (NDA list + data-room access manager)
+- [x] ✅ Vendor Payment Aging — `backend/models/VendorInvoice.js` (VIRTUAL `daysOutstanding`/`agingBucket`/`outstandingAmount`), `backend/routes/vendorPayments.js` (`GET /aging-summary` zero-filled roll-up), ThresholdBased `NotificationRule` (30/60/90 days), `vendor_payments.manage` permission, `frontend/src/app/pages/VendorPayments.tsx` (clickable aging matrix)
+- [x] ✅ Forex & Banking Workflow — `backend/models/ForexTransaction.js`, `backend/routes/forex.js` (maker-checker workflow cloned from `budgetLines.js`: `request-approval`/`approve`/`reject`/`settle`, approver ≠ requester enforced), `forex.manage` permission, "Forex settlement due" `NotificationRule`, `frontend/src/app/pages/ForexWorkflow.tsx`
 - [ ] Reserves & Resources Tracker
 - [ ] HSE Register
 - [ ] Local Content Tracking (Ghanaian metrics)
 - [ ] Daily Drilling Report
 - [ ] Daily Geological Report
-- [ ] NDA & Data Room Tracker
 - [ ] Assumptions Matrix
-- [ ] Insurance Register
 - [ ] Partner / BD Pipeline
-- [ ] Forex & Banking Workflow
-- [ ] Vendor Payment Aging
-- [ ] Environmental Permit Tracker
 - [ ] CSR Commitments Tracker
 
 ---

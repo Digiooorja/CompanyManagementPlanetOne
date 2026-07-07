@@ -30,6 +30,13 @@ import { Correspondence } from "./pages/Correspondence";
 import { Decisions } from "./pages/Decisions";
 import { OperationsUpdates } from "./pages/OperationsUpdates";
 import { BudgetTracker } from "./pages/BudgetTracker";
+import { InsuranceRegister } from "./pages/InsuranceRegister";
+import { EnvironmentalPermits } from "./pages/EnvironmentalPermits";
+import { NdaTracker } from "./pages/NdaTracker";
+import { VendorPayments } from "./pages/VendorPayments";
+import { ForexWorkflow } from "./pages/ForexWorkflow";
+import { LocalContent } from "./pages/LocalContent";
+import { HseRegister } from "./pages/HseRegister";
 
 export const router = createBrowserRouter([
   {
@@ -75,6 +82,13 @@ export const router = createBrowserRouter([
           { path: "decisions", Component: Decisions },
           { path: "operations-updates", Component: OperationsUpdates },
           { path: "budget-tracker", Component: BudgetTracker },
+          { path: "insurance", Component: InsuranceRegister },
+          { path: "environmental-permits", Component: EnvironmentalPermits },
+          { path: "nda-tracker", Component: NdaTracker },
+          { path: "vendor-payments", Component: VendorPayments },
+          { path: "forex", Component: ForexWorkflow },
+          { path: "local-content", Component: LocalContent },
+          { path: "hse", Component: HseRegister },
         ],
       }
     ],

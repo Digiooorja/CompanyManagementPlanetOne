@@ -30,6 +30,15 @@ const Report = sequelize.define('Report', {
       model: 'users',
       key: 'id'
     }
+  },
+  definitionId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'report_definitions',
+      key: 'id'
+    },
+    comment: 'Which report catalogue entry (ReportDefinition) this generated instance came from, if any'
   }
 }, {
   tableName: 'reports',

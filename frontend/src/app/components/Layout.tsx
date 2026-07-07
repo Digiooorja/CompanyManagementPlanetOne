@@ -17,7 +17,20 @@ import {
   X,
   LogOut,
   ChevronDown,
-  ScrollText
+  ScrollText,
+  FileSignature,
+  ClipboardCheck,
+  Mail,
+  Gavel,
+  Shield,
+  Leaf,
+  FileLock2,
+  HardHat,
+  Users,
+  Wallet,
+  ArrowLeftRight,
+  Megaphone,
+  Calculator
 } from "lucide-react";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
@@ -56,8 +69,30 @@ export function Layout() {
     { name: "Licences", href: "/licences", icon: ScrollText },
     { name: "Reports", href: "/reports", icon: BarChart3 },
     { name: "Tasks", href: "/tasks", icon: Activity }, // Activity icon or CheckSquare icon, using Activity for now as it's imported
-    ...(isAdmin ? [{ name: "Admin", href: "/admin", icon: Settings }] : []),
   ];
+
+  // Governance/registers introduced during Phase 2 — previously reachable
+  // only by direct URL because they weren't listed in the sidebar.
+  const governanceNavigation = [
+    { name: "Contracts", href: "/contracts", icon: FileSignature },
+    { name: "Compliance", href: "/compliance", icon: ClipboardCheck },
+    { name: "Correspondence", href: "/correspondence", icon: Mail },
+    { name: "Decisions", href: "/decisions", icon: Gavel },
+    { name: "Insurance Register", href: "/insurance", icon: Shield },
+    { name: "Environmental Permits", href: "/environmental-permits", icon: Leaf },
+    { name: "NDA & Data Room", href: "/nda-tracker", icon: FileLock2 },
+    { name: "HSE Register", href: "/hse", icon: HardHat },
+  ];
+
+  const financeOpsNavigation = [
+    { name: "Budget Tracker", href: "/budget-tracker", icon: Calculator },
+    { name: "Vendor Payments", href: "/vendor-payments", icon: Wallet },
+    { name: "Forex Workflow", href: "/forex", icon: ArrowLeftRight },
+    { name: "Local Content", href: "/local-content", icon: Users },
+    { name: "Operations Updates", href: "/operations-updates", icon: Megaphone },
+  ];
+
+  const adminNavigation = isAdmin ? [{ name: "Admin", href: "/admin", icon: Settings }] : [];
 
   const isActive = (href: string) => {
     if (href === "/") {
@@ -158,7 +193,7 @@ export function Layout() {
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         } lg:translate-x-0`}
       >
-        <nav className="p-4 space-y-1">
+        <nav className="p-4 space-y-1 overflow-y-auto h-[calc(100vh-4rem)]">
           {navigation.map((item) => {
             const Icon = item.icon;
             const active = isActive(item.href);
@@ -177,6 +212,70 @@ export function Layout() {
               </Link>
             );
           })}
+
+          <p className="px-3 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Governance &amp; Registers</p>
+          {governanceNavigation.map((item) => {
+            const Icon = item.icon;
+            const active = isActive(item.href);
+            return (
+              <Link
+                key={item.name}
+                to={item.href}
+                className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                  active
+                    ? "bg-blue-50 text-blue-600"
+                    : "text-gray-700 hover:bg-gray-100"
+                }`}
+              >
+                <Icon className="h-5 w-5" />
+                <span>{item.name}</span>
+              </Link>
+            );
+          })}
+
+          <p className="px-3 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Finance &amp; Operations</p>
+          {financeOpsNavigation.map((item) => {
+            const Icon = item.icon;
+            const active = isActive(item.href);
+            return (
+              <Link
+                key={item.name}
+                to={item.href}
+                className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                  active
+                    ? "bg-blue-50 text-blue-600"
+                    : "text-gray-700 hover:bg-gray-100"
+                }`}
+              >
+                <Icon className="h-5 w-5" />
+                <span>{item.name}</span>
+              </Link>
+            );
+          })}
+
+          {adminNavigation.length > 0 && (
+            <>
+              <p className="px-3 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Admin</p>
+              {adminNavigation.map((item) => {
+                const Icon = item.icon;
+                const active = isActive(item.href);
+                return (
+                  <Link
+                    key={item.name}
+                    to={item.href}
+                    className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                      active
+                        ? "bg-blue-50 text-blue-600"
+                        : "text-gray-700 hover:bg-gray-100"
+                    }`}
+                  >
+                    <Icon className="h-5 w-5" />
+                    <span>{item.name}</span>
+                  </Link>
+                );
+              })}
+            </>
+          )}
         </nav>
       </aside>
 
@@ -190,7 +289,7 @@ export function Layout() {
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-20 lg:hidden"
+          className="fixed inset-0 bg-black bg-opacity-50 z-20 lg:hidden print:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}

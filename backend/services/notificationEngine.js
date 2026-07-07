@@ -12,6 +12,13 @@ const BudgetLine = require('../models/BudgetLine');
 const Finance = require('../models/Finance');
 const Document = require('../models/Document');
 const Risk = require('../models/Risk');
+const InsurancePolicy = require('../models/InsurancePolicy');
+const EnvironmentalPermit = require('../models/EnvironmentalPermit');
+const Nda = require('../models/Nda');
+const VendorInvoice = require('../models/VendorInvoice');
+const ForexTransaction = require('../models/ForexTransaction');
+const LocalContentRecord = require('../models/LocalContentRecord');
+const HseIncident = require('../models/HseIncident');
 
 // ---------------------------------------------------------------------------
 // Module registry — the ONLY place that needs to change when a new source
@@ -92,6 +99,58 @@ const MODULE_REGISTRY = {
     priorityField: null,
     label: (record) => `Risk "${record.title}" (${record.severity} severity / ${record.probability} probability)`,
     ownerResolver: (record) => resolveUserByName(record.owner)
+  },
+  InsurancePolicy: {
+    model: InsurancePolicy,
+    openWhere: { status: { [Op.notIn]: ['Expired', 'Cancelled'] } },
+    priorityField: null,
+    label: (record) => `Insurance policy "${record.policyNumber}"${record.insurer ? ` (${record.insurer})` : ''}`,
+    ownerResolver: (record) => resolveUserByName(record.owner)
+  },
+  EnvironmentalPermit: {
+    model: EnvironmentalPermit,
+    openWhere: { status: { [Op.notIn]: ['Expired'] } },
+    priorityField: null,
+    label: (record) => `${record.permitType || 'Environmental permit'} "${record.permitNumber}"`,
+    ownerResolver: (record) => resolveUserByName(record.owner)
+  },
+  Nda: {
+    model: Nda,
+    openWhere: { status: { [Op.notIn]: ['Expired', 'Terminated'] } },
+    priorityField: null,
+    label: (record) => `NDA with "${record.counterparty}"`,
+    ownerResolver: (record) => resolveUserByName(record.owner)
+  },
+  VendorInvoice: {
+    model: VendorInvoice,
+    openWhere: { status: { [Op.ne]: 'Paid' } },
+    priorityField: null,
+    label: (record) => `Vendor invoice "${record.invoiceNumber || record.id}" (${record.vendor})`,
+    // No owner field on VendorInvoice yet — falls back to Admin/Manager broadcast.
+    ownerResolver: () => Promise.resolve(null)
+  },
+  ForexTransaction: {
+    model: ForexTransaction,
+    openWhere: { status: 'Approved' },
+    priorityField: null,
+    label: (record) => `Forex transaction "${record.reference || record.id}" (${record.fromCurrency}\u2192${record.toCurrency})`,
+    // requestedById/approvedById are already proper user FKs, no name lookup needed.
+    ownerResolver: (record) => Promise.resolve(record.approvedById || record.requestedById || null)
+  },
+  LocalContentRecord: {
+    model: LocalContentRecord,
+    openWhere: {},
+    priorityField: null,
+    label: (record) => `Local content ${record.metric} shortfall for ${record.period}`,
+    // No owner field on LocalContentRecord — falls back to Admin/Manager broadcast.
+    ownerResolver: () => Promise.resolve(null)
+  },
+  HseIncident: {
+    model: HseIncident,
+    openWhere: { status: { [Op.ne]: 'Closed' } },
+    priorityField: null,
+    label: (record) => `HSE incident "${record.incidentType}" (${record.severity} severity)${record.location ? ` at ${record.location}` : ''}`,
+    ownerResolver: (record) => resolveUserByName(record.actionOwner)
   }
 };
 
