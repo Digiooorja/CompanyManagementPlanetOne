@@ -27,6 +27,9 @@ export function Tasks() {
   const [departments, setDepartments] = useState<any[]>([]);
   const [workload, setWorkload] = useState<any[]>([]);
   const [workloadLoading, setWorkloadLoading] = useState(false);
+  const [workloadPerson, setWorkloadPerson] = useState<any | null>(null);
+  const [workloadPersonTasks, setWorkloadPersonTasks] = useState<any[]>([]);
+  const [workloadPersonLoading, setWorkloadPersonLoading] = useState(false);
   
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("my-tasks");
@@ -93,6 +96,33 @@ export function Tasks() {
     } finally {
       setWorkloadLoading(false);
     }
+  };
+
+  // Workload rows only show aggregate counts per person - clicking one drills
+  // down into that person's actual open tasks (previously there was no way to
+  // see the assigned task detail behind the count at all).
+  const openWorkloadPerson = async (person: any) => {
+    setWorkloadPerson(person);
+    setWorkloadPersonLoading(true);
+    try {
+      const allTasks = await tasksApi.getAll();
+      const list = Array.isArray(allTasks) ? allTasks : [];
+      const filtered = list.filter((task) => {
+        const matchesPerson = person.userId ? task.assignedToId === person.userId : !task.assignedToId;
+        return matchesPerson && task.status !== "Completed";
+      });
+      setWorkloadPersonTasks(filtered);
+    } catch (err) {
+      console.error("Failed to load tasks for workload person", err);
+      setWorkloadPersonTasks([]);
+    } finally {
+      setWorkloadPersonLoading(false);
+    }
+  };
+
+  const closeWorkloadPerson = () => {
+    setWorkloadPerson(null);
+    setWorkloadPersonTasks([]);
   };
 
   useEffect(() => {
@@ -306,7 +336,15 @@ export function Tasks() {
                 <TableBody>
                   {workload.map((w, idx) => (
                     <TableRow key={idx}>
-                      <TableCell className="font-medium">{w.name}</TableCell>
+                      <TableCell className="font-medium">
+                        <button
+                          type="button"
+                          className="font-medium text-gray-900 hover:text-blue-600 hover:underline text-left"
+                          onClick={() => openWorkloadPerson(w)}
+                        >
+                          {w.name}
+                        </button>
+                      </TableCell>
                       <TableCell>{w.openTasks}</TableCell>
                       <TableCell>
                         {w.overdueTasks > 0 ? (
@@ -562,6 +600,60 @@ export function Tasks() {
                   <Button type="submit">Create Task</Button>
                 </div>
               </form>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Workload drill-down — lists a person's actual open tasks behind their
+          aggregate counts on the Workload tab, and hands off into the same
+          Task Detail modal used elsewhere on this page. */}
+      {workloadPerson && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-2xl bg-white shadow-xl max-h-[90vh] overflow-y-auto">
+            <CardHeader className="border-b bg-gray-50/50 flex flex-row items-start justify-between space-y-0">
+              <div>
+                <CardTitle>{workloadPerson.name}'s Open Tasks</CardTitle>
+                <p className="text-sm text-gray-500 mt-1">
+                  {workloadPerson.openTasks} open task{workloadPerson.openTasks === 1 ? "" : "s"}
+                  {workloadPerson.overdueTasks > 0 ? `, ${workloadPerson.overdueTasks} overdue` : ""}
+                </p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={closeWorkloadPerson}>Close</Button>
+            </CardHeader>
+            <CardContent className="p-6">
+              {workloadPersonLoading ? (
+                <p className="text-sm text-gray-500">Loading tasks...</p>
+              ) : workloadPersonTasks.length === 0 ? (
+                <p className="text-sm text-gray-500">No open tasks found for this person.</p>
+              ) : (
+                <div className="space-y-2">
+                  {workloadPersonTasks.map((task) => (
+                    <button
+                      key={task.id}
+                      type="button"
+                      onClick={() => {
+                        closeWorkloadPerson();
+                        openTaskDetail(task);
+                      }}
+                      className="w-full text-left p-3 rounded-md border hover:border-blue-400 hover:bg-blue-50/50 transition-colors"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium text-gray-900">{task.title}</span>
+                        <Badge variant="outline" className={getStatusColor(task.status)}>{task.status}</Badge>
+                      </div>
+                      <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {task.dueDate ? formatDisplayDateOrDefault(task.dueDate) : "No due date"}
+                        </span>
+                        <span>{task.progress ?? 0}% complete</span>
+                        <Badge variant={getPriorityColor(task.priority)}>{task.priority}</Badge>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
