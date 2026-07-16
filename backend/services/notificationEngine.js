@@ -3,6 +3,7 @@ const Notification = require('../models/Notification');
 const NotificationRule = require('../models/NotificationRule');
 const User = require('../models/User');
 const { sendEmail } = require('./emailService');
+const { loadPermissionMap } = require('../middleware/rbac');
 const Activity = require('../models/Activity');
 const Task = require('../models/Task');
 const Licence = require('../models/Licence');
@@ -20,6 +21,31 @@ const VendorInvoice = require('../models/VendorInvoice');
 const ForexTransaction = require('../models/ForexTransaction');
 const LocalContentRecord = require('../models/LocalContentRecord');
 const HseIncident = require('../models/HseIncident');
+
+// Maps a MODULE_REGISTRY module name to the RBAC permission key that governs
+// who's eligible to RECEIVE notifications for it (§10.4 "add notification
+// permission for each module"). Seeded/derived in server.js's defaultMatrix.
+// Used by resolveRecipients() below whenever a rule has no specific
+// per-record owner to fall back on.
+const MODULE_NOTIFY_PERMISSIONS = {
+  Activity: 'activities.notify',
+  Task: 'tasks.notify',
+  Licence: 'licences.notify',
+  Contract: 'contracts.notify',
+  ComplianceObligation: 'compliance.notify',
+  Correspondence: 'correspondence.notify',
+  Document: 'documents.notify',
+  BudgetLine: 'budget.notify',
+  FinanceAFE: 'finance.notify',
+  Risk: 'risks.notify',
+  InsurancePolicy: 'insurance.notify',
+  EnvironmentalPermit: 'env_permits.notify',
+  Nda: 'nda.notify',
+  VendorInvoice: 'vendor_payments.notify',
+  ForexTransaction: 'forex.notify',
+  LocalContentRecord: 'local_content.notify',
+  HseIncident: 'hse.notify'
+};
 
 // ---------------------------------------------------------------------------
 // Module registry — the ONLY place that needs to change when a new source
@@ -209,29 +235,56 @@ async function deliverEmailChannel(channels, userId, subject, message) {
   await sendEmail({ to: user.email, subject, text: message });
 }
 
-// Falls back to notifying Admins/Managers when no specific owner can be
-// resolved for a record (e.g. Licence has no responsible-person field yet).
-async function resolveRecipients(recipientId) {
+// Falls back to notifying whoever holds the module's `<module>.notify` RBAC
+// permission (Admin always qualifies) when no specific per-record owner can
+// be resolved (e.g. Licence has no responsible-person field yet) — replaces
+// the previous hardcoded "broadcast to every Admin/Manager org-wide"
+// behaviour. When the rule has `departmentIds` set, this is further narrowed
+// to users in ANY of those departments (§10.4 "one module notification can
+// be sent to multiple department"). Has no effect when `recipientId` is
+// already resolved (e.g. Task.assignedToId) — a specific owner is always
+// notified about their own record regardless of department.
+async function resolveRecipients(recipientId, rule) {
   if (recipientId) return [recipientId];
-  const fallbackUsers = await User.findAll({
-    where: { role: { [Op.in]: ['Admin', 'Manager'] }, active: true },
-    attributes: ['id']
-  });
-  return fallbackUsers.map((u) => u.id);
+
+  const where = { active: true };
+  const departmentIds = rule?.departmentIds;
+  if (Array.isArray(departmentIds) && departmentIds.length > 0) {
+    where.departmentId = { [Op.in]: departmentIds };
+  }
+
+  const candidates = await User.findAll({ where, attributes: ['id', 'role'] });
+
+  const notifyPermission = MODULE_NOTIFY_PERMISSIONS[rule?.module];
+  if (!notifyPermission) {
+    // No RBAC mapping for this module (shouldn't normally happen for a
+    // MODULE_REGISTRY-backed rule) — preserve the previous Admin/Manager
+    // broadcast, still honouring the department filter above.
+    return candidates.filter((u) => ['Admin', 'Manager'].includes(u.role)).map((u) => u.id);
+  }
+
+  const permissionMap = await loadPermissionMap();
+  return candidates
+    .filter((u) => u.role === 'Admin' || permissionMap.get(u.role)?.has(notifyPermission))
+    .map((u) => u.id);
 }
 
 // Creates or "re-arms" a notification per recipient. Re-arming is what makes
 // a recurring alert reappear every login/interval until Done or snoozed
 // (Requirements §5.2 business rule / §10.1 Recurring trigger type).
 async function armNotification({ rule, module, entityId, bucket, dueAt, message, recipientId, priority }) {
-  const recipients = await resolveRecipients(recipientId);
+  const recipients = await resolveRecipients(recipientId, rule);
   const effectivePriority = priority || rule.priority;
   const now = new Date();
 
   const emailSubject = `[PlanetOne] ${effectivePriority} priority alert — ${module}`;
 
   for (const userId of recipients) {
-    const dedupeKey = `${module}|${module}|${entityId}|${rule.triggerType}|${bucket}|${userId}`;
+    // Includes rule.id (not just module) so two different rules watching the
+    // SAME module (e.g. Licence's separate "expiry" and "phase countdown"
+    // DateBased rules, §5.9) never collide into the same Notification row
+    // just because they happen to compute the same lead-time bucket.
+    const dedupeKey = `${module}|${rule.id}|${entityId}|${rule.triggerType}|${bucket}|${userId}`;
     const existing = await Notification.findOne({ where: { dedupeKey } });
 
     if (!existing) {

@@ -132,12 +132,6 @@ export function RegisterDetail() {
     loadMatrixConfig();
   }, []);
 
-  useEffect(() => {
-    const handler = (e: any) => setSearchQuery(e?.detail?.query || "");
-    window.addEventListener('globalSearch', handler as EventListener);
-    return () => window.removeEventListener('globalSearch', handler as EventListener);
-  }, []);
-
   const projectMap = useMemo(() => {
     const map = new Map<string, any>();
     projects.forEach((p) => map.set(String(p.id), p));

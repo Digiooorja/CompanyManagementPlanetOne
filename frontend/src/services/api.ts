@@ -281,6 +281,9 @@ export const licencesApi = {
   create: (data: any) => apiCall('/licences', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: number, data: any) => apiCall(`/licences/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: number) => apiCall(`/licences/${id}`, { method: 'DELETE' }),
+  // Controlled phase transition with mandatory sign-off (§5.9)
+  transitionPhase: (id: number, data: { newPhase: string; phaseStartDate?: string; phaseEndDate?: string; minWorkObligation?: string; comment: string; confirmed: true }) =>
+    apiCall(`/licences/${id}/transition-phase`, { method: 'POST', body: JSON.stringify(data) }),
 };
 
 // Contracts API — Contract Register with expiry/renewal alerts (§5.11)
@@ -536,4 +539,11 @@ export const tasksApi = {
   create: (data: any) => apiCall('/tasks', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: number, data: any) => apiCall(`/tasks/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: number) => apiCall(`/tasks/${id}`, { method: 'DELETE' }),
+};
+
+// Global search API (top header search bar) — site-wide search across the
+// primary content modules; returns { query, results: [{ type, id, title,
+// subtitle, link }] }.
+export const searchApi = {
+  global: (query: string) => apiCall<{ query: string; results: any[] }>(`/search?q=${encodeURIComponent(query)}`),
 };

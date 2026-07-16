@@ -15,7 +15,7 @@ Status keys per item: ✅ implemented · ⚠️ partial · ❌ missing
 | Area | Status |
 |---|---|
 | Central Audit Log (§5.4) | ✅ Done — immutable, hooked into every model, CSV export |
-| Notification & Alert Engine (§5.2, §10) | ✅ Backend done — date/threshold/status/recurring triggers, escalation, snooze; ⚠️ email/SMS transport not wired |
+| Notification & Alert Engine (§5.2, §10) | ✅ Done — date/threshold/status/recurring triggers, escalation, snooze, Email transport via `emailService.js`/nodemailer (2026-07-07); ⚠️ SMS still not wired |
 | Activity recurring pop-up reminders (§5.2) | ✅ Done — login/interval modal, mandatory Critical comments |
 | New register modules — Contract, Compliance, Correspondence, Decision, Operations Update (§5.7, §5.11–§5.14) | ✅ Done — models, routes, alert rules, functional CRUD pages |
 | RBAC role matrix (§4) | ✅ Done — 12 roles, configurable `Role`/`Permission`/`RolePermission` matrix, admin-editable UI; all 11 mutation-gated modules migrated off the legacy Admin/Manager array onto `requirePermission()` |
@@ -26,14 +26,17 @@ Status keys per item: ✅ implemented · ⚠️ partial · ❌ missing
 | AFE Tracking (§5.10) | ✅ Done — authorised/committed/actual-to-date/variance on the existing `Finance` AFE records, automatic aggregation from linked payments, supplementary AFE chain, 80%/100% utilisation alerts, enforced reconciliation sign-off on closure |
 | Document Repository & Version Control (§5.5) | ✅ Done — category/tags/confidentiality (`allowedRoles`-gated), "Awaiting Response From" + due-date reminders via the Notification Engine, automatic `Superseded` status on new-version upload, owner-or-Admin delete restriction; ⚠️ OCR + full-text search and soft-delete/subscriber-notification explicitly deferred |
 | Dashboards, Charts, Filters & Drill-down (§5.8) | ✅ Done — URL-synced filter bar (Block/Project/Status/Date range) on the Executive Dashboard, filtered CSV export, drill-down query params forwarded and consumed by Projects/Documents/Tasks/Finance/Decisions/Compliance/RegisterDetail (Risk Register); real (no longer hardcoded) Quick Stats and Upcoming Deadlines on the Operational Dashboard; the Risk register (`RegisterDetail.tsx`) was also rewired off hardcoded demo data onto the real `Risk` API; ⚠️ no saved/named views or scheduled email/native Excel/PPT export |
-| Phase 1 modules overall (§5.1–§5.15) | 14 of 15 fully done, 1 partial, 0 untouched |
+| Phase 1 modules overall (§5.1–§5.15) | 15 of 15 fully done — Licence Phase Countdown (§5.9) closed 2026-07-10 |
 | Phase 2 add-ons (§7) | ⚠️ Wave 1 + 2 done, Wave 3/4 started (7 of 13) — Insurance Register, Environmental Permit Tracker, NDA & Data Room Tracker, Vendor Payment Aging, Forex & Banking Workflow, Local Content Tracking, HSE Register done per `Phase2DevelopmentPlan.md`; rest not started |
-| Non-functional (§8, §12, §13) | ❌ Largely not started — MFA, multi-currency, integrations, exports, backup/DR |
+| Non-functional (§8, §12, §13) | ⚠️ Mostly not started — MFA, multi-currency, most exports still open; ✅ backup/DR (2026-07-07) and SMTP email integration (2026-07-07) are done |
 
 **Biggest remaining gaps, roughly in priority order:**
-1. Email/SMS transport for the notification engine (§10.2) — currently in-app only.
+1. ~~Email/SMS transport for the notification engine (§10.2) — currently in-app only.~~ Email ✅ done
+   2026-07-07 (`backend/services/emailService.js`); SMS still not wired (no SMS provider integration exists
+   anywhere in the codebase — would need a new provider account/API, out of scope until requested).
 2. True native PDF/PowerPoint export + versioned archive for Chairman View (§6) — currently browser print-to-PDF.
-3. Remaining Phase 1 partial: Licence phase/countdown fields (§5.9) is the only substantial residual gap; Task→Project progress roll-up (§5.3) was closed 2026-07-07.
+3. ~~Remaining Phase 1 partial: Licence phase/countdown fields (§5.9) is the only substantial residual gap~~
+   ✅ done 2026-07-10 — **all 15 Phase 1 modules are now fully implemented.**
 4. ~~Fold `documents`/`comments`/`tasks`/`licences`/`finance` routes into the RBAC matrix too~~ ✅ done 2026-07-07.
 5. OCR + full-text search and recoverable soft-delete/subscriber notifications for the Document Repository (§5.5) — explicitly deferred, not yet started.
 6. Phase 2 add-on modules (§7) and non-functional hardening (§8/§12/§13) — out of Phase 1 scope, deferred by design.
@@ -173,10 +176,27 @@ Status keys per item: ✅ implemented · ⚠️ partial · ❌ missing
 - [ ] ❌ Scheduled email delivery of dashboard views; native Excel/PowerPoint export (CSV done for Blocks; Chairman View still uses browser print-to-PDF, §6)
 
 ### 5.9 Licence Phase Countdown
-- [~] ⚠️ `Licence` has type/expiry/status
-- [ ] Add phase enum (Exploration/Extension/Appraisal/Development/Production), phase start/end, min work obligation
-- [ ] Daily-recalculated countdown; banners at 180/90/30 days; escalate <30 to Executive Dashboard
-- [ ] Controlled phase transition with sign-off (audited)
+- [x] ✅ `Licence` has type/expiry/status, plus phase enum (Exploration/Extension/Appraisal/Development/
+      Production), `phaseStartDate`/`phaseEndDate`, and `minWorkObligation` (2026-07-10, migration
+      `20260604_029_licence_phase_countdown.sql`)
+- [x] ✅ Countdown banners at 180/90/30 days — a second `NotificationRule` ("Licence phase countdown",
+      `dateField='phaseEndDate'`) reuses the existing generic Notification Engine with no engine changes;
+      escalated to the Executive Dashboard the same way licence expiry already was (`chairmanDeadlines`/
+      `licenceDeadlines`/`computeMilestones()` in `ExecutiveDashboard.tsx` all now also surface phase-end
+      countdown items, red/critical banding at <30 days)
+- [x] ✅ Controlled phase transition with sign-off (audited) — `POST /api/licences/:id/transition-phase`
+      requires `newPhase`, a mandatory `comment`, and `confirmed: true`; records `phaseTransitionedById`/
+      `phaseTransitionedAt`/`phaseTransitionComment`. A plain `PUT` rejects any attempt to change `phase`
+      directly (400, points to the transition endpoint) — mirrors the existing AFE closure sign-off pattern
+      in `routes/finance.js`. Frontend: `Licences.tsx` gained a "Transition Phase" dialog/button per card
+      plus a phase countdown badge; the phase select is editable only when first creating a licence, and
+      read-only afterwards.
+- [x] ✅ Bug fix (found while wiring this up): `notificationEngine.js`'s `dedupeKey` was built from
+      `${module}|${module}|...` (the module name duplicated, not the rule) — harmless with one DateBased
+      rule per module, but two rules on the same module (the new phase-countdown rule alongside the
+      pre-existing expiry rule) could collide into the same `Notification` row if they ever computed the
+      same lead-time bucket. Fixed generically by keying on `rule.id` instead — benefits any future module
+      that gains a second rule of the same trigger type.
 
 ### 5.10 AFE Tracking (Actuals vs. Authorised)
 - [x] ✅ Authorised (`amount`) / `committedAmount` / `actualToDate` + auto-computed `variancePercent` added to the existing `Finance` model (`recordType='AFE'`) — `backend/models/Finance.js`
@@ -214,7 +234,7 @@ Status keys per item: ✅ implemented · ⚠️ partial · ❌ missing
 ### 5.15 Risk Register (Basic)
 - [x] ✅ `Risk` has severity/probability/status/owner/mitigation — `backend/models/Risk.js`
 - [x] ✅ Auto-calc score = severity weight × probability weight, exposed as VIRTUAL `riskScore`/`riskBand` fields (not stored columns, mirroring the existing `Finance.utilisationPercent` pattern) so the generic Notification Engine's ThresholdBased evaluator can read them with no engine changes; matrix is Admin-configurable via `GET/PUT /api/risks/matrix-config` (weights + Low/Medium/High thresholds), cached in `backend/config/riskMatrix.js` and editable in-app from the Risk Register page ("Risk Matrix" button, Admin-only)
-- [x] ✅ Review-date reminder — new `reviewDate` field on `Risk`; "Risk review-date reminders" `NotificationRule` (14/7/1-day leads) reuses the shared Notification Engine; high-band escalation — "Risk high-band escalation" threshold-based rule fires a Critical in-app+email alert (to the risk owner, falling back to Admin/Manager broadcast) whenever `riskScore` crosses the configured high threshold — `backend/migrations/20260604_019_risk_matrix.sql`, `backend/server.js`, `backend/services/notificationEngine.js`
+- [x] ✅ Review-date reminder — new `reviewDate` field on `Risk`; "Risk review-date reminders" `NotificationRule` (14/7/1-day leads) reuses the shared Notification Engine; high-band escalation — "Risk high-band escalation" threshold-based rule fires a Critical in-app+email alert (to the risk owner, falling back to whoever holds `risks.notify` — Admin/Manager by default, RBAC-configurable and department-scopable since 2026-07-10) whenever `riskScore` crosses the configured high threshold — `backend/migrations/20260604_019_risk_matrix.sql`, `backend/server.js`, `backend/services/notificationEngine.js`
 - [x] ✅ Frontend: `RegisterDetail.tsx` (Risk Register) gained Score/Band/Review Date columns, a Review Date field on the create/edit form, and an Admin-only inline Risk Matrix editor
 
 ---
@@ -354,16 +374,25 @@ See `Phase2DevelopmentPlan.md` for the full architecture/build plan. Wave 1 ("re
 ## 6. Notification & Alert Engine (§10)  ⭐ foundational
 
 - [x] ✅ Trigger types: date-based, threshold-based, status-based, recurring — generic engine in `services/notificationEngine.js`
-- [~] ⚠️ Channels: `channels` field + priority stored on each alert; **actual email/SMS delivery not wired** (In-app pop-up ack flow via `/acknowledge` exists; no email/SMS transport yet)
+- [x] ✅ Channels: `channels` field + priority stored on each alert; **Email transport wired** (2026-07-07,
+      `backend/services/emailService.js` via nodemailer, best-effort/never blocks in-app delivery); ⚠️ SMS
+      still not wired (no SMS provider integration exists in the codebase). In-app pop-up ack flow via
+      `/acknowledge` also in place.
 - [x] ✅ Escalation paths (per-rule `escalationGraceHours`, one-time escalation sweep) + a fixed 30-minute snooze (no reason required, any priority — see §5.2)
 - [x] ✅ Admin config of lead times / grace periods / channels per module via `NotificationRule` + `/api/notification-rules` (Admin-only, no code change needed); user-level preference overrides not yet implemented
+- [x] ✅ **Per-module notification RBAC permission + department scoping** (2026-07-10) — one `<module>.notify`
+      permission per module (separate from `<module>.manage`), auto-derived onto every role that already has
+      the matching manage permission; `NotificationRule.departmentIds` (JSON array) optionally restricts a
+      rule's fallback broadcast to one or more specific departments instead of org-wide. Admin-configurable
+      via `Admin.tsx`'s new "Notification Rules" tab (department chips) + the RBAC Matrix tab (the `.notify`
+      permissions appear there automatically, no frontend change needed).
 
 **Implementation notes:**
-- Model registry (`MODULE_REGISTRY`) now covers `Activity` (dueDate), `Task` (dueDate), `Licence` (expiryDate), `Contract` (expiryDate), `ComplianceObligation` (dueDate), `Correspondence` (responseDueDate) — extend the registry + add a rule row for AFE/other modules as they're built; no engine changes needed.
-- Recipient resolution: `Task.assignedToId` is a proper FK; `Activity.assignedTo` is matched by name (best-effort) since it's still a free-text string; `Licence` has no owner field yet, so alerts fall back to broadcasting to all Admin/Manager users.
+- Model registry (`MODULE_REGISTRY`) now covers `Activity` (dueDate), `Task` (dueDate), `Licence` (expiryDate + phaseEndDate, §5.9), `Contract` (expiryDate), `ComplianceObligation` (dueDate), `Correspondence` (responseDueDate) — extend the registry + add a rule row for AFE/other modules as they're built; no engine changes needed.
+- Recipient resolution: `Task.assignedToId` is a proper FK; `Activity.assignedTo` is matched by name (best-effort) since it's still a free-text string. When no specific per-record owner is resolved (e.g. Licence has no responsible-person field), the engine now falls back to whoever holds the module's `<module>.notify` RBAC permission (Admin always qualifies), optionally further restricted to specific department(s) via `NotificationRule.departmentIds` — replaces the old hardcoded "broadcast to every Admin/Manager org-wide" behaviour (2026-07-10).
 - Sweep runs hourly via `startNotificationScheduler()`; Admin can force an immediate run via `POST /api/notifications/run-check`.
-- Default rules are seeded on server startup (Activity/Task/Licence/Contract/Compliance/Correspondence date reminders) — see `defaultRules` in `server.js`.
-- Migration `20260604_009_notification_engine.sql` must be applied (`npm run migrate` in `backend/`) before this is usable in an existing database.
+- Default rules are seeded on server startup (Activity/Task/Licence expiry+phase/Contract/Compliance/Correspondence date reminders) — see `defaultRules` in `server.js`.
+- Migration `20260604_009_notification_engine.sql` must be applied (`npm run migrate` in `backend/`) before this is usable in an existing database; likewise `20260604_030`/`20260604_031` for the department-scoping columns.
 
 ---
 
@@ -372,7 +401,7 @@ See `Phase2DevelopmentPlan.md` for the full architecture/build plan. Wave 1 ("re
 - [ ] Performance: pages/dashboards <3s at 100 concurrent users
 - [ ] Security: MFA (Finance/Legal/Chairman), TLS + encryption at rest, doc/folder-level permissions
 - [ ] Multi-currency (GHS/USD) with configurable base reporting currency
-- [ ] Integrations: SMTP email (Phase 1), Calendar sync, SSO/Active Directory
+- [ ] Integrations: ~~SMTP email (Phase 1)~~ ✅ done 2026-07-07 (`emailService.js`); Calendar sync, SSO/Active Directory still not started
 - [ ] Exports: PDF/Excel/PowerPoint/CSV
 - [ ] Backup/DR, retention, Ghana Data Protection Act (Act 843) compliance
 

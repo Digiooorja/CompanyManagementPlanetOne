@@ -64,12 +64,6 @@ export function Documents() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const handler = (e: any) => setSearchQuery(e?.detail?.query || "");
-    window.addEventListener('globalSearch', handler as EventListener);
-    return () => window.removeEventListener('globalSearch', handler as EventListener);
-  }, []);
-
-  useEffect(() => {
     const loadData = async () => {
       try {
         setLoading(true);

@@ -37,11 +37,26 @@ import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { useAuth } from "../contexts/AuthContext";
 import { NotificationPopupEngine } from "./NotificationPopupEngine";
+import { searchApi } from "../../services/api";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
+
+const SEARCH_RESULT_ICONS: Record<string, any> = {
+  Block: Box,
+  Project: FolderKanban,
+  Activity: Activity,
+  Task: ClipboardCheck,
+  Document: FileText,
+  Contract: FileSignature,
+  Licence: ScrollText,
+  Compliance: ClipboardCheck,
+  Correspondence: Mail,
+  Decision: Gavel,
+  Risk: Shield,
+};
 
 export function Layout() {
   const location = useLocation();
@@ -49,6 +64,11 @@ export function Layout() {
   const { user, logout, isGuest, isAdmin } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const searchDebounceRef = useRef<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchBlurTimeoutRef = useRef<number | null>(null);
 
   // Listen for global requests to close the sidebar (e.g., from pages opening dialogs)
   useEffect(() => {
@@ -56,6 +76,65 @@ export function Layout() {
     window.addEventListener('closeSidebar', handler as EventListener);
     return () => window.removeEventListener('closeSidebar', handler as EventListener);
   }, []);
+
+  // Global search bar: queries the whole DB (GET /api/search) and shows a
+  // dropdown of matching records with a direct link to the page they live
+  // on. This dropdown is the single, canonical place search results are
+  // shown - previously this bar also dispatched a `globalSearch` DOM event
+  // that individual pages listened to in order to filter their OWN
+  // already-loaded local list, which meant the same search could show two
+  // different, inconsistent result sets (an empty dropdown here + a
+  // populated list on the page, or vice versa). That per-page listening was
+  // removed from every page; nothing listens for this event anymore, so it's
+  // no longer dispatched either.
+  const runGlobalSearch = (query: string) => {
+    setSearchQuery(query);
+
+    if (searchDebounceRef.current) {
+      window.clearTimeout(searchDebounceRef.current);
+    }
+
+    searchDebounceRef.current = window.setTimeout(async () => {
+      const trimmed = query.trim();
+      if (trimmed.length < 2) {
+        setSearchResults([]);
+        setSearchLoading(false);
+        setSearchOpen(false);
+        return;
+      }
+
+      setSearchOpen(true);
+      setSearchLoading(true);
+      try {
+        const data = await searchApi.global(trimmed);
+        setSearchResults(Array.isArray(data?.results) ? data.results : []);
+      } catch (err) {
+        console.error('Global search failed', err);
+        setSearchResults([]);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 300);
+  };
+
+  const handleSearchResultClick = (link: string) => {
+    setSearchOpen(false);
+    navigate(link);
+  };
+
+  // Small delay before closing on blur so a click on a result registers first.
+  const handleSearchBlur = () => {
+    searchBlurTimeoutRef.current = window.setTimeout(() => setSearchOpen(false), 150);
+  };
+
+  const handleSearchFocus = () => {
+    if (searchBlurTimeoutRef.current) {
+      window.clearTimeout(searchBlurTimeoutRef.current);
+    }
+    if (searchQuery.trim().length >= 2) {
+      setSearchOpen(true);
+    }
+  };
 
   const navigation = [
     { name: "Dashboard", href: "/", icon: LayoutDashboard },
@@ -135,18 +214,46 @@ export function Layout() {
                 type="search"
                 placeholder="Search projects, documents, activities..."
                 className="pl-10 bg-gray-50"
-                onChange={(e) => {
-                  const q = (e.target as HTMLInputElement).value || "";
-                  if (searchDebounceRef.current) {
-                    window.clearTimeout(searchDebounceRef.current);
-                  }
-                  // debounce broadcast
-                  // @ts-ignore
-                  searchDebounceRef.current = window.setTimeout(() => {
-                    window.dispatchEvent(new CustomEvent('globalSearch', { detail: { query: q } }));
-                  }, 250);
-                }}
+                value={searchQuery}
+                onChange={(e) => runGlobalSearch((e.target as HTMLInputElement).value || "")}
+                onFocus={handleSearchFocus}
+                onBlur={handleSearchBlur}
               />
+
+              {searchOpen && (
+                <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-96 overflow-y-auto z-50">
+                  {searchLoading ? (
+                    <p className="p-4 text-sm text-gray-500">Searching...</p>
+                  ) : searchResults.length === 0 ? (
+                    <p className="p-4 text-sm text-gray-500">No results found for "{searchQuery.trim()}".</p>
+                  ) : (
+                    <ul className="py-1">
+                      {searchResults.map((result) => {
+                        const ResultIcon = SEARCH_RESULT_ICONS[result.type] || FileText;
+                        return (
+                          <li key={`${result.type}-${result.id}`}>
+                            <button
+                              type="button"
+                              className="w-full flex items-start gap-3 px-4 py-2 text-left hover:bg-gray-50"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => handleSearchResultClick(result.link)}
+                            >
+                              <ResultIcon className="h-4 w-4 text-gray-400 mt-0.5 shrink-0" />
+                              <span className="min-w-0">
+                                <span className="block text-sm font-medium text-gray-900 truncate">{result.title}</span>
+                                <span className="block text-xs text-gray-500">
+                                  {result.type}
+                                  {result.subtitle ? ` · ${result.subtitle}` : ""}
+                                </span>
+                              </span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 

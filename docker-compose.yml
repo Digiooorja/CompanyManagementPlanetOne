@@ -8,10 +8,44 @@ services:
     ports:
       - "3306:3306"
     environment:
-      MYSQL_ROOT_PASSWORD: Yash1234
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-Yash1234}
       MYSQL_DATABASE: PlanetOneDashboard
     volumes:
       - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${DB_ROOT_PASSWORD:-Yash1234}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    container_name: planetone-backend
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - ./backend/.env
+    environment:
+      # Overrides whatever DATABASE_URL is in backend/.env so the backend always reaches the "db"
+      # service by its Docker network name rather than localhost.
+      DATABASE_URL: mysql://root:${DB_ROOT_PASSWORD:-Yash1234}@db:3306/PlanetOneDashboard
+      PORT: 5000
+    ports:
+      - "5000:5000"
+    volumes:
+      - backend_backups:/app/backups
+
+  frontend:
+    build: ./frontend
+    container_name: planetone-frontend
+    restart: always
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
 
 volumes:
   mysql_data:
+  backend_backups:

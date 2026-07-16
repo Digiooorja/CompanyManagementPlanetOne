@@ -100,7 +100,6 @@ export function ExecutiveDashboard() {
   const [auditFeed, setAuditFeed] = useState<any[]>([]);
   const [loadingBlocks, setLoadingBlocks] = useState(true);
   const [blockError, setBlockError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
   // Filter bar is collapsed by default to reclaim vertical space; active
   // filters stay visible as chips even when collapsed.
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -190,6 +189,23 @@ export function ExecutiveDashboard() {
             date: exp.toISOString().split('T')[0],
             daysLeft: diffDays,
             status: diffDays < 90 ? 'critical' : diffDays < 180 ? 'warning' : 'normal',
+            block: lic.licenceNumber || 'Unknown'
+          });
+        }
+      }
+
+      // 1b. Licence Phase Countdown (§5.9) — same escalation banding as
+      // expiry (180/90/30 days), surfaced alongside it on this dashboard.
+      if (lic.phaseEndDate && lic.status === 'Active') {
+        const phaseEnd = new Date(lic.phaseEndDate);
+        const diffDays = Math.ceil((phaseEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+        if (diffDays > 0 && diffDays < 365 * 2) {
+          milestones.push({
+            title: `${lic.phase || 'Phase'} End (${lic.licenceType || 'Licence'})`,
+            date: phaseEnd.toISOString().split('T')[0],
+            daysLeft: diffDays,
+            status: diffDays < 30 ? 'critical' : diffDays < 90 ? 'warning' : 'normal',
             block: lic.licenceNumber || 'Unknown'
           });
         }
@@ -372,12 +388,6 @@ export function ExecutiveDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canSeeChairmanView]);
 
-  useEffect(() => {
-    const handler = (e: any) => setSearchQuery(e?.detail?.query || "");
-    window.addEventListener('globalSearch', handler as EventListener);
-    return () => window.removeEventListener('globalSearch', handler as EventListener);
-  }, []);
-
   function daysUntil(date: string | null | undefined): number | null {
     if (!date) return null;
     const diff = new Date(date).getTime() - Date.now();
@@ -401,6 +411,25 @@ export function ExecutiveDashboard() {
           module: "Licence",
           title: `${l.licenceType || "Licence"} ${l.licenceNumber || ""} expiry`,
           date: l.expiryDate,
+          daysLeft: d,
+          urgency: d < 30 ? "red" : d < 90 ? "amber" : "green",
+          link: "/licences",
+        });
+      });
+
+    // Licence Phase Countdown (§5.9) — escalated alongside expiry using the
+    // same red/amber/green banding, so a phase deadline <30 days shows up on
+    // the Executive Dashboard exactly like an expiry deadline does.
+    licences
+      .filter((l) => l.status === "Active" && l.phaseEndDate)
+      .forEach((l) => {
+        const d = daysUntil(l.phaseEndDate);
+        if (d === null) return;
+        items.push({
+          id: `licence-phase-${l.id}`,
+          module: "Licence",
+          title: `${l.phase || "Phase"} end \u2014 ${l.licenceType || "Licence"} ${l.licenceNumber || ""}`,
+          date: l.phaseEndDate,
           daysLeft: d,
           urgency: d < 30 ? "red" : d < 90 ? "amber" : "green",
           link: "/licences",
@@ -566,74 +595,13 @@ export function ExecutiveDashboard() {
     .filter(lic => lic.diffDays > 0)
     .sort((a, b) => a.diffDays - b.diffDays)[0];
 
-  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const filteredCountdownCards = liveCountdownCards.filter((card) => matchesDateRange(card.date));
 
-  const searchResults = normalizedSearch
-    ? [
-        ...documents.map((doc) => ({
-          page: 'Documents',
-          title: doc.title || doc.name || 'Untitled document',
-          subtitle: `${doc.documentType || doc.type || 'Document'} • ${doc.status || 'Unknown status'}`,
-          link: `/documents/${doc.id}`,
-          group: 'Documents',
-        })),
-        ...activities.map((activity) => ({
-          page: 'Activities',
-          title: activity.title || activity.name || 'Untitled activity',
-          subtitle: `${activity.project || activity.project?.name || 'No project'} • ${activity.status || 'Unknown status'}`,
-          link: `/activities/${activity.id}`,
-          group: 'Activities',
-        })),
-        ...projects.map((project) => ({
-          page: 'Projects',
-          title: project.name || project.title || 'Untitled project',
-          subtitle: `${project.block || project.blockName || 'No block'} • ${project.status || 'Unknown status'}`,
-          link: `/projects/${project.id}`,
-          group: 'Projects',
-        })),
-      ]
-        .filter((item) =>
-          [item.title, item.subtitle, item.page]
-            .filter(Boolean)
-            .join(' ')
-            .toLowerCase()
-            .includes(normalizedSearch)
-        )
-    : [];
+  const filteredBlocks = filterBarActiveOnBlocks;
 
-  const filteredCountdownCards = (
-    normalizedSearch
-      ? liveCountdownCards.filter((card) => [card.title, card.block, card.date]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase()
-          .includes(normalizedSearch))
-      : liveCountdownCards
-  ).filter((card) => matchesDateRange(card.date));
+  const filteredRisks = criticalRisks;
 
-  const filteredBlocks = normalizedSearch
-    ? filterBarActiveOnBlocks.filter((block) => [block.name, block.operator, block.location, block.area, block.description]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-        .includes(normalizedSearch))
-    : filterBarActiveOnBlocks;
-
-  const filteredRisks = normalizedSearch
-    ? criticalRisks.filter((risk) => [risk.title, risk.description, risk.severity]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-        .includes(normalizedSearch))
-    : criticalRisks;
-
-  const filteredPendingAFEs = normalizedSearch
-    ? filterBarActiveOnAFEs.filter((afe) => [afe.afeNumber, afe.item, afe.amount?.toString(), afe.delegatedTo]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-        .includes(normalizedSearch))
-    : filterBarActiveOnAFEs;
+  const filteredPendingAFEs = filterBarActiveOnAFEs;
 
   const exportBlocksCsv = () => {
     const header = ['Block', 'Status', 'Operator', 'Area', 'Location'];
@@ -817,20 +785,37 @@ export function ExecutiveDashboard() {
   // Chairman-authorised users get the rich cross-module list; everyone
   // else gets the always-available licence expiries in the same shape.
   // ------------------------------------------------------------------
-  const licenceDeadlines = licences
-    .filter((l) => l.status === "Active" && l.expiryDate)
-    .map((l) => {
-      const d = daysUntil(l.expiryDate);
-      return {
-        id: `licence-${l.id}`,
-        module: "Licence",
-        title: `${l.licenceType || "Licence"} ${l.licenceNumber || ""} expiry`,
-        date: l.expiryDate as string | null,
-        daysLeft: d,
-        urgency: (d === null ? "green" : d < 30 ? "red" : d < 90 ? "amber" : "green") as "red" | "amber" | "green",
-        link: "/licences",
-      };
-    })
+  const licenceDeadlines = [
+    ...licences
+      .filter((l) => l.status === "Active" && l.expiryDate)
+      .map((l) => {
+        const d = daysUntil(l.expiryDate);
+        return {
+          id: `licence-${l.id}`,
+          module: "Licence",
+          title: `${l.licenceType || "Licence"} ${l.licenceNumber || ""} expiry`,
+          date: l.expiryDate as string | null,
+          daysLeft: d,
+          urgency: (d === null ? "green" : d < 30 ? "red" : d < 90 ? "amber" : "green") as "red" | "amber" | "green",
+          link: "/licences",
+        };
+      }),
+    // Licence Phase Countdown (§5.9) alongside expiry, same shape/banding.
+    ...licences
+      .filter((l) => l.status === "Active" && l.phaseEndDate)
+      .map((l) => {
+        const d = daysUntil(l.phaseEndDate);
+        return {
+          id: `licence-phase-${l.id}`,
+          module: "Licence",
+          title: `${l.phase || "Phase"} end — ${l.licenceType || "Licence"} ${l.licenceNumber || ""}`,
+          date: l.phaseEndDate as string | null,
+          daysLeft: d,
+          urgency: (d === null ? "green" : d < 30 ? "red" : d < 90 ? "amber" : "green") as "red" | "amber" | "green",
+          link: "/licences",
+        };
+      }),
+  ]
     .filter((x) => x.daysLeft !== null)
     .sort((a, b) => (a.daysLeft ?? 0) - (b.daysLeft ?? 0));
 
@@ -1104,40 +1089,6 @@ export function ExecutiveDashboard() {
             </Card>
           )}
         </div>
-      )}
-
-      {normalizedSearch && (
-        <Card className="p-4">
-          <div className="flex items-center gap-2 mb-4">
-            <Search className="h-4 w-4 text-gray-500" />
-            <div>
-              <h2 className="text-xl">Search Results</h2>
-              <p className="text-sm text-gray-500">Showing documents, activities, and projects matching “{searchQuery}”.</p>
-            </div>
-          </div>
-
-          {searchResults.length === 0 ? (
-            <p className="text-gray-600">No results found for “{searchQuery}”.</p>
-          ) : (
-            <div className="space-y-3">
-              {searchResults.slice(0, 10).map((result, index) => (
-                <Link
-                  key={`${result.page}-${index}`}
-                  to={result.link}
-                  className="block rounded-lg border border-gray-200 p-4 hover:border-blue-300 hover:bg-blue-50 transition"
-                >
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <p className="font-medium">{result.title}</p>
-                      <p className="text-sm text-gray-500">{result.subtitle}</p>
-                    </div>
-                    <Badge variant="outline">{result.page}</Badge>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
-        </Card>
       )}
 
       {/* Analytics / Operations / Assets / Risk & Actions — tabbed instead of

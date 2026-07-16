@@ -4,7 +4,7 @@ import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "../components/ui/table";
-import { AlertCircle, FileText, CheckCircle, Clock, Calendar, Search } from "lucide-react";
+import { AlertCircle, FileText, CheckCircle, Clock, Calendar } from "lucide-react";
 import { formatDisplayDateOrDefault } from "../lib/date";
 import { workflowsApi, documentsApi, activitiesApi, projectsApi, tasksApi, risksApi } from "../../services/api";
 import { useAuth } from "../contexts/AuthContext";
@@ -15,7 +15,6 @@ export function OperationalDashboard() {
   const [workflowInbox, setWorkflowInbox] = useState<any[]>([]);
   const [workflowInboxLoading, setWorkflowInboxLoading] = useState(true);
   const [workflowInboxError, setWorkflowInboxError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
   const [documents, setDocuments] = useState<any[]>([]);
   const [activities, setActivities] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
@@ -78,51 +77,7 @@ export function OperationalDashboard() {
     fetchSearchData();
   }, []);
 
-  useEffect(() => {
-    const handler = (e: any) => setSearchQuery(e?.detail?.query || "");
-    window.addEventListener('globalSearch', handler as EventListener);
-    return () => window.removeEventListener('globalSearch', handler as EventListener);
-  }, []);
-
-  const normalizedSearch = searchQuery.trim().toLowerCase();
-
-  const searchResults = normalizedSearch
-    ? [
-        ...documents.map((doc) => ({
-          page: 'Documents',
-          title: doc.title || doc.name || 'Untitled document',
-          subtitle: `${doc.documentType || doc.type || 'Document'} • ${doc.status || 'Unknown status'}`,
-          link: `/documents/${doc.id}`,
-        })),
-        ...activities.map((activity) => ({
-          page: 'Activities',
-          title: activity.title || activity.name || 'Untitled activity',
-          subtitle: `${activity.project || activity.project?.name || 'No project'} • ${activity.status || 'Unknown status'}`,
-          link: `/activities/${activity.id}`,
-        })),
-        ...projects.map((project) => ({
-          page: 'Projects',
-          title: project.name || project.title || 'Untitled project',
-          subtitle: `${project.block || project.blockName || 'No block'} • ${project.status || 'Unknown status'}`,
-          link: `/projects/${project.id}`,
-        })),
-      ]
-        .filter((item) =>
-          [item.title, item.subtitle, item.page]
-            .filter(Boolean)
-            .join(' ')
-            .toLowerCase()
-            .includes(normalizedSearch)
-        )
-    : [];
-
-  const filteredMyTasks = normalizedSearch
-    ? myTasks.filter((task) => [task.title, task.description, task.priority, task.status]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-        .includes(normalizedSearch))
-    : myTasks;
+  const filteredMyTasks = myTasks;
 
   // Real, live upcoming deadlines (replaces a previous hardcoded placeholder
   // list) — sourced from open activities and my open tasks, so every entry
@@ -139,21 +94,9 @@ export function OperationalDashboard() {
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
     .slice(0, 8);
 
-  const filteredUpcomingDeadlines = normalizedSearch
-    ? upcomingDeadlines.filter((deadline) => [deadline.event, deadline.type, deadline.date]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-        .includes(normalizedSearch))
-    : upcomingDeadlines;
+  const filteredUpcomingDeadlines = upcomingDeadlines;
 
-  const filteredWorkflowInbox = normalizedSearch
-    ? workflowInbox.filter((item) => [item.title, item.type, item.submittedBy, item.submitDate, item.date]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-        .includes(normalizedSearch))
-    : workflowInbox;
+  const filteredWorkflowInbox = workflowInbox;
 
   // Real, live quick stats (replaces previous hardcoded 12/8/15/3 placeholders)
   // — each stat links back to its underlying filtered list (§5.8 drill-down).
@@ -193,39 +136,6 @@ export function OperationalDashboard() {
           <Button variant="outline">Switch to Executive View</Button>
         </Link>
       </div>
-
-      {normalizedSearch && (
-        <Card className="p-4">
-          <div className="flex items-center gap-2 mb-4">
-            <Search className="h-4 w-4 text-gray-500" />
-            <div>
-              <h2 className="text-xl">Search Results</h2>
-              <p className="text-sm text-gray-500">Showing documents, activities, and projects matching “{searchQuery}”.</p>
-            </div>
-          </div>
-          {searchResults.length === 0 ? (
-            <p className="text-gray-600">No results found for “{searchQuery}”.</p>
-          ) : (
-            <div className="space-y-3">
-              {searchResults.slice(0, 10).map((result, index) => (
-                <Link
-                  key={`${result.page}-${index}`}
-                  to={result.link}
-                  className="block rounded-lg border border-gray-200 p-4 hover:border-blue-300 hover:bg-blue-50 transition"
-                >
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <p className="font-medium">{result.title}</p>
-                      <p className="text-sm text-gray-500">{result.subtitle}</p>
-                    </div>
-                    <Badge variant="outline">{result.page}</Badge>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
-        </Card>
-      )}
 
       {/* Quick Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

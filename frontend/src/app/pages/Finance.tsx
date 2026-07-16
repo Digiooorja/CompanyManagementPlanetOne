@@ -204,16 +204,6 @@ export function Finance() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [newAfe.projectId, newAfe.activityId]);
 
-  useEffect(() => {
-    const handleGlobalSearch = (event: Event) => {
-      const customEvent = event as CustomEvent;
-      setSearchQuery(customEvent.detail?.query || '');
-    };
-
-    window.addEventListener('globalSearch', handleGlobalSearch);
-    return () => window.removeEventListener('globalSearch', handleGlobalSearch);
-  }, []);
-
   const summary = useMemo(() => {
     const totalBudget = financeItems
       .filter((item) => item.recordType === 'AFE')

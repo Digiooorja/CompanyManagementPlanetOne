@@ -219,6 +219,7 @@ const localContentRoutes = require('./routes/localContent');
 const hseRoutes = require('./routes/hse');
 const rbacRoutes = require('./routes/rbac');
 const orgChartRoutes = require('./routes/orgChart');
+const searchRoutes = require('./routes/search');
 const { authMiddleware, optionalAuthMiddleware, adminMiddleware } = require('./middleware/auth');
 const { requirePermission } = require('./middleware/rbac');
 
@@ -325,5 +326,11 @@ app.use('/api/notification-rules', authMiddleware, adminMiddleware, notification
 
 // RBAC matrix configuration (roles, permissions, role-permission assignments) — Admin-only (§4).
 app.use('/api/admin', authMiddleware, adminMiddleware, rbacRoutes);
+
+// Global search bar (top header) — site-wide search across the primary
+// content modules. optionalAuthMiddleware so guests can still search public
+// data, while logged-in users additionally get Confidential documents they
+// have access to.
+app.use('/api/search', optionalAuthMiddleware, searchRoutes);
 
 module.exports = app;

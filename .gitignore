@@ -9,3 +9,4 @@ frontend/.env
 backend/.env.test
 tmp/
 backend/backups/
+logs/

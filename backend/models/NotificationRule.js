@@ -123,6 +123,34 @@ const NotificationRule = sequelize.define('NotificationRule', {
     type: DataTypes.BOOLEAN,
     allowNull: false,
     defaultValue: true
+  },
+  departmentIds: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    comment: 'JSON array of department IDs. When non-empty, restricts the fallback "no specific record ' +
+      'owner" broadcast to users in ANY of these departments (who also hold the module\'s <module>.notify ' +
+      'RBAC permission) instead of org-wide Admin/Manager. Empty/null = no department restriction (org-wide). ' +
+      'Has no effect when a rule resolves a specific per-record owner (e.g. Task.assignedToId) - that owner ' +
+      'is always notified regardless of department.',
+    get() {
+      const raw = this.getDataValue('departmentIds');
+      if (!raw) return [];
+      try {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed.map(Number) : [];
+      } catch {
+        return [];
+      }
+    },
+    set(value) {
+      if (Array.isArray(value)) {
+        this.setDataValue('departmentIds', JSON.stringify(value.map(Number)));
+      } else if (value === null || value === undefined) {
+        this.setDataValue('departmentIds', null);
+      } else {
+        this.setDataValue('departmentIds', value);
+      }
+    }
   }
 }, {
   tableName: 'notification_rules',

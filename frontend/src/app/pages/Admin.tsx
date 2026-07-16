@@ -28,7 +28,7 @@ import {
   RefreshCw,
   Loader2
 } from "lucide-react";
-import { adminApi, departmentsApi, rbacApi, orgChartApi } from "../../services/api";
+import { adminApi, departmentsApi, rbacApi, orgChartApi, notificationRulesApi } from "../../services/api";
 
 export function Admin() {
   const { user, isAdmin } = useAuth();
@@ -37,6 +37,7 @@ export function Admin() {
   const [departments, setDepartments] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
   const [permissions, setPermissions] = useState<any[]>([]);
+  const [notificationRules, setNotificationRules] = useState<any[]>([]);
   const [metrics, setMetrics] = useState({
     totalUsers: 0,
     activeUsers: 0,
@@ -85,18 +86,20 @@ export function Admin() {
     setIsLoading(true);
     setErrorMsg(null);
     try {
-      const [usersData, dashboardMetrics, departmentsData, rolesData, permissionsData] = await Promise.all([
+      const [usersData, dashboardMetrics, departmentsData, rolesData, permissionsData, notificationRulesData] = await Promise.all([
         adminApi.getUsers(),
         adminApi.getDashboard(),
         departmentsApi.getAll(),
         rbacApi.getRoles(),
-        rbacApi.getPermissions()
+        rbacApi.getPermissions(),
+        notificationRulesApi.getAll().catch(() => [])
       ]);
       setUsers(usersData);
       setMetrics(dashboardMetrics);
       setDepartments(departmentsData);
       setRoles(Array.isArray(rolesData) ? rolesData : []);
       setPermissions(Array.isArray(permissionsData) ? permissionsData : []);
+      setNotificationRules(Array.isArray(notificationRulesData) ? notificationRulesData : []);
     } catch (err: any) {
       console.error("Failed to load admin data:", err);
       setErrorMsg(err.message || "An error occurred while loading administrative records.");
@@ -152,12 +155,36 @@ export function Admin() {
     }
   };
 
-  // Listen for navigation-level global search requests
-  useEffect(() => {
-    const handler = (e: any) => setSearchQuery(e?.detail?.query || "");
-    window.addEventListener('globalSearch', handler as EventListener);
-    return () => window.removeEventListener('globalSearch', handler as EventListener);
-  }, []);
+  // Notification Rules — multi-department scoping (§10.4 "one module
+  // notification can be sent to multiple department"). The per-module
+  // `<module>.notify` RBAC permission itself is edited via the RBAC Matrix
+  // tab above (it's just another row there); this tab only controls which
+  // department(s) each rule's fallback broadcast is restricted to, plus the
+  // active toggle.
+  const handleRuleDepartmentToggle = async (rule: any, departmentId: number, checked: boolean) => {
+    const current: number[] = Array.isArray(rule.departmentIds) ? rule.departmentIds : [];
+    const newDepartmentIds = checked
+      ? [...current, departmentId]
+      : current.filter((id) => id !== departmentId);
+
+    setNotificationRules((prev) => prev.map((r) => (r.id === rule.id ? { ...r, departmentIds: newDepartmentIds } : r)));
+    try {
+      await notificationRulesApi.update(rule.id, { departmentIds: newDepartmentIds });
+    } catch (err: any) {
+      alert(err.message || "Failed to update the rule's departments — reverting.");
+      loadData();
+    }
+  };
+
+  const handleRuleActiveToggle = async (rule: any, active: boolean) => {
+    setNotificationRules((prev) => prev.map((r) => (r.id === rule.id ? { ...r, active } : r)));
+    try {
+      await notificationRulesApi.update(rule.id, { active });
+    } catch (err: any) {
+      alert(err.message || "Failed to update the rule — reverting.");
+      loadData();
+    }
+  };
 
   const openAddDialog = () => {
     setFormUsername("");
@@ -463,6 +490,7 @@ export function Admin() {
           <TabsTrigger value="org-chart" className="data-[state=active]:bg-white data-[state=active]:shadow-sm" onClick={() => { if (orgChart.length === 0) loadOrgChart(); }}>Org Chart</TabsTrigger>
           <TabsTrigger value="roles" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">System Roles</TabsTrigger>
           <TabsTrigger value="permissions" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">RBAC Matrix</TabsTrigger>
+          <TabsTrigger value="notifications" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">Notification Rules</TabsTrigger>
         </TabsList>
 
         <TabsContent value="users" className="space-y-4 mt-6">
@@ -711,6 +739,89 @@ export function Admin() {
                       ))}
                     </Fragment>
                   ))}
+                </TableBody>
+              </Table>
+            </div>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="notifications" className="mt-6">
+          <Card className="p-6">
+            <div className="mb-6">
+              <h3 className="text-xl font-bold text-slate-900">Notification Rules</h3>
+              <p className="text-sm text-slate-500 mt-1">
+                For records with no specific assigned owner (e.g. a Licence with no responsible-person field), the
+                Notification Engine falls back to notifying whoever holds that module's <strong>"Receive
+                notifications"</strong> permission (see the RBAC Matrix tab — each module now has its own
+                notification permission, separate from its edit/manage permission). Restrict that fallback to one
+                or more departments here, or leave none selected for an org-wide broadcast (§10.4).
+              </p>
+            </div>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-slate-50">
+                    <TableHead className="font-semibold text-slate-800">Module</TableHead>
+                    <TableHead className="font-semibold text-slate-800">Rule</TableHead>
+                    <TableHead className="font-semibold text-slate-800">Trigger</TableHead>
+                    <TableHead className="font-semibold text-slate-800">Departments</TableHead>
+                    <TableHead className="font-semibold text-slate-800 text-center">Active</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {notificationRules.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-8 text-slate-500">
+                        No notification rules found.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    notificationRules.map((rule) => {
+                      const selectedDeptIds: number[] = Array.isArray(rule.departmentIds) ? rule.departmentIds : [];
+                      return (
+                      <TableRow key={rule.id} className="hover:bg-slate-50/30">
+                        <TableCell className="text-sm text-slate-700 whitespace-nowrap">{rule.module}</TableCell>
+                        <TableCell className="text-sm text-slate-700">{rule.name}</TableCell>
+                        <TableCell className="text-sm text-slate-500 whitespace-nowrap">{rule.triggerType}</TableCell>
+                        <TableCell className="min-w-[260px]">
+                          <div className="flex flex-wrap gap-1.5">
+                            {departments.length === 0 ? (
+                              <span className="text-xs text-slate-400">No departments available</span>
+                            ) : (
+                              departments.map((dept) => {
+                                const selected = selectedDeptIds.includes(Number(dept.id));
+                                return (
+                                  <button
+                                    key={dept.id}
+                                    type="button"
+                                    onClick={() => handleRuleDepartmentToggle(rule, Number(dept.id), !selected)}
+                                    className={`px-2 py-0.5 rounded-full text-xs font-medium border transition-all duration-150 ${selected
+                                        ? "bg-blue-600 text-white border-blue-600"
+                                        : "bg-white text-slate-600 border-slate-300 hover:border-blue-400"
+                                      }`}
+                                  >
+                                    {dept.name}
+                                  </button>
+                                );
+                              })
+                            )}
+                          </div>
+                          {selectedDeptIds.length === 0 && (
+                            <p className="text-xs text-slate-400 mt-1">All departments (org-wide)</p>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <input
+                            type="checkbox"
+                            checked={!!rule.active}
+                            onChange={(e) => handleRuleActiveToggle(rule, e.target.checked)}
+                            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                          />
+                        </TableCell>
+                      </TableRow>
+                      );
+                    })
+                  )}
                 </TableBody>
               </Table>
             </div>

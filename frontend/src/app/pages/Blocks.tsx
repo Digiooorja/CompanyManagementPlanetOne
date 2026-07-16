@@ -117,12 +117,6 @@ export function Blocks() {
     fetchBlocks();
   }, []);
 
-  useEffect(() => {
-    const handler = (e: any) => setSearchQuery(e?.detail?.query || "");
-    window.addEventListener('globalSearch', handler as EventListener);
-    return () => window.removeEventListener('globalSearch', handler as EventListener);
-  }, []);
-
   const normalizedSearch = searchQuery.trim().toLowerCase();
   const filteredBlocks = normalizedSearch
     ? blocks.filter((b) => [b.name, b.operator, b.area, b.location]

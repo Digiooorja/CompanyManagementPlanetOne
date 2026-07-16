@@ -190,12 +190,6 @@ export function Projects() {
     fetchBlocks();
   }, []);
 
-  useEffect(() => {
-    const handler = (e: any) => setSearchQuery(e?.detail?.query || "");
-    window.addEventListener('globalSearch', handler as EventListener);
-    return () => window.removeEventListener('globalSearch', handler as EventListener);
-  }, []);
-
   const normalizedSearch = searchQuery.trim().toLowerCase();
   const renderedProjects = projects.filter((project) => {
     if (filterBlock !== 'all' && String(project.blockId) !== String(filterBlock)) {

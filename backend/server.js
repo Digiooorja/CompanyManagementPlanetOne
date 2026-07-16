@@ -114,6 +114,23 @@ const startServer = async () => {
         channels: ['InApp', 'Email']
       },
       {
+        // §5.9 "Licence Phase Countdown" — a second, independent DateBased
+        // rule on the same Licence module (dateField='phaseEndDate' instead
+        // of 'expiryDate'). Needs no MODULE_REGISTRY/engine changes; the
+        // engine already supports multiple rules per module. <30 days maps
+        // to 'Critical' the same way evaluateDateBased() escalates any
+        // date-based rule automatically (see notificationEngine.js).
+        name: 'Licence phase countdown',
+        module: 'Licence',
+        triggerType: 'DateBased',
+        dateField: 'phaseEndDate',
+        leadTimeDays: [180, 90, 30],
+        recurrenceIntervalHours: 24,
+        escalationGraceHours: null,
+        priority: 'High',
+        channels: ['InApp', 'Email']
+      },
+      {
         name: 'Contract expiry/renewal reminders',
         module: 'Contract',
         triggerType: 'DateBased',
@@ -380,7 +397,36 @@ const startServer = async () => {
       { key: 'vendor_payments.manage', module: 'Vendor Payment Aging', description: 'Create, edit and delete vendor invoices' },
       { key: 'forex.manage', module: 'Forex & Banking Workflow', description: 'Create, edit and action forex transactions (request/approve/reject/settle)' },
       { key: 'local_content.manage', module: 'Local Content Tracking', description: 'Create, edit and delete local-content tracking records' },
-      { key: 'hse.manage', module: 'HSE Register', description: 'Create, edit, close and delete HSE incidents' }
+      { key: 'hse.manage', module: 'HSE Register', description: 'Create, edit, close and delete HSE incidents' },
+
+      // --- Per-module notification permissions (§10.4) ---
+      // Governs who is eligible to RECEIVE alerts for a module, separately
+      // from who can EDIT its records — orthogonal to the `.manage`
+      // permission above (e.g. someone might want alerts without edit
+      // rights, or vice versa). Used by the Notification Engine's
+      // resolveRecipients() (services/notificationEngine.js) whenever a
+      // rule has no specific per-record owner to notify (falls back to
+      // "anyone whose role holds this permission", optionally further
+      // restricted to one department via NotificationRule.departmentId).
+      // defaultMatrix below auto-derives these from the matching `.manage`
+      // grant for every role, so no per-role list needs to be duplicated.
+      { key: 'activities.notify', module: 'Activities', description: 'Receive notifications/alerts for activities' },
+      { key: 'tasks.notify', module: 'Tasks', description: 'Receive notifications/alerts for tasks' },
+      { key: 'licences.notify', module: 'Licences', description: 'Receive notifications/alerts for licences' },
+      { key: 'contracts.notify', module: 'Contract Register', description: 'Receive notifications/alerts for contracts' },
+      { key: 'compliance.notify', module: 'Compliance Tracker', description: 'Receive notifications/alerts for compliance obligations' },
+      { key: 'correspondence.notify', module: 'Correspondence Log', description: 'Receive notifications/alerts for correspondence' },
+      { key: 'documents.notify', module: 'Documents', description: 'Receive notifications/alerts for documents' },
+      { key: 'budget.notify', module: 'Work Programme & Budget Tracker', description: 'Receive notifications/alerts for budget lines' },
+      { key: 'finance.notify', module: 'Finance & Budget', description: 'Receive notifications/alerts for AFEs/finance records' },
+      { key: 'risks.notify', module: 'Risk Register', description: 'Receive notifications/alerts for risks' },
+      { key: 'insurance.notify', module: 'Insurance Register', description: 'Receive notifications/alerts for insurance policies' },
+      { key: 'env_permits.notify', module: 'Environmental Permit Tracker', description: 'Receive notifications/alerts for environmental permits' },
+      { key: 'nda.notify', module: 'NDA & Data Room Tracker', description: 'Receive notifications/alerts for NDAs' },
+      { key: 'vendor_payments.notify', module: 'Vendor Payment Aging', description: 'Receive notifications/alerts for vendor invoices' },
+      { key: 'forex.notify', module: 'Forex & Banking Workflow', description: 'Receive notifications/alerts for forex transactions' },
+      { key: 'local_content.notify', module: 'Local Content Tracking', description: 'Receive notifications/alerts for local-content records' },
+      { key: 'hse.notify', module: 'HSE Register', description: 'Receive notifications/alerts for HSE incidents' }
     ];
 
     const permissionRows = {};
@@ -410,6 +456,38 @@ const startServer = async () => {
       'External Partner': ['reports.view'],
       Admin: ['admin.manage_users', 'admin.manage_rbac', 'notifications.manage_rules', 'audit.view', 'reports.manage']
     };
+
+    // Auto-derive each role's `<module>.notify` grants from whatever
+    // `<module>.manage` permissions it already has above, instead of
+    // duplicating every role's array a second time. Whoever manages a
+    // module's records by default also receives its notifications; Admin
+    // can subsequently fine-tune either independently via the RBAC Matrix UI
+    // (they're separate permission keys, not linked after this initial seed).
+    const NOTIFY_PERMISSION_BY_MANAGE_PERMISSION = {
+      'activities.manage': 'activities.notify',
+      'tasks.manage': 'tasks.notify',
+      'licences.manage': 'licences.notify',
+      'contracts.manage': 'contracts.notify',
+      'compliance.manage': 'compliance.notify',
+      'correspondence.manage': 'correspondence.notify',
+      'documents.manage': 'documents.notify',
+      'budget.manage': 'budget.notify',
+      'finance.manage': 'finance.notify',
+      'risks.manage': 'risks.notify',
+      'insurance.manage': 'insurance.notify',
+      'env_permits.manage': 'env_permits.notify',
+      'nda.manage': 'nda.notify',
+      'vendor_payments.manage': 'vendor_payments.notify',
+      'forex.manage': 'forex.notify',
+      'local_content.manage': 'local_content.notify',
+      'hse.manage': 'hse.notify'
+    };
+    for (const permissionKeys of Object.values(defaultMatrix)) {
+      const derivedNotifyKeys = permissionKeys
+        .map((key) => NOTIFY_PERMISSION_BY_MANAGE_PERMISSION[key])
+        .filter((key) => key && !permissionKeys.includes(key));
+      permissionKeys.push(...derivedNotifyKeys);
+    }
 
     for (const [roleName, permissionKeys] of Object.entries(defaultMatrix)) {
       const role = roleRows[roleName];

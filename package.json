@@ -8,7 +8,17 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
-    "dev": "vite frontend"
+    "dev": "vite frontend",
+    "install:clean": "node scripts/clean-install.js",
+    "pm2:start": "pm2 start ecosystem.config.js",
+    "pm2:stop": "pm2 stop ecosystem.config.js",
+    "pm2:restart": "pm2 restart ecosystem.config.js",
+    "pm2:status": "pm2 status",
+    "pm2:logs": "pm2 logs",
+    "docker:up": "docker compose up -d --build",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f",
+    "docker:migrate": "docker compose exec backend npm run migrate"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",

@@ -28,7 +28,8 @@ import {
   Eye,
   Download,
   FileText,
-  Link2
+  Link2,
+  GitBranch
 } from "lucide-react";
 import { licencesApi, blocksApi, documentsApi } from "../../services/api";
 import { useAuth } from "../contexts/AuthContext";
@@ -75,6 +76,7 @@ function getExpiryTheme(days: number | null): {
 }
 
 const LICENCE_STATUSES = ["Active", "Suspended", "Renewed"];
+const LICENCE_PHASES = ["Exploration", "Extension", "Appraisal", "Development", "Production"];
 
 // -----------------------------------------------------------------------
 // Empty form state factory
@@ -89,6 +91,10 @@ function emptyForm() {
     expiryDate: "",
     status: "Active",
     notes: "",
+    phase: "",
+    phaseStartDate: "",
+    phaseEndDate: "",
+    minWorkObligation: "",
   };
 }
 
@@ -113,6 +119,58 @@ export function Licences() {
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const [linkingDocId, setLinkingDocId] = useState('');
   const [linkingDoc, setLinkingDoc] = useState(false);
+
+  // Controlled Phase Transition dialog (§5.9) — the only way `phase` can
+  // change once initially set; requires a mandatory sign-off comment.
+  const [isTransitionOpen, setIsTransitionOpen] = useState(false);
+  const [transitioningLicence, setTransitioningLicence] = useState<any | null>(null);
+  const [transitionForm, setTransitionForm] = useState({
+    newPhase: "",
+    phaseStartDate: "",
+    phaseEndDate: "",
+    minWorkObligation: "",
+    comment: "",
+    confirmed: false,
+  });
+  const [transitioning, setTransitioning] = useState(false);
+  const [transitionError, setTransitionError] = useState<string | null>(null);
+
+  const openTransition = (licence: any) => {
+    setTransitioningLicence(licence);
+    setTransitionError(null);
+    setTransitionForm({
+      newPhase: "",
+      phaseStartDate: licence.phaseEndDate ? String(licence.phaseEndDate).slice(0, 10) : "",
+      phaseEndDate: "",
+      minWorkObligation: licence.minWorkObligation || "",
+      comment: "",
+      confirmed: false,
+    });
+    setIsTransitionOpen(true);
+  };
+
+  const handleTransitionPhase = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!transitioningLicence) return;
+    setTransitioning(true);
+    setTransitionError(null);
+    try {
+      await licencesApi.transitionPhase(transitioningLicence.id, {
+        newPhase: transitionForm.newPhase,
+        phaseStartDate: transitionForm.phaseStartDate || undefined,
+        phaseEndDate: transitionForm.phaseEndDate || undefined,
+        minWorkObligation: transitionForm.minWorkObligation || undefined,
+        comment: transitionForm.comment,
+        confirmed: true,
+      });
+      setIsTransitionOpen(false);
+      loadData();
+    } catch (err: any) {
+      setTransitionError(err.message || "Failed to transition licence phase.");
+    } finally {
+      setTransitioning(false);
+    }
+  };
 
   const loadDocuments = async (licId: number) => {
     setLoadingDocs(true);
@@ -151,6 +209,10 @@ export function Licences() {
             expiryDate: found.expiryDate ? String(found.expiryDate).slice(0, 10) : "",
             status: found.status || "Active",
             notes: found.notes || "",
+            phase: found.phase || "",
+            phaseStartDate: found.phaseStartDate ? String(found.phaseStartDate).slice(0, 10) : "",
+            phaseEndDate: found.phaseEndDate ? String(found.phaseEndDate).slice(0, 10) : "",
+            minWorkObligation: found.minWorkObligation || "",
           });
           setIsEditOpen(true);
           loadDocuments(found.id);
@@ -246,6 +308,10 @@ export function Licences() {
       expiryDate: licence.expiryDate ? String(licence.expiryDate).slice(0, 10) : "",
       status: licence.status || "Active",
       notes: licence.notes || "",
+      phase: licence.phase || "",
+      phaseStartDate: licence.phaseStartDate ? String(licence.phaseStartDate).slice(0, 10) : "",
+      phaseEndDate: licence.phaseEndDate ? String(licence.phaseEndDate).slice(0, 10) : "",
+      minWorkObligation: licence.minWorkObligation || "",
     });
     setIsEditOpen(true);
     loadDocuments(licence.id);
@@ -349,7 +415,7 @@ export function Licences() {
   // -----------------------------------------------------------------------
   // Shared form body rendered inside both Add and Edit dialogs
   // -----------------------------------------------------------------------
-  const renderFormBody = () => (
+  const renderFormBody = (isEditing = false) => (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1.5">
@@ -402,6 +468,61 @@ export function Licences() {
           >
             {LICENCE_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
+        </div>
+      </div>
+
+      {/* Licence Phase (§5.9) — editable on creation (establishing the initial
+          state); once a licence exists, changing phase requires the audited
+          Transition Phase action instead of a plain field edit. */}
+      <div className="space-y-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Licence Phase</label>
+          {isEditing && (
+            <span className="text-xs text-slate-400">Use “Transition Phase” to change</span>
+          )}
+        </div>
+        {isEditing ? (
+          <p className="text-sm text-slate-700">{form.phase || "Not yet set"}</p>
+        ) : (
+          <select
+            className="w-full h-10 px-3 bg-white border border-slate-200 rounded-md text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            value={form.phase}
+            onChange={(e) => setForm((p) => ({ ...p, phase: e.target.value }))}
+          >
+            <option value="">— Not set —</option>
+            {LICENCE_PHASES.map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
+        )}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Phase Start</label>
+            <Input
+              type="date"
+              disabled={isEditing}
+              value={form.phaseStartDate}
+              onChange={(e) => setForm((p) => ({ ...p, phaseStartDate: e.target.value }))}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Phase End (countdown)</label>
+            <Input
+              type="date"
+              disabled={isEditing}
+              value={form.phaseEndDate}
+              onChange={(e) => setForm((p) => ({ ...p, phaseEndDate: e.target.value }))}
+            />
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Minimum Work Obligation</label>
+          <textarea
+            rows={2}
+            disabled={isEditing}
+            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none disabled:text-slate-500"
+            placeholder="e.g. 2 exploration wells, 500km 2D seismic"
+            value={form.minWorkObligation}
+            onChange={(e) => setForm((p) => ({ ...p, minWorkObligation: e.target.value }))}
+          />
         </div>
       </div>
 
@@ -595,6 +716,8 @@ export function Licences() {
           {filteredLicences.map((licence) => {
             const days = daysUntilExpiry(licence.expiryDate);
             const theme = getExpiryTheme(days);
+            const phaseDays = daysUntilExpiry(licence.phaseEndDate);
+            const phaseTheme = licence.phaseEndDate ? getExpiryTheme(phaseDays) : null;
             const blockNames: string[] = Array.isArray(licence.blockNames) ? licence.blockNames : [];
 
             return (
@@ -638,6 +761,25 @@ export function Licences() {
                   )}
                 </div>
 
+                {/* Phase countdown (§5.9) */}
+                {licence.phase && (
+                  <div className="flex items-center justify-between gap-2 p-2 bg-slate-50 rounded-md border border-slate-200">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <GitBranch className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                      <span className="text-xs font-semibold text-slate-700 truncate">{licence.phase} phase</span>
+                    </div>
+                    {phaseTheme && (
+                      <span className={`flex-shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold ${phaseTheme.badge}`}>
+                        {phaseTheme.icon}
+                        {phaseTheme.label}
+                      </span>
+                    )}
+                  </div>
+                )}
+                {licence.minWorkObligation && (
+                  <p className="text-xs text-slate-500"><span className="font-medium text-slate-700">Min. work obligation:</span> {licence.minWorkObligation}</p>
+                )}
+
                 {/* Covered blocks */}
                 {blockNames.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 pt-1">
@@ -669,6 +811,15 @@ export function Licences() {
                       <Edit3 className="h-3.5 w-3.5" />
                       Edit
                     </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openTransition(licence)}
+                      className="flex items-center gap-1 text-xs flex-1"
+                    >
+                      <GitBranch className="h-3.5 w-3.5" />
+                      Transition Phase
+                    </Button>
                     {isAdmin && (
                       <Button
                         variant="outline"
@@ -698,7 +849,7 @@ export function Licences() {
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-4">
-            {renderFormBody()}
+            {renderFormBody(false)}
             <DialogFooter className="gap-2 pt-2">
               <DialogClose asChild>
                 <Button type="button" variant="outline">Cancel</Button>
@@ -722,7 +873,7 @@ export function Licences() {
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleUpdate} className="space-y-4">
-            {renderFormBody()}
+            {renderFormBody(true)}
             
             {/* Attached Documents Section (Moved above footer) */}
             <div className="mt-6 pt-6 border-t border-slate-200">
@@ -823,6 +974,112 @@ export function Licences() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Transition Phase Dialog (§5.9) — the only path to change `phase`;
+          requires a mandatory sign-off comment + explicit confirmation. */}
+      <Dialog open={isTransitionOpen} onOpenChange={setIsTransitionOpen}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <GitBranch className="h-5 w-5" />
+              Transition Licence Phase
+            </DialogTitle>
+          </DialogHeader>
+          {transitioningLicence && (
+            <form onSubmit={handleTransitionPhase} className="space-y-4">
+              <p className="text-sm text-slate-600">
+                {transitioningLicence.licenceNumber} — currently{" "}
+                <span className="font-semibold">{transitioningLicence.phase || "no phase set"}</span>
+              </p>
+
+              {transitionError && (
+                <div className="p-2.5 bg-red-50 border border-red-200 rounded text-sm text-red-700">{transitionError}</div>
+              )}
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">New Phase *</label>
+                <select
+                  required
+                  className="w-full h-10 px-3 bg-white border border-slate-200 rounded-md text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={transitionForm.newPhase}
+                  onChange={(e) => setTransitionForm((p) => ({ ...p, newPhase: e.target.value }))}
+                >
+                  <option value="">— Select new phase —</option>
+                  {LICENCE_PHASES.filter((p) => p !== transitioningLicence.phase).map((p) => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Phase Start</label>
+                  <Input
+                    type="date"
+                    value={transitionForm.phaseStartDate}
+                    onChange={(e) => setTransitionForm((p) => ({ ...p, phaseStartDate: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Phase End (countdown)</label>
+                  <Input
+                    type="date"
+                    value={transitionForm.phaseEndDate}
+                    onChange={(e) => setTransitionForm((p) => ({ ...p, phaseEndDate: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Minimum Work Obligation</label>
+                <textarea
+                  rows={2}
+                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  placeholder="e.g. 1 appraisal well within 12 months"
+                  value={transitionForm.minWorkObligation}
+                  onChange={(e) => setTransitionForm((p) => ({ ...p, minWorkObligation: e.target.value }))}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Sign-off Comment *</label>
+                <textarea
+                  required
+                  rows={3}
+                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  placeholder="Rationale for the transition, regulatory approval reference, etc."
+                  value={transitionForm.comment}
+                  onChange={(e) => setTransitionForm((p) => ({ ...p, comment: e.target.value }))}
+                />
+              </div>
+
+              <label className="flex items-start gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={transitionForm.confirmed}
+                  onChange={(e) => setTransitionForm((p) => ({ ...p, confirmed: e.target.checked }))}
+                />
+                I confirm this phase transition is approved and this action will be recorded against my user account.
+              </label>
+
+              <DialogFooter className="gap-2 pt-2">
+                <DialogClose asChild>
+                  <Button type="button" variant="outline">Cancel</Button>
+                </DialogClose>
+                <Button
+                  type="submit"
+                  disabled={transitioning || !transitionForm.newPhase || !transitionForm.comment.trim() || !transitionForm.confirmed}
+                  className="bg-slate-900 hover:bg-slate-800 text-white"
+                >
+                  {transitioning ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <GitBranch className="h-4 w-4 mr-2" />}
+                  Confirm Transition
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
     </div>

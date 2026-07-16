@@ -32,12 +32,14 @@ and bugs found while working in this codebase. Legend: 🔴 blocking for product
 - [x] ~~Zero automated tests exist~~ Backend: Jest + Supertest set up (`backend/tests/`, `npm test`),
       running against a dedicated, safety-guarded test database (dropped/rebuilt from the current models on
       every run — see `backend/README.md` § Testing). Frontend: Vitest set up (`frontend/`, `npm test`).
-  - [x] **35 backend test suites / 136 tests**, covering essentially every route module: the original
+  - [x] **39 backend test suites / 169 tests**, covering essentially every route module: the original
         maker-checker/RBAC/roll-up suites, plus blocks, projects, departments, registers, comments, risks,
         workflows, contracts, compliance, correspondence, decisions, operations-updates, licences, documents
         (confidentiality access control), insurance, environmental permits, NDAs + data-room grants, vendor
         payment aging, local content, HSE (incidents + exposure hours + TRIR/LTIF), auth, notifications,
-        notification rules, reports catalogue, RBAC admin, org chart, admin/user management, and the audit log.
+        notification rules, reports catalogue, RBAC admin, org chart, admin/user management, the audit log,
+        the email service (Email notification channel), the DB backup service, licence phase-countdown
+        transitions, and per-module notify permission + department-scoped notification resolution.
   - [x] **Frontend: 4 test files / 21 tests** — `lib/date.test.ts` (pure functions) plus component tests for
         `Button`, `Badge`, `Progress` (React Testing Library + jsdom via `vitest.config.ts`, merged with the
         real `vite.config.ts` so aliases/plugins match).
@@ -87,17 +89,20 @@ and bugs found while working in this codebase. Legend: 🔴 blocking for product
       honest "No linked documents." state otherwise rather than fabricated filenames. Also fixed the adjacent
       hardcoded "Days Remaining: 4" stat in the same file to compute from the real `dueDate`.
 
-## 4. Largest incomplete Phase 1 requirement — 🟡
+## 4. Largest incomplete Phase 1 requirement — ✅ closed 2026-07-10
 
-- [ ] **§5.9 Licence Phase Countdown** — mostly unbuilt:
-  - [ ] Phase enum (Exploration / Extension / Appraisal / Development / Production)
-  - [ ] Phase start/end dates + minimum work obligation fields
-  - [ ] Daily-recalculated countdown with 180/90/30-day banners
-  - [ ] Escalation of <30-day items to the Executive Dashboard
-  - [ ] Controlled, audited phase-transition sign-off workflow
+- [x] ~~**§5.9 Licence Phase Countdown** — mostly unbuilt~~ Fixed 2026-07-10 — all 5 sub-items done:
+  - [x] Phase enum (Exploration / Extension / Appraisal / Development / Production) — `Licence.phase`
+  - [x] Phase start/end dates + minimum work obligation fields — `phaseStartDate`/`phaseEndDate`/`minWorkObligation`
+  - [x] Daily-recalculated countdown with 180/90/30-day banners — a second `NotificationRule`
+        (`dateField: 'phaseEndDate'`) on the existing Licence module, no engine changes needed
+  - [x] Escalation of <30-day items to the Executive Dashboard — `chairmanDeadlines`/`licenceDeadlines`/
+        `computeMilestones()` in `ExecutiveDashboard.tsx` all surface phase-end countdowns alongside expiry
+  - [x] Controlled, audited phase-transition sign-off workflow — `POST /api/licences/:id/transition-phase`
+        (mandatory comment + confirmation, records who/when); a plain `PUT` rejects direct phase changes
 
-  (Every other Phase 1 module from the requirements doc is done or has only minor gaps — this is the one
-  genuinely unbuilt core feature.)
+  **All 15 of 15 Phase 1 modules from the requirements doc are now fully implemented** — see
+  `REQUIREMENTS_GAP_CHECKLIST.md`'s Executive Summary.
 
 ## 5. Other functional gaps — 🟡
 
@@ -105,19 +110,38 @@ and bugs found while working in this codebase. Legend: 🔴 blocking for product
 - [x] ~~Contract expiry, Correspondence overdue-responses, and Compliance due dates surfaced on Chairman View~~ ✅ confirmed already live in `ExecutiveDashboard.tsx`'s Block A "Upcoming Deadlines" widget (this item was stale in the requirements checklist, not an actual gap)
 - [x] ~~Operations Update auto-surfacing on `BlockDetail.tsx`~~ ✅ done (2026-07-07) — Overview tab now shows the 3 latest updates for the block, with a filtered link through to `OperationsUpdates.tsx` (which gained a URL-synced block filter)
 - [x] ~~`documents`/`comments`/`tasks`/`licences`/`finance` routes folded into the RBAC matrix~~ ✅ done (2026-07-07) — new `documents.manage`/`comments.manage`/`tasks.manage`/`licences.manage`/`finance.manage` permissions now gate all mutations on those 5 routes at the `server.js` mount level, matching the other 18 modules. Legacy inline `managerMiddleware`/`adminMiddleware` checks removed from `licences.js`. Ownership-level checks (document owner-or-Admin delete, own-comment-or-Admin edit, task-owner confirms 100%) were kept as a complementary layer on top. `defaultMatrix` extended additively so day-to-day roles keep access; `Chairman/Board` and `External Partner` (explicitly read-only roles) correctly lose the blanket mutate access the old `authMiddleware`-only gate accidentally gave them. Verified via direct HTTP tests (no token → 401, read-only role → 403, Manager → 201).
-- [ ] Notification engine is **in-app only** — no email/SMS transport, so anyone not actively logged in
-      misses time-critical alerts (licence expiry, budget variance, overdue compliance, etc.)
+- [x] ~~Notification engine is **in-app only** — no email/SMS transport~~ Email ✅ done 2026-07-07
+      (`backend/services/emailService.js`, nodemailer, best-effort/never blocks in-app delivery). SMS is
+      still not wired (no SMS provider integration exists anywhere in the codebase — would need a new
+      provider account/API, out of scope until requested).
+- [x] ~~Notification recipients for ownerless records always broadcast to every Admin/Manager org-wide~~
+      Fixed 2026-07-10 — added a `<module>.notify` RBAC permission per module (separate from `.manage`,
+      auto-derived onto every role that already has the matching manage permission) plus
+      `NotificationRule.departmentIds` (JSON array) to optionally restrict a rule's fallback broadcast to
+      one or more specific departments. Configurable via `Admin.tsx`'s RBAC Matrix tab (the new `.notify`
+      permissions just show up there automatically) and its new "Notification Rules" tab (department chips).
 - [ ] Chairman View export is browser print-to-PDF only — no native PDF/PowerPoint generation, no scheduled
       email digest, no versioned archive
 - [ ] OCR + full-text document search, and recoverable soft-delete for documents — both explicitly deferred
 
-## 6. Operational readiness — 🟢
+## 6. Operational readiness — ✅ done 2026-07-16
 
-- [ ] No process manager for local/production runtime (currently raw `node server.js` / `vite` in a
-      terminal — a crashed terminal takes the whole app down, as happened during this project). Recommend
-      PM2, a Windows Service wrapper, or equivalent for anything beyond a laptop demo.
-- [ ] Frontend `node_modules` has been observed getting into a partially-installed state; confirm a clean
-      `npm install` (workspace root, not per-package) is part of the deployment/build process.
+- [x] ~~No process manager for local/production runtime (currently raw `node server.js` / `vite` in a
+      terminal — a crashed terminal takes the whole app down, as happened during this project).~~ Fixed —
+      added [`ecosystem.config.js`](ecosystem.config.js) (PM2 config) running the backend (`node server.js`)
+      and the frontend (`vite preview`, serving the built `dist/`) as auto-restarting, crash-resilient
+      processes instead of raw terminal processes. Requires `npm install -g pm2` and, for the frontend, a
+      prior `npm run build`. Start/stop/inspect via `npm run pm2:start` / `pm2:stop` / `pm2:restart` /
+      `pm2:status` / `pm2:logs` from the repo root, or the `pm2` CLI directly. `pm2 save && pm2 startup`
+      persists the process list across reboots (see comments in `ecosystem.config.js` for the Windows
+      equivalent, `pm2-windows-startup`). A Windows Service wrapper remains a viable alternative if PM2
+      itself is not desired in a given environment.
+- [x] ~~Frontend `node_modules` has been observed getting into a partially-installed state; confirm a clean
+      `npm install` (workspace root, not per-package) is part of the deployment/build process.~~ Fixed —
+      added [`scripts/clean-install.js`](scripts/clean-install.js) (`npm run install:clean` from the repo
+      root), which removes every `node_modules`/`package-lock.json` (root, `backend/`, `frontend/`) and
+      reinstalls each from scratch. Recommend running this as (or before) the deployment/build step rather
+      than relying on an incremental `npm install`.
 - [x] ~~No health-check endpoint~~ ✅ done 2026-07-07 — `GET /api/health` added to `backend/app.js`
       (returns `{ status: 'ok' }`), also used as the automated test suite's smoke test.
 
@@ -125,11 +149,11 @@ and bugs found while working in this codebase. Legend: 🔴 blocking for product
 
 ## Suggested order of attack
 
-1. Automated tests for the financial maker-checker flows (Budget revisions, AFE, Forex) — highest risk of
-   silent regressions.
+1. ~~Automated tests for the financial maker-checker flows (Budget revisions, AFE, Forex) — highest risk of
+   silent regressions.~~ ✅ done 2026-07-07 (part of the broader test suite build-out, §2).
 2. Security basics: rotate/secure secrets, TLS, MFA for privileged roles.
-3. Backup/DR plan + retention policy.
+3. ~~Backup/DR plan + retention policy.~~ Backup/DR ✅ done 2026-07-07 (§1); Audit Log retention policy still open.
 4. Fix the two known functional bugs (Activities Kanban, WorkflowDetail hardcoded list) — small, contained.
-5. Licence Phase Countdown (§5.9) — the one substantial missing Phase 1 feature.
-6. Email/SMS notification transport.
+5. ~~Licence Phase Countdown (§5.9) — the one substantial missing Phase 1 feature.~~ ✅ done 2026-07-10.
+6. ~~Email/SMS notification transport.~~ Email ✅ done 2026-07-07; SMS still open (no provider integration).
 7. Everything else in §5/§6 above, roughly in the listed order.

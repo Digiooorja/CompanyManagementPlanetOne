@@ -137,6 +137,8 @@ Periodic field/project status log per block/well — summary, key issues, and ne
 
 The **Licences** page (`/licences`) lists all block licences with expiry-proximity colour coding (Active / Expiring within 60 days / Expired). Add or edit a licence, and manage its documents (upload, link existing documents, preview, download) directly from the licence card.
 
+Each licence also tracks its **phase** (Exploration / Extension / Appraisal / Development / Production), with its own countdown badge based on the phase end date, plus a minimum work obligation note. The phase itself can only be changed via the **Transition Phase** button, which requires a mandatory sign-off comment and confirmation — it's recorded (who, when, why) and can't be edited as a plain field.
+
 ## 9. Reports
 
 The **Reports** page (`/reports`) is a catalogue of operational, financial, HSE, and performance reports, with category/frequency filters and search. Use **Generate** or **Export PDF/Excel** on a report card, and check **Recently Generated Reports** for history.
@@ -150,7 +152,8 @@ Click the bell icon or go to **Notifications** (`/notifications`) to see **All /
 Available only to **Admin** users (`/admin`):
 
 - **Users**: create, edit, deactivate, or delete user accounts; view a user's profile change history.
-- **Roles & Permissions matrix**: create/delete roles and toggle which permissions each role has (the system **Admin** role itself cannot be edited).
+- **Roles & Permissions matrix**: create/delete roles and toggle which permissions each role has (the system **Admin** role itself cannot be edited). Each module has both a `.manage` permission (create/edit/delete) and a separate `.notify` permission (who's eligible to receive that module's alerts) — they're independent, so a role can have one without the other.
+- **Notification Rules**: pick which department(s) each module's fallback alert broadcast goes to (e.g. restrict Licence expiry alerts to Legal only), or leave none selected for an org-wide broadcast to everyone with that module's notify permission. Also toggle a rule active/inactive.
 - **Org Chart**: view the department/reporting structure.
 - **Dashboard metrics**: refresh system-wide counts.
 
