@@ -23,9 +23,15 @@ and bugs found while working in this codebase. Legend: 🔴 blocking for product
       backend/backups/<file>.sql` run by hand — a documented/rehearsed restore runbook is still a gap.
 - [ ] **Data retention policy** for the Audit Log (currently immutable/unbounded — §5.4 flags "configurable
       retention" as still TODO)
-- [ ] Secrets hygiene: `backend/.env` currently has live AWS keys and DB password committed to the working
-      tree — confirm these are rotated/not the ones actually used in production, and that `.env` is
-      git-ignored
+- [ ] Secrets hygiene: 🔴 **`backend/.env copy` was actually committed to git** (found 2026-07-16 — tracked
+      despite `.env`/`backend/.env` being git-ignored, because the literal filename `.env copy` didn't match
+      the ignore pattern) and contained live-looking AWS access keys. It's been renamed/sanitized to a
+      placeholder-only [.env.example](.env.example) at the repo root, but **the real key values are still
+      present in git history** on any branch/commit made before this fix — treat those AWS credentials as
+      compromised and rotate them regardless of whether they were "real" production creds. A history rewrite
+      (`git filter-repo`/BFG + force-push) would be needed to fully purge them, which hasn't been done here
+      (destructive/history-rewriting, needs explicit sign-off). The actual runtime `.env` also moved from
+      `backend/.env` to the repo root — confirm nothing still points at the old path.
 
 ## 2. Testing — comprehensive coverage + CI added 2026-07-07
 

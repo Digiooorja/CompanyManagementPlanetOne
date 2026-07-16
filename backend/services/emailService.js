@@ -3,7 +3,7 @@ const nodemailer = require('nodemailer');
 // Thin wrapper around nodemailer for the Notification & Alert Engine's Email
 // channel (Requirements §10 — Notification.channels / NotificationRule.channels
 // can include 'Email' alongside the always-on 'InApp' channel). Reads SMTP
-// config from environment variables (see backend/.env: EMAIL_HOST, EMAIL_PORT,
+// config from environment variables (see the repo root's .env: EMAIL_HOST, EMAIL_PORT,
 // EMAIL_USE_TLS, EMAIL_USE_SSL, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD,
 // DEFAULT_FROM_EMAIL).
 let transporter = null;

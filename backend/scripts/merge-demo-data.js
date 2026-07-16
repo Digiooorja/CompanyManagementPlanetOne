@@ -220,6 +220,6 @@ FULL RUNBOOK (PowerShell, run from backend/):
    $env:TARGET_DATABASE_URL="mysql://root:<pass>@localhost:3306/planetone_demo"
    node scripts/merge-demo-data.js
 
-5. Point backend/.env's DATABASE_URL at planetone_demo (or rename the
+5. Point the repo root's .env's DATABASE_URL at planetone_demo (or rename the
    database) once you're happy with the result, and restart the backend.
 */

@@ -26,9 +26,9 @@ services:
       db:
         condition: service_healthy
     env_file:
-      - ./backend/.env
+      - ./.env
     environment:
-      # Overrides whatever DATABASE_URL is in backend/.env so the backend always reaches the "db"
+      # Overrides whatever DATABASE_URL is in .env so the backend always reaches the "db"
       # service by its Docker network name rather than localhost.
       DATABASE_URL: mysql://root:${DB_ROOT_PASSWORD:-Yash1234}@db:3306/PlanetOneDashboard
       PORT: 5000

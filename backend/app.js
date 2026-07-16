@@ -2,9 +2,12 @@ const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const { Op, QueryTypes } = require('sequelize');
+const path = require('path');
 const sequelize = require('./database');
 
-require('dotenv').config();
+// database.js already loads the repo-root .env, but load it explicitly here too so
+// process.env is populated even if this module is ever required without ./database first.
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
 const app = express();
 const PORT = process.env.PORT || 5000;

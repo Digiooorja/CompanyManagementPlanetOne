@@ -21,12 +21,13 @@ Backend API server built with Node.js, Express, Sequelize ORM, and MariaDB/MySQL
 
 ## Environment Variables
 
-Create a `.env` file in the backend root with:
+Create a `.env` file in the **repo root** (not inside `backend/`) with:
 ```
 DATABASE_URL=mysql://username:password@localhost:3306/dos_planet_tracking
 PORT=5000
 JWT_SECRET=your_secret_key_here
 ```
+See [.env.example](../.env.example) in the repo root for the full list of variables (AWS/S3, SMTP, backup overrides).
 
 For remote or Docker-based databases, update the URL accordingly.
 

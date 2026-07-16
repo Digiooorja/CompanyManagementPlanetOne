@@ -80,13 +80,13 @@ httpd from a production build ([frontend/Dockerfile](frontend/Dockerfile), [fron
 cd /opt   # or wherever you want the app to live
 sudo git clone <your-repo-url> planetone
 sudo chown -R ubuntu:ubuntu planetone
-cd planetone/backend
-cp ".env copy" .env   # or create .env fresh — see below
+cd planetone
+cp .env.example .env
 nano .env
 ```
 
 Set real, rotated values (never commit these, and never reuse whatever is currently in this repo's
-`backend/.env` — see §1 of the launch checklist) — the backend reads:
+`.env.example` history — see §1 of the launch checklist) — the backend reads:
 
 | Variable | Purpose |
 |---|---|
@@ -97,9 +97,8 @@ Set real, rotated values (never commit these, and never reuse whatever is curren
 | `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USE_TLS`/`EMAIL_USE_SSL`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `DEFAULT_FROM_EMAIL` | SMTP for email notifications (`backend/services/emailService.js`) |
 | `DB_BACKUP_DIR`, `DB_BACKUP_S3_PREFIX`, `DB_BACKUP_RETENTION_COUNT` | optional overrides for the automated backup schedule (`backend/services/backupService.js`) |
 
-Also set a real MariaDB root password before starting anything, either by exporting it or adding it to a
-`.env` file in the repo root (docker-compose automatically loads `.env` from the same directory as the
-compose file):
+Also add a real MariaDB root password to the same `.env` (docker-compose automatically loads `.env` from
+the same directory as the compose file, i.e. the repo root):
 
 ```bash
 cd /opt/planetone
@@ -193,9 +192,9 @@ docker compose up -d --build   # rebuilds only images whose source changed
 
 This guide gets the app **running** on AWS; it does not by itself make it production-secure. Go through
 [LAUNCH_READINESS_CHECKLIST.md](LAUNCH_READINESS_CHECKLIST.md) §1 (Security & Compliance) before onboarding
-real users/client data — in particular: rotate every secret away from what's committed in this repo's
-`backend/.env`, enforce TLS (done above), add MFA for privileged roles, and review Ghana Data Protection
-Act (Act 843) compliance.
+real users/client data — in particular: rotate every secret away from what's ever been committed to this
+repo's git history (see §1's "Secrets hygiene" note), enforce TLS (done above), add MFA for privileged
+roles, and review Ghana Data Protection Act (Act 843) compliance.
 
 ## Appendix: Manual deployment (without Docker)
 

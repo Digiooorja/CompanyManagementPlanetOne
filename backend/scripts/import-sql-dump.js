@@ -8,7 +8,7 @@
  * Usage:
  *   node scripts/import-sql-dump.js <dumpFilePath> <databaseName>
  *
- * Reads connection host/user/password from DATABASE_URL in backend/.env
+ * Reads connection host/user/password from DATABASE_URL in the repo root's .env
  * (only host/user/password/port are reused - the database name is
  * overridden by the <databaseName> argument so this never touches the
  * database currently configured in .env).
@@ -17,7 +17,7 @@
 const fs = require('fs');
 const path = require('path');
 const mysql = require('mysql2/promise');
-require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
+require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 
 async function main() {
   const [, , dumpFilePath, databaseName] = process.argv;
