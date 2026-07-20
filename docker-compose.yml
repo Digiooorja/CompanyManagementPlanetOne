@@ -36,7 +36,9 @@ services:
       - backend_backups:/app/backups
 
   frontend:
-    build: ./frontend
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
     container_name: planetone-frontend
     restart: always
     depends_on:

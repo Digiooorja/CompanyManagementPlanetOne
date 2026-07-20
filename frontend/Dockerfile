@@ -1,15 +1,21 @@
 # Frontend image — see AWS_DEPLOYMENT_GUIDE.md § Docker Compose deployment.
 # Multi-stage: build the static bundle with Node, then serve it with Apache httpd.
+#
+# The repo root is an npm workspaces project with "frontend" as its only workspace member —
+# there is no frontend/package-lock.json, the lockfile lives at the repo root. So this build
+# needs the repo root as its build context (see docker-compose.yml: context: ., dockerfile:
+# frontend/Dockerfile) rather than ./frontend, so `npm ci` can see the root lockfile.
 
 FROM node:20-alpine AS build
 WORKDIR /app
-COPY package*.json ./
+COPY package.json package-lock.json ./
+COPY frontend/package.json ./frontend/
 RUN npm ci
-COPY . .
-RUN npm run build
+COPY frontend ./frontend
+RUN npm run build --workspace=frontend
 
 FROM httpd:2.4-alpine
-COPY --from=build /app/dist /usr/local/apache2/htdocs
+COPY --from=build /app/frontend/dist /usr/local/apache2/htdocs
 
 # Enable the modules needed for API proxying (mod_proxy/mod_proxy_http) and SPA client-side
 # routing fallback (mod_rewrite) — present in this image but commented out by default.
