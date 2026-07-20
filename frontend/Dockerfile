@@ -26,6 +26,6 @@ RUN sed -i \
       /usr/local/apache2/conf/httpd.conf \
     && echo 'Include conf/extra/planetone.conf' >> /usr/local/apache2/conf/httpd.conf
 
-COPY apache.conf /usr/local/apache2/conf/extra/planetone.conf
+COPY frontend/apache.conf /usr/local/apache2/conf/extra/planetone.conf
 
 EXPOSE 80
