@@ -1,7 +1,9 @@
 -- Migration: 20260604_003_drop_licence_fields_from_blocks.sql
--- Removes the deprecated licenceStart and licenceExpiry columns from the blocks table.
--- Licences are now fully managed in the separate 'licences' table with M:N mapping.
+-- Removes deprecated licenceStart and licenceExpiry columns from blocks.
+-- Uses IF EXISTS so the migration can be re-run safely.
 
-ALTER TABLE blocks
-  DROP COLUMN licenceStart,
-  DROP COLUMN licenceExpiry;
+ALTER TABLE `blocks`
+	DROP COLUMN IF EXISTS `licenceStart`;
+
+ALTER TABLE `blocks`
+	DROP COLUMN IF EXISTS `licenceExpiry`;
