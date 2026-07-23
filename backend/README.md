@@ -90,10 +90,22 @@ All schema changes are managed through SQL migration files in the `migrations/` 
 | `npm start`        | Start the production server          |
 | `npm run dev`      | Start with auto-restart (nodemon)    |
 | `npm run migrate`  | Apply pending database migrations    |
+| `npm run migrate:fake` | Mark pending migrations as applied without running SQL |
 | `npm run seed`     | Seed the database with sample data   |
 | `npm run seed:blocks` | Seed concession block data        |
 | `npm run seed:demo`   | Seed a demo user account           |
 | `npm test`         | Run the automated test suite (Jest + Supertest) |
+
+### Fake migrations
+
+Use fake migrations when the schema was already changed manually (or by another tool)
+and you only need to advance the migration tracker.
+
+Examples:
+```
+npm run migrate:fake
+npm run migrate -- --fake --to=20260604_010_add_linked_milestone_to_activities.sql
+```
 
 ## Testing
 

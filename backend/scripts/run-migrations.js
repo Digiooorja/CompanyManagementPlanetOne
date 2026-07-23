@@ -6,6 +6,9 @@
  *
  * Usage:
  *   node backend/scripts/run-migrations.js
+ *   node backend/scripts/run-migrations.js --fake
+ *   node backend/scripts/run-migrations.js --to=20260604_010_add_linked_milestone_to_activities.sql
+ *   node backend/scripts/run-migrations.js --fake --to=20260604_010_add_linked_milestone_to_activities.sql
  *
  * How it works:
  *   1. Creates a `_migrations` tracking table if it does not exist.
@@ -25,7 +28,42 @@ const sequelize = require('../database');
 
 const MIGRATIONS_DIR = path.resolve(__dirname, '../migrations');
 
+function parseArgs(argv) {
+  const args = new Set(argv);
+  const fake = args.has('--fake');
+  const help = args.has('--help') || args.has('-h');
+  const toArg = argv.find((a) => a.startsWith('--to='));
+  const toMigration = toArg ? toArg.slice('--to='.length).trim() : null;
+
+  return { fake, help, toMigration };
+}
+
+function printHelp() {
+  console.log(`
+Migration runner usage:
+
+  node scripts/run-migrations.js
+    Apply all pending migrations.
+
+  node scripts/run-migrations.js --fake
+    Mark all pending migrations as applied without executing SQL.
+
+  node scripts/run-migrations.js --to=<filename.sql>
+    Apply pending migrations only up to and including the given file.
+
+  node scripts/run-migrations.js --fake --to=<filename.sql>
+    Fake-apply pending migrations only up to and including the given file.
+`);
+}
+
 async function run() {
+  const { fake, help, toMigration } = parseArgs(process.argv.slice(2));
+
+  if (help) {
+    printHelp();
+    return;
+  }
+
   try {
     await sequelize.authenticate();
     console.log('Database connected.\n');
@@ -52,7 +90,17 @@ async function run() {
       .filter((f) => f.endsWith('.sql'))
       .sort(); // alphabetical = chronological if named with date prefix
 
-    const pending = allFiles.filter((f) => !appliedSet.has(f));
+    let pending = allFiles.filter((f) => !appliedSet.has(f));
+
+    if (toMigration) {
+      if (!allFiles.includes(toMigration)) {
+        console.error(`Target migration not found: ${toMigration}`);
+        await sequelize.close();
+        process.exit(1);
+      }
+
+      pending = pending.filter((f) => f <= toMigration);
+    }
 
     if (pending.length === 0) {
       console.log('All migrations are already applied. Nothing to do.');
@@ -60,10 +108,32 @@ async function run() {
       return;
     }
 
-    console.log(`Found ${pending.length} pending migration(s):\n`);
+    const modeLabel = fake ? 'FAKE mode (no SQL will be executed)' : 'APPLY mode';
+    console.log(`Found ${pending.length} pending migration(s) in ${modeLabel}:\n`);
 
     // Step 4: Run each pending migration inside a transaction
     for (const filename of pending) {
+      if (fake) {
+        const transaction = await sequelize.transaction();
+        try {
+          console.log(`  Faking:   ${filename}`);
+          await sequelize.query(
+            'INSERT INTO _migrations (filename) VALUES (?)',
+            { replacements: [filename], transaction }
+          );
+          await transaction.commit();
+          console.log(`  Faked:    ${filename} ✓\n`);
+          continue;
+        } catch (err) {
+          await transaction.rollback();
+          console.error(`\n  FAILED:   ${filename}`);
+          console.error(`  Error:    ${err.message}`);
+          console.error('\n  Fake migration stopped. Fix the error above and re-run.\n');
+          await sequelize.close();
+          process.exit(1);
+        }
+      }
+
       const filePath = path.join(MIGRATIONS_DIR, filename);
       const sql = fs.readFileSync(filePath, 'utf8');
 
@@ -106,7 +176,11 @@ async function run() {
       }
     }
 
-    console.log('All pending migrations applied successfully.');
+    if (fake) {
+      console.log('All selected migrations were fake-applied successfully.');
+    } else {
+      console.log('All pending migrations applied successfully.');
+    }
     await sequelize.close();
   } catch (err) {
     console.error('Migration runner error:', err.message);
