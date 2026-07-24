@@ -6,7 +6,7 @@ const Role = require('./models/Role');
 const Permission = require('./models/Permission');
 const RolePermission = require('./models/RolePermission');
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5040;
 
 const startServer = async () => {
   try {

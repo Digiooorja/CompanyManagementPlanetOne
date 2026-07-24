@@ -10,7 +10,7 @@ const sequelize = require('./database');
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5040;
 
 // Register all models so sequelize.sync can create the tables
 require('./models/Project');
