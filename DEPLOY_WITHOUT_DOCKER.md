@@ -4,7 +4,7 @@ This guide runs your app directly on the server (no Docker).
 
 ## 1. Architecture (No Docker)
 
-- Frontend: static files served by Nginx
+- Frontend: static files served by Apache2
 - Backend: Node.js process (PM2)
 - Database: MySQL or MariaDB service
 
@@ -22,7 +22,7 @@ This guide runs your app directly on the server (no Docker).
 
 ```bash
 sudo apt update
-sudo apt install -y nginx mysql-server git curl
+sudo apt install -y apache2 mysql-server git curl
 ```
 
 Install Node.js LTS (example using NodeSource):
@@ -173,54 +173,61 @@ npm run build
 
 This produces static files under `frontend/dist`.
 
-## 10. Nginx Configuration
+## 10. Apache2 Configuration
 
 Create site file:
 
 ```bash
-sudo nano /etc/nginx/sites-available/planetone
+sudo nano /etc/apache2/sites-available/planetone.conf
 ```
 
 Paste (replace `your-domain.com`):
 
 Note: replace `/home/<your-user>/...` with your actual Linux username.
 
-```nginx
-server {
-    listen 80;
-    server_name your-domain.com;
+```apache
+<VirtualHost *:80>
+    ServerName your-domain.com
+    DocumentRoot /home/<your-user>/DOS_APPS/planetone/frontend/dist
 
-    root /home/<your-user>/DOS_APPS/planetone/frontend/dist;
-    index index.html;
+    <Directory /home/<your-user>/DOS_APPS/planetone/frontend/dist>
+        Options Indexes FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
 
-    location / {
-        try_files $uri /index.html;
-    }
+    # Proxy backend API requests to Node.js on port 5040
+    ProxyPreserveHost On
+    ProxyPass /api http://127.0.0.1:5040/api
+    ProxyPassReverse /api http://127.0.0.1:5040/api
 
-    location /api/ {
-        proxy_pass http://127.0.0.1:5040/;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
+    # React SPA fallback to index.html for client-side routes
+    RewriteEngine On
+    RewriteCond %{REQUEST_URI} !^/api
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^ /index.html [L]
+
+    ErrorLog ${APACHE_LOG_DIR}/planetone_error.log
+    CustomLog ${APACHE_LOG_DIR}/planetone_access.log combined
+</VirtualHost>
 ```
 
 Enable and reload:
 
 ```bash
-sudo ln -s /etc/nginx/sites-available/planetone /etc/nginx/sites-enabled/planetone
-sudo nginx -t
-sudo systemctl reload nginx
+sudo a2enmod proxy proxy_http rewrite headers
+sudo a2ensite planetone.conf
+sudo a2dissite 000-default.conf
+sudo apache2ctl configtest
+sudo systemctl reload apache2
 ```
 
 ## 11. Enable HTTPS (Recommended)
 
 ```bash
-sudo apt install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d your-domain.com
+sudo apt install -y certbot python3-certbot-apache
+sudo certbot --apache -d your-domain.com
 ```
 
 ## 12. Deployment Updates (No Docker)
@@ -238,7 +245,7 @@ cd ../frontend
 npm install
 npm run build
 
-sudo systemctl reload nginx
+sudo systemctl reload apache2
 ```
 
 ## 13. Troubleshooting

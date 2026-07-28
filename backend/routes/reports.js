@@ -4,6 +4,8 @@ const Report = require('../models/Report');
 const ReportDefinition = require('../models/ReportDefinition');
 const { authMiddleware } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/rbac');
+const { buildReportDataset } = require('../services/reportDataBuilder');
+const { buildPdfBuffer, buildExcelBuffer } = require('../services/reportFileBuilder');
 
 // ---- Report catalogue (definitions) ----
 // These routes must come before the generic '/:id' routes below so
@@ -83,6 +85,8 @@ router.delete('/definitions/:id', authMiddleware, requirePermission('reports.man
 // POST /definitions/:id/generate — logs a real generated-report instance
 // (appears in the "Recently Generated Reports" list) and bumps the
 // definition's lastGeneratedDate. Requires login so createdBy is genuine.
+// The logged `content` is now a real summary computed from current DB data
+// (row count + key aggregates), not a placeholder sentence.
 router.post('/definitions/:id/generate', authMiddleware, async (req, res) => {
   try {
     const definition = await ReportDefinition.findByPk(req.params.id);
@@ -93,9 +97,16 @@ router.post('/definitions/:id/generate', authMiddleware, async (req, res) => {
     const format = req.body?.format && formats.includes(req.body.format) ? req.body.format : formats[0];
     const typeByCategory = { Operations: 'Activity', Financial: 'Finance', HSE: 'Custom', Performance: 'Project' };
 
+    const dataset = await buildReportDataset(definition);
+    const content = [
+      `${definition.name} (${definition.category}) — ${definition.block || 'All Blocks'} — ${format} format.`,
+      `Rows: ${dataset.rows.length}`,
+      ...dataset.summaryLines
+    ].join('\n');
+
     const report = await Report.create({
       title: definition.name,
-      content: `${definition.name} (${definition.category}) generated for ${definition.block || 'All Blocks'} in ${format} format.`,
+      content,
       generatedDate,
       type: typeByCategory[definition.category] || 'Custom',
       createdBy: req.user?.id || null,
@@ -106,6 +117,60 @@ router.post('/definitions/:id/generate', authMiddleware, async (req, res) => {
 
     res.status(201).json({ report, definition });
   } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// POST /definitions/:id/download — builds a REAL PDF or Excel file from
+// current DB data (via reportDataBuilder/reportFileBuilder) and streams it
+// back as a binary attachment. Also logs a Report row exactly like
+// /generate above, so "Recently Generated Reports" stays accurate whichever
+// entry point the user clicked.
+router.post('/definitions/:id/download', authMiddleware, async (req, res) => {
+  try {
+    const definition = await ReportDefinition.findByPk(req.params.id);
+    if (!definition) return res.status(404).json({ message: 'Report definition not found' });
+
+    const formats = Array.isArray(definition.formats) ? definition.formats : ['PDF'];
+    const format = req.body?.format && formats.includes(req.body.format) ? req.body.format : formats[0];
+    const typeByCategory = { Operations: 'Activity', Financial: 'Finance', HSE: 'Custom', Performance: 'Project' };
+
+    const dataset = await buildReportDataset(definition);
+    const generatedDate = new Date();
+    const meta = [
+      `Category: ${definition.category}`,
+      `Block(s): ${definition.block || 'All Blocks'}`,
+      `Frequency: ${definition.frequency}`,
+      `Generated: ${generatedDate.toLocaleString()}`
+    ];
+
+    const content = [`${definition.name} (${definition.category}) — ${definition.block || 'All Blocks'} — ${format} format.`, `Rows: ${dataset.rows.length}`, ...dataset.summaryLines].join('\n');
+
+    const report = await Report.create({
+      title: definition.name,
+      content,
+      generatedDate,
+      type: typeByCategory[definition.category] || 'Custom',
+      createdBy: req.user?.id || null,
+      definitionId: definition.id
+    });
+    await definition.update({ lastGeneratedDate: generatedDate });
+
+    const safeName = definition.name.replace(/[^a-zA-Z0-9\-_ ]/g, '').replace(/\s+/g, '_');
+
+    if (format === 'Excel') {
+      const buffer = await buildExcelBuffer({ title: definition.name, meta, dataset });
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="${safeName}.xlsx"`);
+      return res.send(buffer);
+    }
+
+    const buffer = await buildPdfBuffer({ title: definition.name, meta, dataset });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${safeName}.pdf"`);
+    return res.send(buffer);
+  } catch (err) {
+    console.error('Error building report download:', err);
     res.status(400).json({ message: err.message });
   }
 });
@@ -130,6 +195,55 @@ router.get('/:id', async (req, res) => {
     res.json(report);
   } catch (err) {
     res.status(500).json({ message: err.message });
+  }
+});
+
+// GET /:id/download — re-downloads an already-logged report from "Recently
+// Generated Reports". If it's linked to a ReportDefinition (definitionId),
+// rebuilds a fresh PDF/Excel from CURRENT live data (same as the definition
+// download route above); otherwise falls back to a plain-text PDF of the
+// stored content, so older/definition-less report rows still download.
+router.get('/:id/download', authMiddleware, async (req, res) => {
+  try {
+    const report = await Report.findByPk(req.params.id);
+    if (!report) return res.status(404).json({ message: 'Report not found' });
+
+    const format = req.query.format === 'Excel' ? 'Excel' : 'PDF';
+    const safeName = (report.title || `report-${report.id}`).replace(/[^a-zA-Z0-9\-_ ]/g, '').replace(/\s+/g, '_');
+
+    let dataset;
+    let meta;
+    if (report.definitionId) {
+      const definition = await ReportDefinition.findByPk(report.definitionId);
+      if (definition) {
+        dataset = await buildReportDataset(definition);
+        meta = [
+          `Category: ${definition.category}`,
+          `Block(s): ${definition.block || 'All Blocks'}`,
+          `Frequency: ${definition.frequency}`,
+          `Originally generated: ${new Date(report.generatedDate).toLocaleString()}`
+        ];
+      }
+    }
+    if (!dataset) {
+      dataset = { columns: [{ key: 'content', label: 'Details' }], rows: [{ content: report.content }], summaryLines: [] };
+      meta = [`Type: ${report.type}`, `Generated: ${new Date(report.generatedDate).toLocaleString()}`];
+    }
+
+    if (format === 'Excel') {
+      const buffer = await buildExcelBuffer({ title: report.title, meta, dataset });
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="${safeName}.xlsx"`);
+      return res.send(buffer);
+    }
+
+    const buffer = await buildPdfBuffer({ title: report.title, meta, dataset });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${safeName}.pdf"`);
+    return res.send(buffer);
+  } catch (err) {
+    console.error('Error re-downloading report:', err);
+    res.status(400).json({ message: err.message });
   }
 });
 

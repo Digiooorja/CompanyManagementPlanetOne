@@ -366,7 +366,7 @@ export function ActivityDetail() {
       formData.append('title', uploadTitle || uploadFile.name);
       formData.append('author', authorName);
       formData.append('documentType', uploadType);
-      formData.append('status', 'Review');
+      formData.append('status', 'Under Review');
       if (activity?.projectId) {
         formData.append('projectId', String(activity.projectId));
       }

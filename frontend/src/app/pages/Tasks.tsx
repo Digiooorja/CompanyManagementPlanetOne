@@ -483,8 +483,15 @@ export function Tasks() {
                           <SelectItem value="In Progress">In Progress</SelectItem>
                           <SelectItem value="Completed">Completed</SelectItem>
                           <SelectItem value="Blocked">Blocked</SelectItem>
+                          <SelectItem value="Overdue">Overdue</SelectItem>
                         </SelectContent>
                       </Select>
+                      {task.status === 'Overdue' && (
+                        <p className="text-[10px] text-red-500 mt-1 leading-tight">
+                          Past due date — the automatic overdue sweep will keep resetting this to
+                          "Overdue" unless you mark it Completed or push the due date forward.
+                        </p>
+                      )}
                     </div>
                     {(task.relatedType === 'Activity' || task.relatedType === 'Workflow') && (
                       <Link to={task.relatedType === 'Activity' ? `/activities/${task.relatedId}` : `/workflows/${task.relatedId}`}>

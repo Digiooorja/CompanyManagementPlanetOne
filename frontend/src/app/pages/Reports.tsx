@@ -38,6 +38,7 @@ export function Reports() {
   const [recentReports, setRecentReports] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [actioningId, setActioningId] = useState<number | null>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -79,11 +80,20 @@ export function Reports() {
     count: definitions.filter((d) => d.category === name).length,
   }));
 
+  // Generate/Export/re-download all now fetch a REAL PDF/Excel file built
+  // from current DB data on the backend (backend/services/reportDataBuilder.js
+  // + reportFileBuilder.js) via reportsApi.download()/downloadGenerated() —
+  // no more client-side placeholder text/CSV blobs.
   const handleGenerate = async (definition: any) => {
     try {
       setActioningId(definition.id);
-      await reportsApi.generate(definition.id);
+      setError(null);
+      const formats: string[] = Array.isArray(definition.formats) && definition.formats.length > 0 ? definition.formats : ['PDF'];
+      const format = formats[0];
+      await reportsApi.download(definition.id, format);
       await loadData();
+      setSuccessMessage(`"${definition.name}" generated and downloaded as ${format} — also listed in Recently Generated Reports below.`);
+      setTimeout(() => setSuccessMessage(null), 4000);
     } catch (err) {
       console.error('Error generating report:', err);
       setError('Unable to generate report.');
@@ -95,27 +105,8 @@ export function Reports() {
   const handleExport = async (definition: any, format: string) => {
     try {
       setActioningId(definition.id);
-      const { report } = await reportsApi.generate(definition.id, format);
-      const content = [
-        `Report: ${report.title}`,
-        `Category: ${definition.category}`,
-        `Block(s): ${definition.block || 'All Blocks'}`,
-        `Frequency: ${definition.frequency}`,
-        `Generated: ${new Date(report.generatedDate).toLocaleString()}`,
-        `Format: ${format}`,
-        '',
-        report.content,
-      ].join('\n');
-      const isExcel = format === 'Excel';
-      const blob = new Blob([content], { type: isExcel ? 'text/csv' : 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${definition.name.replace(/\s+/g, '_')}.${isExcel ? 'csv' : 'txt'}`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
+      setError(null);
+      await reportsApi.download(definition.id, format);
       await loadData();
     } catch (err) {
       console.error('Error exporting report:', err);
@@ -124,6 +115,17 @@ export function Reports() {
       setActioningId(null);
     }
   };
+
+  const handleDownloadRecent = async (recent: any) => {
+    try {
+      setError(null);
+      await reportsApi.downloadGenerated(recent.id, 'PDF');
+    } catch (err) {
+      console.error('Error downloading report:', err);
+      setError('Unable to download report.');
+    }
+  };
+
 
   const openCreateDef = () => {
     setEditingDefId(null);
@@ -230,6 +232,12 @@ export function Reports() {
       {error && (
         <Card className="p-4 bg-red-50 border border-red-200">
           <p className="text-red-700">{error}</p>
+        </Card>
+      )}
+
+      {successMessage && (
+        <Card className="p-4 bg-green-50 border border-green-200">
+          <p className="text-green-700">{successMessage}</p>
         </Card>
       )}
 
@@ -378,7 +386,12 @@ export function Reports() {
                     <p className="text-xs text-gray-500">{new Date(recent.generatedDate).toLocaleString()}</p>
                   </div>
                 </div>
-                <Badge variant="outline">{recent.type}</Badge>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Badge variant="outline">{recent.type}</Badge>
+                  <Button size="sm" variant="ghost" onClick={() => handleDownloadRecent(recent)}>
+                    <Download className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
               </div>
             ))}
           </div>

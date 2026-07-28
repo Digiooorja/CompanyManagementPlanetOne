@@ -48,6 +48,53 @@ async function apiUpload<T>(endpoint: string, formData: FormData): Promise<T> {
   return response.json();
 }
 
+// Fetches a binary file (PDF/Excel/etc.) from the API and triggers a real
+// browser download using the filename the server suggests via
+// Content-Disposition — used for report downloads (real PDF/XLSX files,
+// not client-side text stand-ins).
+async function apiDownloadFile(
+  endpoint: string,
+  options: RequestInit = {},
+  fallbackFilename = 'download'
+): Promise<void> {
+  const url = `${API_BASE_URL}${endpoint}`;
+  const token = authStorage.getToken();
+
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options.headers,
+    },
+  });
+
+  if (!response.ok) {
+    let message = `API Error ${url}: ${response.status} ${response.statusText}`;
+    try {
+      const body = await response.json();
+      if (body?.message) message = body.message;
+    } catch {
+      // response body wasn't JSON — keep the generic message
+    }
+    throw new Error(message);
+  }
+
+  const disposition = response.headers.get('Content-Disposition') || '';
+  const match = disposition.match(/filename="?([^"]+)"?/);
+  const filename = match ? match[1] : fallbackFilename;
+
+  const blob = await response.blob();
+  const blobUrl = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = blobUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(blobUrl);
+}
+
 // Projects API
 export const projectsApi = {
   getAll: () => apiCall<any[]>('/projects'),
@@ -251,6 +298,12 @@ export const reportsApi = {
   deleteDefinition: (id: number) => apiCall(`/reports/definitions/${id}`, { method: 'DELETE' }),
   generate: (definitionId: number, format?: string) =>
     apiCall<{ report: any; definition: any }>(`/reports/definitions/${definitionId}/generate`, { method: 'POST', body: JSON.stringify({ format }) }),
+  // Builds and downloads a REAL PDF/Excel file from current data (backend/services/reportDataBuilder.js + reportFileBuilder.js).
+  download: (definitionId: number, format: string) =>
+    apiDownloadFile(`/reports/definitions/${definitionId}/download`, { method: 'POST', body: JSON.stringify({ format }) }, `report.${format === 'Excel' ? 'xlsx' : 'pdf'}`),
+  // Re-downloads an already-logged "Recently Generated Reports" entry, rebuilt fresh from live data if it's linked to a definition.
+  downloadGenerated: (reportId: number, format: string) =>
+    apiDownloadFile(`/reports/${reportId}/download?format=${format}`, { method: 'GET' }, `report.${format === 'Excel' ? 'xlsx' : 'pdf'}`),
 };
 // Risks API
 export const risksApi = {

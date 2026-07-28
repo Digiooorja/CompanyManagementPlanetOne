@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>PlanetOne — Project Tracking Platform | Overview</title>
+<style>
+  :root {
+    --navy: #0b1f3a;
+    --navy-deep: #071527;
+    --teal: #12b3a6;
+    --gold: #e0a336;
+    --ink: #1c2a3a;
+    --muted: #5b6b7d;
+    --card: #ffffff;
+    --bg: #eef2f6;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    font-family: 'Segoe UI', Calibri, Arial, sans-serif;
+    color: var(--ink);
+  }
+
+  .slide {
+    width: 1280px;
+    height: 720px;
+    margin: 24px auto;
+    background: var(--card);
+    box-shadow: 0 10px 40px rgba(0,0,0,0.18);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .header {
+    background: linear-gradient(120deg, var(--navy-deep), var(--navy) 70%);
+    color: #fff;
+    padding: 20px 36px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: relative;
+  }
+
+  .header::after {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 4px;
+    background: linear-gradient(90deg, var(--teal), var(--gold));
+  }
+
+  .brand h1 {
+    margin: 0;
+    font-size: 28px;
+    letter-spacing: 0.5px;
+  }
+
+  .brand h1 span { color: var(--teal); }
+
+  .brand p {
+    margin: 4px 0 0;
+    font-size: 13.5px;
+    color: #c7d3e0;
+    max-width: 640px;
+  }
+
+  .badge-stack {
+    display: flex;
+    gap: 10px;
+  }
+
+  .badge {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 8px;
+    padding: 8px 14px;
+    text-align: center;
+    min-width: 92px;
+  }
+
+  .badge .num {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--gold);
+    display: block;
+    line-height: 1.1;
+  }
+
+  .badge .lbl {
+    font-size: 10px;
+    color: #cfd9e6;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+
+  .body {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1.05fr 1.05fr 0.9fr;
+    gap: 14px;
+    padding: 18px 28px 8px;
+  }
+
+  .col h2 {
+    font-size: 14.5px;
+    margin: 0 0 8px;
+    color: var(--navy);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 2px solid var(--teal);
+    padding-bottom: 5px;
+  }
+
+  .card {
+    background: #f7f9fb;
+    border: 1px solid #e1e7ee;
+    border-left: 4px solid var(--teal);
+    border-radius: 6px;
+    padding: 9px 12px;
+    margin-bottom: 8px;
+  }
+
+  .card.gold { border-left-color: var(--gold); }
+
+  .card h3 {
+    margin: 0 0 3px;
+    font-size: 12.5px;
+    color: var(--ink);
+  }
+
+  .card p {
+    margin: 0;
+    font-size: 10.8px;
+    color: var(--muted);
+    line-height: 1.35;
+  }
+
+  .pill-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+  }
+
+  .pill {
+    font-size: 10px;
+    background: var(--navy);
+    color: #fff;
+    padding: 3px 9px;
+    border-radius: 12px;
+  }
+
+  .pill.alt { background: var(--teal); }
+
+  .stack-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 4px;
+  }
+
+  .tag {
+    font-size: 10px;
+    padding: 4px 8px;
+    border-radius: 5px;
+    background: #eef3f8;
+    border: 1px solid #dde5ee;
+    color: var(--navy);
+    font-weight: 600;
+  }
+
+  .footer {
+    background: var(--navy-deep);
+    color: #cfd9e6;
+    padding: 12px 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11px;
+  }
+
+  .footer .stack {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .footer .stack span {
+    background: rgba(255,255,255,0.08);
+    padding: 4px 10px;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.18);
+  }
+
+  .footer .tagline {
+    font-style: italic;
+    color: #9fb0c3;
+  }
+
+  @media print {
+    body { background: #fff; }
+    .slide {
+      margin: 0;
+      box-shadow: none;
+      width: 100%;
+      height: 100vh;
+    }
+    @page { size: landscape; margin: 0; }
+  }
+</style>
+</head>
+<body>
+
+<div class="slide">
+
+  <div class="header">
+    <div class="brand">
+      <h1>PlanetOne<span>PMS</span></h1>
+      <p>End-to-end Oil &amp; Gas project, portfolio &amp; governance tracking — from exploration blocks
+        down to individual tasks, budgets and compliance obligations.</p>
+    </div>
+    <div class="badge-stack">
+      <div class="badge"><span class="num">15/15</span><span class="lbl">Phase 1 Modules</span></div>
+      <div class="badge"><span class="num">12</span><span class="lbl">RBAC Roles</span></div>
+      <div class="badge"><span class="num">190+</span><span class="lbl">Automated Tests</span></div>
+    </div>
+  </div>
+
+  <div class="body">
+
+    <!-- Column 1: Core Delivery -->
+    <div class="col">
+      <h2>Core Delivery Tracking</h2>
+
+      <div class="card">
+        <h3>Blocks → Projects → Activities → Tasks</h3>
+        <p>Full work-breakdown hierarchy with automatic completion roll-up from tasks/activities up to
+          project %, surfaced live on dashboards.</p>
+      </div>
+
+      <div class="card">
+        <h3>Executive &amp; Operational Dashboards</h3>
+        <p>Portfolio health gauge, KPI strip, Attention Required panel, Asset Health Matrix, and a
+          dedicated Chairman/Board view — all with URL-synced filters and drill-down to source records.</p>
+      </div>
+
+      <div class="card">
+        <h3>Document Repository</h3>
+        <p>Category/tag/confidentiality-gated storage (S3-backed), automatic version supersession,
+          "awaiting response" due-date reminders.</p>
+      </div>
+
+      <div class="card">
+        <h3>Licences &amp; Phase Countdown</h3>
+        <p>Exploration → Production phase tracking, 180/90/30-day countdown banners, audited
+          phase-transition sign-off workflow.</p>
+      </div>
+    </div>
+
+    <!-- Column 2: Governance -->
+    <div class="col">
+      <h2>Governance &amp; Finance</h2>
+
+      <div class="card gold">
+        <h3>Registers Suite</h3>
+        <p>Risk, Contract, Compliance, Correspondence, Decisions, Insurance, Environmental Permits, NDA
+          &amp; Data Room, HSE Incidents/Exposure — each with its own alert rules.</p>
+        <div class="pill-row">
+          <span class="pill">Risk</span><span class="pill">HSE</span><span class="pill">Compliance</span>
+          <span class="pill">Contracts</span><span class="pill">NDA/Data Room</span>
+        </div>
+      </div>
+
+      <div class="card gold">
+        <h3>Budget Tracker &amp; AFE Tracking</h3>
+        <p>Multi-currency budget lines with enforced maker-checker revisions, variance/utilisation alerts,
+          AFE authorised/committed/actual-to-date reconciliation with sign-off.</p>
+      </div>
+
+      <div class="card gold">
+        <h3>Vendor Payments, Forex &amp; Local Content</h3>
+        <p>Payment aging tracking, forex/banking approval workflow, local content compliance tracking —
+          Phase 2 modules already live.</p>
+      </div>
+
+      <div class="card gold">
+        <h3>Reports &amp; Audit Log</h3>
+        <p>Configurable report catalogue plus an immutable, org-wide Audit Log capturing every
+          create/update/delete for compliance traceability.</p>
+      </div>
+    </div>
+
+    <!-- Column 3: Platform -->
+    <div class="col">
+      <h2>Platform Capabilities</h2>
+
+      <div class="card">
+        <h3>Configurable RBAC</h3>
+        <p>12 business roles, Admin-editable permission matrix, department-scoped visibility — no code
+          changes needed to retune access.</p>
+      </div>
+
+      <div class="card">
+        <h3>Notification &amp; Alert Engine</h3>
+        <p>Date/threshold/status/recurring triggers, in-app + email delivery, per-module notify
+          permissions and department-scoped fallback routing.</p>
+      </div>
+
+      <div class="card">
+        <h3>Org Structure &amp; Team Profiles</h3>
+        <p>Auto-generated org chart, team allocation view, onboarding/offboarding notifications.</p>
+      </div>
+
+      <div class="card">
+        <h3>Operationally Ready</h3>
+        <p>Automated daily DB backups (+S3), health-check endpoint, Docker Compose &amp; PM2 deployment
+          paths, CI pipeline with 190+ tests.</p>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    <div class="stack">
+      <span>React + TypeScript</span>
+      <span>Node.js / Express</span>
+      <span>Sequelize ORM</span>
+      <span>MySQL / MariaDB</span>
+      <span>AWS S3</span>
+      <span>Docker · PM2</span>
+    </div>
+    <div class="tagline">One platform — from the block to the boardroom.</div>
+  </div>
+
+</div>
+
+</body>
+</html>

@@ -251,12 +251,18 @@ export function Blocks() {
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <Label>Licence Name</Label>
-                        <Input
+                        <Label>Licence Type</Label>
+                        <select
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                           value={newLicence.licenceType}
                           onChange={(e) => setNewLicence({ ...newLicence, licenceType: e.target.value })}
-                          placeholder="e.g. Deep Water Exploration"
-                        />
+                        >
+                          <option value="Exploration">Exploration</option>
+                          <option value="Production">Production</option>
+                          <option value="Environmental">Environmental</option>
+                          <option value="Drilling">Drilling</option>
+                          <option value="Contract">Contract</option>
+                        </select>
                       </div>
                       <div>
                         <Label>Issued By</Label>

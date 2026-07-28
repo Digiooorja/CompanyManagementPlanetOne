@@ -77,6 +77,9 @@ function getExpiryTheme(days: number | null): {
 
 const LICENCE_STATUSES = ["Active", "Suspended", "Renewed"];
 const LICENCE_PHASES = ["Exploration", "Extension", "Appraisal", "Development", "Production"];
+// Must match backend/models/Licence.js's licenceType ENUM exactly - this field
+// is a strict DB enum, not a freeform name (there is no separate "name" column).
+const LICENCE_TYPES = ["Exploration", "Production", "Environmental", "Drilling", "Contract"];
 
 // -----------------------------------------------------------------------
 // Empty form state factory
@@ -428,13 +431,16 @@ export function Licences() {
           />
         </div>
         <div className="space-y-1.5">
-          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Licence Name *</label>
-          <Input
+          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Licence Type *</label>
+          <select
             required
-            placeholder="e.g. Deep Water Exploration"
+            className="w-full h-10 px-3 bg-white border border-slate-200 rounded-md text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
             value={form.licenceType}
             onChange={(e) => setForm((p) => ({ ...p, licenceType: e.target.value }))}
-          />
+          >
+            <option value="" disabled>Select type</option>
+            {LICENCE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
         </div>
       </div>
 
